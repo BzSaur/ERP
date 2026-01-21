@@ -1,0 +1,205 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Finiquito y Liquidación</h2>
+    <p class="text-muted mb-0">Cálculo de prestaciones por terminación laboral</p>
+  </div>
+  <a href="/finiquito/crear" class="btn btn-primary">
+    <i class="bi bi-calculator me-1"></i> Calcular Nuevo
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Estadísticas -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card stat-card bg-info">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Finiquitos</div>
+            <div class="stat-value"><%= stats.finiquitos %></div>
+          </div>
+          <i class="bi bi-file-check stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-warning">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Liquidaciones</div>
+            <div class="stat-value"><%= stats.liquidaciones %></div>
+          </div>
+          <i class="bi bi-file-earmark-medical stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-secondary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Pendientes</div>
+            <div class="stat-value"><%= stats.pendientes %></div>
+          </div>
+          <i class="bi bi-hourglass-split stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Pagados</div>
+            <div class="stat-value"><%= stats.pagados %></div>
+          </div>
+          <i class="bi bi-check-circle stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Info -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="alert alert-info mb-0">
+      <h6 class="alert-heading"><i class="bi bi-info-circle me-1"></i> Finiquito (Renuncia voluntaria)</h6>
+      <ul class="mb-0 small">
+        <li>Días trabajados no pagados</li>
+        <li>Vacaciones proporcionales + Prima vacacional (25%)</li>
+        <li>Aguinaldo proporcional</li>
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="alert alert-warning mb-0">
+      <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-1"></i> Liquidación (Despido injustificado)</h6>
+      <ul class="mb-0 small">
+        <li>Todo lo del finiquito +</li>
+        <li>Indemnización: 3 meses de salario (Art. 48, 50 LFT)</li>
+        <li>Prima de antigüedad: 12 días por año (Art. 162 LFT)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/finiquito" method="GET" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label for="tipo" class="form-label">Tipo</label>
+        <select class="form-select" id="tipo" name="tipo">
+          <option value="">Todos</option>
+          <option value="FINIQUITO" <%= filtros.tipo === 'FINIQUITO' ? 'selected' : '' %>>Finiquito</option>
+          <option value="LIQUIDACION" <%= filtros.tipo === 'LIQUIDACION' ? 'selected' : '' %>>Liquidación</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="estado" class="form-label">Estado</label>
+        <select class="form-select" id="estado" name="estado">
+          <option value="">Todos</option>
+          <option value="CALCULADO" <%= filtros.estado === 'CALCULADO' ? 'selected' : '' %>>Calculado</option>
+          <option value="APROBADO" <%= filtros.estado === 'APROBADO' ? 'selected' : '' %>>Aprobado</option>
+          <option value="PAGADO" <%= filtros.estado === 'PAGADO' ? 'selected' : '' %>>Pagado</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/finiquito" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th>Tipo</th>
+            <th>Fecha Baja</th>
+            <th>Motivo</th>
+            <th class="text-center">Antigüedad</th>
+            <th class="text-end">Total Neto</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (finiquitos.length === 0) { %>
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">
+                <i class="bi bi-file-earmark-text fs-1 d-block mb-2"></i>
+                No hay finiquitos registrados
+              </td>
+            </tr>
+          <% } else { %>
+            <% finiquitos.forEach(f => { %>
+              <tr>
+                <td>
+                  <strong><%= f.empleado.Nombre %> <%= f.empleado.Apellido_Paterno %></strong>
+                </td>
+                <td>
+                  <% if (f.Tipo === 'FINIQUITO') { %>
+                    <span class="badge bg-info">Finiquito</span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark">Liquidación</span>
+                  <% } %>
+                </td>
+                <td><%= f.Fecha_Baja.toLocaleDateString('es-MX') %></td>
+                <td><small><%= f.Motivo_Baja %></small></td>
+                <td class="text-center">
+                  <strong><%= f.Antiguedad_Anos %></strong>a 
+                  <strong><%= f.Antiguedad_Meses %></strong>m
+                </td>
+                <td class="text-end">
+                  <strong>$<%= Number(f.Total_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
+                <td>
+                  <% if (f.Estado === 'CALCULADO') { %>
+                    <span class="badge bg-secondary">Calculado</span>
+                  <% } else if (f.Estado === 'APROBADO') { %>
+                    <span class="badge bg-primary">Aprobado</span>
+                  <% } else { %>
+                    <span class="badge bg-success">Pagado</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <a href="/finiquito/<%= f.ID_Finiquito %>" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

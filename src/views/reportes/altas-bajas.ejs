@@ -1,0 +1,132 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/reportes">Reportes</a></li>
+        <li class="breadcrumb-item active">Altas y Bajas</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Reporte de Altas y Bajas - <%= year %></h4>
+  </div>
+  <div class="d-flex gap-2">
+    <form action="/reportes/altas-bajas" method="GET" class="d-flex gap-2">
+      <select name="year" class="form-select" onchange="this.form.submit()">
+        <% [2024, 2025, 2026, 2027].forEach(function(y) { %>
+        <option value="<%= y %>" <%= y === year ? 'selected' : '' %>><%= y %></option>
+        <% }); %>
+      </select>
+    </form>
+    <button class="btn btn-outline-primary" onclick="window.print()">
+      <i class="bi bi-printer me-2"></i>Imprimir
+    </button>
+  </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-4 mb-4">
+  <div class="col-md-6">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="mb-1">Altas</h6>
+            <h2 class="mb-0"><%= altas.length %></h2>
+          </div>
+          <i class="bi bi-person-plus fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-danger text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="mb-1">Bajas</h6>
+            <h2 class="mb-0"><%= bajas.length %></h2>
+          </div>
+          <i class="bi bi-person-dash fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Altas -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header bg-success text-white">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-person-plus me-2"></i>
+          Altas en <%= year %>
+        </h5>
+      </div>
+      <div class="card-body p-0">
+        <% if (altas.length > 0) { %>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nombre</th>
+                <th>Área</th>
+                <th>Fecha Ingreso</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% altas.forEach(function(emp) { %>
+              <tr>
+                <td><%= emp.Nombre %> <%= emp.Apellido_Paterno %></td>
+                <td><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
+                <td><%= new Date(emp.Fecha_Ingreso).toLocaleDateString('es-MX') %></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <% } else { %>
+        <div class="text-center text-muted py-4">No hay altas registradas en este año</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bajas -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header bg-danger text-white">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-person-dash me-2"></i>
+          Bajas en <%= year %>
+        </h5>
+      </div>
+      <div class="card-body p-0">
+        <% if (bajas.length > 0) { %>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nombre</th>
+                <th>Área</th>
+                <th>Fecha Baja</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% bajas.forEach(function(emp) { %>
+              <tr>
+                <td><%= emp.Nombre %> <%= emp.Apellido_Paterno %></td>
+                <td><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
+                <td><%= new Date(emp.Fecha_Baja).toLocaleDateString('es-MX') %></td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <% } else { %>
+        <div class="text-center text-muted py-4">No hay bajas registradas en este año</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>

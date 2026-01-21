@@ -1,0 +1,75 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">Registrar Horas Adicionales</h2>
+    <p class="text-muted mb-0">Agregar horas extra, dobles, triples o festivas</p>
+  </div>
+  <a href="/horas-adicionales" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-body">
+    <form action="/horas-adicionales" method="POST">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="ID_Empleado" class="form-label">Empleado *</label>
+          <select class="form-select" id="ID_Empleado" name="ID_Empleado" required>
+            <option value="">Seleccionar empleado...</option>
+            <% empleados.forEach(emp => { %>
+              <option value="<%= emp.ID_Empleado %>">
+                <%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>
+                <% if (emp.puesto) { %> - <%= emp.puesto.Nombre_Puesto %><% } %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        
+        <div class="col-md-3">
+          <label for="Fecha" class="form-label">Fecha *</label>
+          <input type="date" class="form-control" id="Fecha" name="Fecha" required>
+        </div>
+        
+        <div class="col-md-3">
+          <label for="Tipo_Hora" class="form-label">Tipo de Hora *</label>
+          <select class="form-select" id="Tipo_Hora" name="Tipo_Hora" required>
+            <option value="">Seleccionar...</option>
+            <option value="PRESENCIAL">Presencial</option>
+            <option value="EN_LINEA">En Línea (Remoto)</option>
+            <option value="EXTRA">Extra (1.5x)</option>
+            <option value="DOBLE">Doble (2x)</option>
+            <option value="TRIPLE">Triple (3x)</option>
+          </select>
+        </div>
+        
+        <div class="col-md-3">
+          <label for="Cantidad_Horas" class="form-label">Cantidad de Horas *</label>
+          <input type="number" class="form-control" id="Cantidad_Horas" name="Cantidad_Horas" 
+                 required min="0.5" max="24" step="0.5" placeholder="8">
+        </div>
+        
+        <div class="col-md-12">
+          <label for="Descripcion" class="form-label">Descripción</label>
+          <textarea class="form-control" id="Descripcion" name="Descripcion" rows="2"
+                    placeholder="Descripción o razón de las horas adicionales"></textarea>
+        </div>
+      </div>
+      
+      <hr class="my-4">
+      
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Registrar
+        </button>
+        <a href="/horas-adicionales" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

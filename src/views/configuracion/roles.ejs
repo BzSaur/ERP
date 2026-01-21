@@ -1,0 +1,118 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">Gestión de Roles</h2>
+    <p class="text-muted mb-0">Administrar roles del sistema</p>
+  </div>
+  <a href="/configuracion" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Roles Existentes</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Usuarios</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% roles.forEach(rol => { %>
+                <tr>
+                  <td><%= rol.ID_Rol %></td>
+                  <td><strong><%= rol.Nombre_Rol %></strong></td>
+                  <td><%= rol.Descripcion || '-' %></td>
+                  <td><span class="badge bg-info"><%= rol._count.app_usuarios %></span></td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#editarRol<%= rol.ID_Rol %>">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                  </td>
+                </tr>
+                
+                <!-- Modal Editar -->
+                <div class="modal fade" id="editarRol<%= rol.ID_Rol %>" tabindex="-1">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <form action="/configuracion/roles/<%= rol.ID_Rol %>?_method=PUT" method="POST">
+                        <div class="modal-header">
+                          <h5 class="modal-title">Editar Rol</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                          <div class="mb-3">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" class="form-control" name="Nombre_Rol" 
+                                   value="<%= rol.Nombre_Rol %>" required>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea class="form-control" name="Descripcion" rows="2"><%= rol.Descripcion || '' %></textarea>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                          <button type="submit" class="btn btn-primary">Guardar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Nuevo Rol</h5>
+      </div>
+      <div class="card-body">
+        <form action="/configuracion/roles" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Nombre *</label>
+            <input type="text" class="form-control" name="Nombre_Rol" required maxlength="30">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="2" maxlength="255"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-plus-lg me-1"></i> Crear Rol
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

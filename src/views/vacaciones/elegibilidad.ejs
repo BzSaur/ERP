@@ -1,0 +1,141 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-people me-2"></i>Elegibilidad de Vacaciones</h2>
+    <p class="text-muted mb-0">Empleados y su derecho a vacaciones <%= anioActual %></p>
+  </div>
+  <a href="/vacaciones" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Resumen -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Elegibles</div>
+            <div class="stat-value"><%= empleados.filter(e => e.elegible).length %></div>
+          </div>
+          <i class="bi bi-check-circle stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card stat-card bg-warning">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Menos de 1 año</div>
+            <div class="stat-value"><%= empleados.filter(e => !e.elegible).length %></div>
+          </div>
+          <i class="bi bi-clock stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card stat-card bg-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Total Empleados</div>
+            <div class="stat-value"><%= empleados.length %></div>
+          </div>
+          <i class="bi bi-people stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th>Puesto / Área</th>
+            <th>Fecha Ingreso</th>
+            <th class="text-center">Antigüedad</th>
+            <th class="text-center">Días Corresp.</th>
+            <th class="text-center">Días Pend.</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% empleados.forEach(emp => { %>
+            <tr class="<%= !emp.elegible ? 'table-light' : '' %>">
+              <td>
+                <strong><%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %></strong>
+              </td>
+              <td>
+                <% if (emp.puesto) { %>
+                  <small><%= emp.puesto.Nombre_Puesto %></small><br>
+                <% } %>
+                <% if (emp.area) { %>
+                  <small class="text-muted"><%= emp.area.Nombre_Area %></small>
+                <% } %>
+              </td>
+              <td><%= emp.Fecha_Ingreso.toLocaleDateString('es-MX') %></td>
+              <td class="text-center">
+                <% if (emp.antiguedad.anos > 0) { %>
+                  <strong><%= emp.antiguedad.anos %></strong> años
+                  <% if (emp.antiguedad.meses > 0) { %>
+                    <small class="text-muted"><%= emp.antiguedad.meses %> meses</small>
+                  <% } %>
+                <% } else { %>
+                  <small class="text-muted"><%= emp.antiguedad.meses %> meses</small>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (emp.elegible) { %>
+                  <strong><%= emp.diasCorrespondientes %></strong>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (emp.elegible) { %>
+                  <strong class="<%= emp.diasPendientes > 0 ? 'text-success' : 'text-muted' %>">
+                    <%= emp.diasPendientes %>
+                  </strong>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (!emp.elegible) { %>
+                  <span class="badge bg-secondary">No elegible</span>
+                <% } else if (emp.tieneRegistro) { %>
+                  <span class="badge bg-success">Registrado</span>
+                <% } else { %>
+                  <span class="badge bg-warning text-dark">Pendiente generar</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

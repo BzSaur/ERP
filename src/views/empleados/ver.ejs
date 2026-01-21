@@ -1,0 +1,175 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/empleados">Empleados</a></li>
+        <li class="breadcrumb-item active"><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %></li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Detalle del Empleado</h4>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/empleados/<%= empleado.ID_Empleado %>/editar" class="btn btn-primary">
+      <i class="bi bi-pencil me-2"></i>Editar
+    </a>
+    <a href="/empleados" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-2"></i>Volver
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Información Personal -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-person me-2"></i>
+          Información Personal
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 40%">ID Empleado</td>
+            <td><strong>#<%= empleado.ID_Empleado %></strong></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Nombre Completo</td>
+            <td><strong><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %> <%= empleado.Apellido_Materno || '' %></strong></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Fecha de Nacimiento</td>
+            <td><%= empleado.Fecha_Nacimiento ? new Date(empleado.Fecha_Nacimiento).toLocaleDateString('es-MX') : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Nacionalidad</td>
+            <td><%= empleado.nacionalidad ? empleado.nacionalidad.Nombre_Nacionalidad : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Documento de Identidad</td>
+            <td><%= empleado.Tipo_Documento %>: <%= empleado.Documento_Identidad %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">RFC</td>
+            <td><%= empleado.RFC || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">NSS</td>
+            <td><%= empleado.NSS || '-' %></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Información Laboral -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-briefcase me-2"></i>
+          Información Laboral
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 40%">Estatus</td>
+            <td>
+              <span class="badge <%= empleado.estatus && empleado.estatus.Nombre_Estatus === 'ACTIVO' ? 'bg-success' : 'bg-secondary' %>">
+                <%= empleado.estatus ? empleado.estatus.Nombre_Estatus : '-' %>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td class="text-muted">Área</td>
+            <td><%= empleado.area ? empleado.area.Nombre_Area : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Puesto</td>
+            <td><%= empleado.puesto ? empleado.puesto.Nombre_Puesto : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Tipo de Horario</td>
+            <td><%= empleado.tipo_horario ? empleado.tipo_horario.Nombre_Horario : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Fecha de Ingreso</td>
+            <td><%= new Date(empleado.Fecha_Ingreso).toLocaleDateString('es-MX') %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Fecha de Baja</td>
+            <td><%= empleado.Fecha_Baja ? new Date(empleado.Fecha_Baja).toLocaleDateString('es-MX') : '-' %></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Información Salarial -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-currency-dollar me-2"></i>
+          Información Salarial
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 50%">Salario Diario</td>
+            <td><%= empleado.Salario_Diario ? '$' + parseFloat(empleado.Salario_Diario).toFixed(2) : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Salario por Hora</td>
+            <td><%= empleado.Salario_Hora ? '$' + parseFloat(empleado.Salario_Hora).toFixed(2) : '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Horas Semanales</td>
+            <td><%= empleado.Horas_Semanales_Contratadas || '-' %></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Información de Contacto -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-telephone me-2"></i>
+          Información de Contacto
+        </h5>
+      </div>
+      <div class="card-body">
+        <% if (empleado.contacto) { %>
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 40%">Email Personal</td>
+            <td><%= empleado.contacto.Email_Personal || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Email Corporativo</td>
+            <td><%= empleado.contacto.Email_Corporativo || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Teléfono Celular</td>
+            <td><%= empleado.contacto.Telefono_Celular || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Teléfono Fijo</td>
+            <td><%= empleado.contacto.Telefono_Fijo || '-' %></td>
+          </tr>
+        </table>
+        <% } else { %>
+        <p class="text-muted mb-0">Sin información de contacto registrada</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+

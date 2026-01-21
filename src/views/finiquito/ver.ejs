@@ -1,0 +1,341 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">
+      <% if (finiquito.Tipo === 'FINIQUITO') { %>
+        <i class="bi bi-file-check me-2"></i>Finiquito
+      <% } else { %>
+        <i class="bi bi-file-earmark-medical me-2"></i>Liquidación
+      <% } %>
+      #<%= finiquito.ID_Finiquito %>
+    </h2>
+    <p class="text-muted mb-0">
+      <%= finiquito.empleado.Nombre %> <%= finiquito.empleado.Apellido_Paterno %> <%= finiquito.empleado.Apellido_Materno || '' %>
+    </p>
+  </div>
+  <div>
+    <% if (finiquito.Estado === 'CALCULADO') { %>
+      <form action="/finiquito/<%= finiquito.ID_Finiquito %>/aprobar" method="POST" class="d-inline">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-circle me-1"></i> Aprobar
+        </button>
+      </form>
+    <% } else if (finiquito.Estado === 'APROBADO') { %>
+      <form action="/finiquito/<%= finiquito.ID_Finiquito %>/pagar" method="POST" class="d-inline">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-cash me-1"></i> Registrar Pago
+        </button>
+      </form>
+    <% } %>
+    <a href="/finiquito" class="btn btn-outline-secondary ms-2">
+      <i class="bi bi-arrow-left me-1"></i> Regresar
+    </a>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<div class="row g-4">
+  <!-- Información General -->
+  <div class="col-lg-8">
+    <!-- Datos del Empleado -->
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Datos del Empleado</h5>
+        <span class="badge <%= finiquito.Estado === 'CALCULADO' ? 'bg-secondary' : finiquito.Estado === 'APROBADO' ? 'bg-primary' : 'bg-success' %>">
+          <%= finiquito.Estado %>
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <small class="text-muted d-block">Nombre Completo</small>
+            <strong><%= finiquito.empleado.Nombre %> <%= finiquito.empleado.Apellido_Paterno %> <%= finiquito.empleado.Apellido_Materno || '' %></strong>
+          </div>
+          <div class="col-md-4">
+            <small class="text-muted d-block">Departamento</small>
+            <strong><%= finiquito.empleado.departamento?.Nombre || 'N/A' %></strong>
+          </div>
+          <div class="col-md-4">
+            <small class="text-muted d-block">Puesto</small>
+            <strong><%= finiquito.empleado.puesto?.Nombre || 'N/A' %></strong>
+          </div>
+          <div class="col-md-3">
+            <small class="text-muted d-block">Fecha de Ingreso</small>
+            <strong><%= finiquito.Fecha_Ingreso.toLocaleDateString('es-MX') %></strong>
+          </div>
+          <div class="col-md-3">
+            <small class="text-muted d-block">Fecha de Baja</small>
+            <strong><%= finiquito.Fecha_Baja.toLocaleDateString('es-MX') %></strong>
+          </div>
+          <div class="col-md-3">
+            <small class="text-muted d-block">Antigüedad</small>
+            <strong><%= finiquito.Antiguedad_Anos %> año(s), <%= finiquito.Antiguedad_Meses %> mes(es)</strong>
+          </div>
+          <div class="col-md-3">
+            <small class="text-muted d-block">Tipo</small>
+            <% if (finiquito.Tipo === 'FINIQUITO') { %>
+              <span class="badge bg-info fs-6">Finiquito</span>
+            <% } else { %>
+              <span class="badge bg-warning text-dark fs-6">Liquidación</span>
+            <% } %>
+          </div>
+        </div>
+        <hr>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <small class="text-muted d-block">Salario Mensual</small>
+            <strong>$<%= Number(finiquito.Salario_Mensual).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+          </div>
+          <div class="col-md-4">
+            <small class="text-muted d-block">Salario Diario</small>
+            <strong>$<%= Number(finiquito.Salario_Diario).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+          </div>
+          <div class="col-md-4">
+            <small class="text-muted d-block">Motivo de Baja</small>
+            <strong><%= finiquito.Motivo_Baja %></strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desglose de Cálculos -->
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>Desglose de Prestaciones</h5>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th class="text-center">Días/Unidades</th>
+              <th class="text-end">Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Días Trabajados -->
+            <tr>
+              <td>
+                <i class="bi bi-calendar-day me-2 text-primary"></i>
+                Días trabajados no pagados
+              </td>
+              <td class="text-center"><%= finiquito.Dias_Trabajados %> días</td>
+              <td class="text-end">$<%= Number(finiquito.Monto_Dias_Trabajados).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+
+            <!-- Vacaciones -->
+            <tr>
+              <td>
+                <i class="bi bi-sun me-2 text-warning"></i>
+                Vacaciones proporcionales
+                <small class="text-muted d-block">Correspondientes al año actual</small>
+              </td>
+              <td class="text-center"><%= Number(finiquito.Dias_Vacaciones).toFixed(2) %> días</td>
+              <td class="text-end">$<%= Number(finiquito.Monto_Vacaciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+
+            <!-- Prima Vacacional -->
+            <tr>
+              <td>
+                <i class="bi bi-star me-2 text-info"></i>
+                Prima vacacional
+                <small class="text-muted d-block">25% sobre vacaciones (Art. 80 LFT)</small>
+              </td>
+              <td class="text-center">25%</td>
+              <td class="text-end">$<%= Number(finiquito.Monto_Prima_Vacacional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+
+            <!-- Aguinaldo -->
+            <tr>
+              <td>
+                <i class="bi bi-gift me-2 text-success"></i>
+                Aguinaldo proporcional
+                <small class="text-muted d-block">15 días mínimo (Art. 87 LFT)</small>
+              </td>
+              <td class="text-center"><%= Number(finiquito.Dias_Aguinaldo).toFixed(2) %> días</td>
+              <td class="text-end">$<%= Number(finiquito.Monto_Aguinaldo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+
+            <% if (finiquito.Tipo === 'LIQUIDACION') { %>
+              <!-- Indemnización -->
+              <tr class="table-warning">
+                <td>
+                  <i class="bi bi-shield-check me-2 text-danger"></i>
+                  <strong>Indemnización constitucional</strong>
+                  <small class="text-muted d-block">3 meses de salario integrado (Art. 48, 50 LFT)</small>
+                </td>
+                <td class="text-center">90 días</td>
+                <td class="text-end">
+                  <strong>$<%= Number(finiquito.Monto_Indemnizacion).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
+              </tr>
+
+              <!-- Prima de Antigüedad -->
+              <tr class="table-warning">
+                <td>
+                  <i class="bi bi-clock-history me-2 text-danger"></i>
+                  <strong>Prima de antigüedad</strong>
+                  <small class="text-muted d-block">12 días por año trabajado, topado a 2 SM (Art. 162 LFT)</small>
+                </td>
+                <td class="text-center"><%= finiquito.Antiguedad_Anos %> año(s)</td>
+                <td class="text-end">
+                  <strong>$<%= Number(finiquito.Monto_Prima_Antiguedad).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+          <tfoot>
+            <tr class="table-light">
+              <td colspan="2" class="text-end"><strong>Subtotal Percepciones:</strong></td>
+              <td class="text-end"><strong>$<%= Number(finiquito.Total_Bruto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></td>
+            </tr>
+            <% if (finiquito.ISR_Retenido > 0) { %>
+            <tr class="table-danger">
+              <td colspan="2" class="text-end">(-) ISR Retenido:</td>
+              <td class="text-end text-danger">$<%= Number(finiquito.ISR_Retenido).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+            <% } %>
+            <tr class="table-success">
+              <td colspan="2" class="text-end"><strong class="fs-5">TOTAL NETO A PAGAR:</strong></td>
+              <td class="text-end"><strong class="fs-5 text-success">$<%= Number(finiquito.Total_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel Lateral -->
+  <div class="col-lg-4">
+    <!-- Resumen -->
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Resumen de Pago</h5>
+      </div>
+      <div class="card-body text-center">
+        <h2 class="display-6 text-success mb-0">
+          $<%= Number(finiquito.Total_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>
+        </h2>
+        <p class="text-muted">Total Neto</p>
+        
+        <hr>
+        
+        <div class="row text-start small">
+          <div class="col-6">
+            <span class="text-muted">Tipo:</span>
+          </div>
+          <div class="col-6 text-end">
+            <% if (finiquito.Tipo === 'FINIQUITO') { %>
+              <span class="badge bg-info">Finiquito</span>
+            <% } else { %>
+              <span class="badge bg-warning text-dark">Liquidación</span>
+            <% } %>
+          </div>
+          <div class="col-6">
+            <span class="text-muted">Estado:</span>
+          </div>
+          <div class="col-6 text-end">
+            <span class="badge <%= finiquito.Estado === 'CALCULADO' ? 'bg-secondary' : finiquito.Estado === 'APROBADO' ? 'bg-primary' : 'bg-success' %>">
+              <%= finiquito.Estado %>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado y Fechas -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial</h6>
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span><i class="bi bi-calculator me-2"></i>Calculado</span>
+            <span class="text-muted small"><%= finiquito.Fecha_Calculo.toLocaleDateString('es-MX') %></span>
+          </li>
+          <% if (finiquito.Estado === 'APROBADO' || finiquito.Estado === 'PAGADO') { %>
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span><i class="bi bi-check-circle me-2"></i>Aprobado</span>
+            <span class="text-muted small">
+              <% if (finiquito.Aprobado_Por_Usuario) { %>
+                por <%= finiquito.Aprobado_Por_Usuario.Nombre_Usuario %>
+              <% } %>
+            </span>
+          </li>
+          <% } %>
+          <% if (finiquito.Estado === 'PAGADO' && finiquito.Fecha_Pago) { %>
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span><i class="bi bi-cash-coin me-2 text-success"></i>Pagado</span>
+            <span class="text-muted small"><%= finiquito.Fecha_Pago.toLocaleDateString('es-MX') %></span>
+          </li>
+          <% } %>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Observaciones -->
+    <% if (finiquito.Observaciones) { %>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-chat-text me-2"></i>Observaciones</h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-0"><%= finiquito.Observaciones %></p>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Información Legal -->
+    <div class="card bg-light">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Base Legal</h6>
+      </div>
+      <div class="card-body small">
+        <% if (finiquito.Tipo === 'FINIQUITO') { %>
+          <p class="mb-2">
+            <strong>Art. 76 LFT:</strong> Vacaciones mínimas según antigüedad.
+          </p>
+          <p class="mb-2">
+            <strong>Art. 80 LFT:</strong> Prima vacacional del 25% mínimo.
+          </p>
+          <p class="mb-0">
+            <strong>Art. 87 LFT:</strong> Aguinaldo de 15 días mínimo.
+          </p>
+        <% } else { %>
+          <p class="mb-2">
+            <strong>Art. 48-50 LFT:</strong> Indemnización de 3 meses de salario.
+          </p>
+          <p class="mb-0">
+            <strong>Art. 162 LFT:</strong> Prima de antigüedad de 12 días por año trabajado.
+          </p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Botones de Acción -->
+<div class="d-flex justify-content-between mt-4">
+  <a href="/finiquito" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Regresar a la Lista
+  </a>
+  <div>
+    <button class="btn btn-outline-primary" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i> Imprimir
+    </button>
+  </div>
+</div>

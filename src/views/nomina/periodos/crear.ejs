@@ -1,0 +1,111 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-plus-lg me-2"></i>Nuevo Periodo de Nómina</h2>
+    <p class="text-muted mb-0">Crear un nuevo periodo de pago</p>
+  </div>
+  <a href="/nomina/periodos" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-body">
+    <form action="/nomina/periodos" method="POST">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="Nombre_Periodo" class="form-label">Nombre del Periodo *</label>
+          <input type="text" class="form-control" id="Nombre_Periodo" name="Nombre_Periodo" 
+                 required placeholder="Ej: Quincena 1 - Enero 2025">
+        </div>
+        
+        <div class="col-md-6">
+          <label for="Tipo_Periodo" class="form-label">Tipo de Periodo *</label>
+          <select class="form-select" id="Tipo_Periodo" name="Tipo_Periodo" required>
+            <option value="">Seleccionar...</option>
+            <option value="SEMANAL">Semanal (7 días)</option>
+            <option value="QUINCENAL" selected>Quincenal (15 días)</option>
+            <option value="MENSUAL">Mensual (30 días)</option>
+          </select>
+        </div>
+        
+        <div class="col-md-4">
+          <label for="Fecha_Inicio" class="form-label">Fecha de Inicio *</label>
+          <input type="date" class="form-control" id="Fecha_Inicio" name="Fecha_Inicio" required>
+        </div>
+        
+        <div class="col-md-4">
+          <label for="Fecha_Fin" class="form-label">Fecha de Fin *</label>
+          <input type="date" class="form-control" id="Fecha_Fin" name="Fecha_Fin" required>
+        </div>
+        
+        <div class="col-md-4">
+          <label for="Fecha_Pago" class="form-label">Fecha de Pago *</label>
+          <input type="date" class="form-control" id="Fecha_Pago" name="Fecha_Pago" required>
+        </div>
+        
+        <div class="col-12">
+          <label for="Observaciones" class="form-label">Observaciones</label>
+          <textarea class="form-control" id="Observaciones" name="Observaciones" rows="2"
+                    placeholder="Notas adicionales sobre este periodo..."></textarea>
+        </div>
+      </div>
+      
+      <hr class="my-4">
+      
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Crear Periodo
+        </button>
+        <a href="/nomina/periodos" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const tipoSelect = document.getElementById('Tipo_Periodo');
+  const fechaInicio = document.getElementById('Fecha_Inicio');
+  const fechaFin = document.getElementById('Fecha_Fin');
+  const fechaPago = document.getElementById('Fecha_Pago');
+  
+  // Auto-calcular fecha fin y pago según tipo
+  function calcularFechas() {
+    if (!fechaInicio.value) return;
+    
+    const inicio = new Date(fechaInicio.value);
+    let dias = 15; // Por defecto quincenal
+    
+    switch(tipoSelect.value) {
+      case 'SEMANAL':
+        dias = 6;
+        break;
+      case 'QUINCENAL':
+        dias = 14;
+        break;
+      case 'MENSUAL':
+        dias = 29;
+        break;
+    }
+    
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + dias);
+    fechaFin.value = fin.toISOString().split('T')[0];
+    
+    // Fecha de pago: día siguiente al fin
+    const pago = new Date(fin);
+    pago.setDate(pago.getDate() + 1);
+    fechaPago.value = pago.toISOString().split('T')[0];
+  }
+  
+  tipoSelect.addEventListener('change', calcularFechas);
+  fechaInicio.addEventListener('change', calcularFechas);
+});
+</script>

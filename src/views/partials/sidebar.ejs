@@ -1,0 +1,171 @@
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <a href="/" class="sidebar-brand">
+      <i class="bi bi-building"></i>
+      <span>ERP RH</span>
+    </a>
+    <button class="sidebar-toggle" id="sidebarToggle" title="Colapsar menú">
+      <i class="bi bi-list"></i>
+    </button>
+  </div>
+  
+  <div class="sidebar-body">
+    <ul class="sidebar-nav">
+      <!-- Dashboard -->
+      <li class="nav-item">
+        <a href="/" class="nav-link <%= currentPath === '/' ? 'active' : '' %>">
+          <i class="bi bi-speedometer2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+      
+      <!-- Empleados -->
+      <li class="nav-item">
+        <a href="/empleados" class="nav-link <%= currentPath.startsWith('/empleados') ? 'active' : '' %>">
+          <i class="bi bi-people"></i>
+          <span>Empleados</span>
+        </a>
+      </li>
+      
+      <!-- Catálogos -->
+      <li class="nav-item has-submenu">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/areas') || currentPath.startsWith('/puestos') || currentPath.startsWith('/nacionalidades') || currentPath.startsWith('/horarios') ? 'active' : '' %>">
+          <i class="bi bi-folder"></i>
+          <span>Catálogos</span>
+          <i class="bi bi-chevron-down submenu-arrow"></i>
+        </a>
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/areas') || currentPath.startsWith('/puestos') || currentPath.startsWith('/nacionalidades') || currentPath.startsWith('/horarios') ? 'show' : '' %>">
+          <li>
+            <a href="/areas" class="<%= currentPath.startsWith('/areas') ? 'active' : '' %>">
+              <i class="bi bi-diagram-3"></i> Áreas
+            </a>
+          </li>
+          <li>
+            <a href="/puestos" class="<%= currentPath.startsWith('/puestos') ? 'active' : '' %>">
+              <i class="bi bi-briefcase"></i> Puestos
+            </a>
+          </li>
+          <li>
+            <a href="/nacionalidades" class="<%= currentPath.startsWith('/nacionalidades') ? 'active' : '' %>">
+              <i class="bi bi-globe"></i> Nacionalidades
+            </a>
+          </li>
+          <li>
+            <a href="/horarios" class="<%= currentPath.startsWith('/horarios') ? 'active' : '' %>">
+              <i class="bi bi-clock"></i> Horarios
+            </a>
+          </li>
+        </ul>
+      </li>
+      
+      <!-- Horas Adicionales -->
+      <li class="nav-item">
+        <a href="/horas-adicionales" class="nav-link <%= currentPath.startsWith('/horas-adicionales') ? 'active' : '' %>">
+          <i class="bi bi-clock-history"></i>
+          <span>Horas Adicionales</span>
+        </a>
+      </li>
+      
+      <!-- Nómina -->
+      <li class="nav-item has-submenu">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/nomina') || currentPath.startsWith('/vacaciones') || currentPath.startsWith('/aguinaldo') || currentPath.startsWith('/finiquito') ? 'active' : '' %>">
+          <i class="bi bi-cash-stack"></i>
+          <span>Nómina</span>
+          <i class="bi bi-chevron-down submenu-arrow"></i>
+        </a>
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/nomina') || currentPath.startsWith('/vacaciones') || currentPath.startsWith('/aguinaldo') || currentPath.startsWith('/finiquito') ? 'show' : '' %>">
+          <li>
+            <a href="/nomina" class="<%= currentPath === '/nomina' ? 'active' : '' %>">
+              <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/nomina/periodos" class="<%= currentPath.startsWith('/nomina/periodos') ? 'active' : '' %>">
+              <i class="bi bi-calendar3"></i> Periodos
+            </a>
+          </li>
+          <li>
+            <a href="/vacaciones" class="<%= currentPath.startsWith('/vacaciones') ? 'active' : '' %>">
+              <i class="bi bi-sun"></i> Vacaciones
+            </a>
+          </li>
+          <li>
+            <a href="/aguinaldo" class="<%= currentPath.startsWith('/aguinaldo') ? 'active' : '' %>">
+              <i class="bi bi-gift"></i> Aguinaldo
+            </a>
+          </li>
+          <li>
+            <a href="/finiquito" class="<%= currentPath.startsWith('/finiquito') ? 'active' : '' %>">
+              <i class="bi bi-file-earmark-text"></i> Finiquito
+            </a>
+          </li>
+        </ul>
+      </li>
+      
+      <!-- Reportes -->
+      <li class="nav-item has-submenu">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/reportes') ? 'active' : '' %>">
+          <i class="bi bi-file-earmark-bar-graph"></i>
+          <span>Reportes</span>
+          <i class="bi bi-chevron-down submenu-arrow"></i>
+        </a>
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/reportes') ? 'show' : '' %>">
+          <li>
+            <a href="/reportes" class="<%= currentPath === '/reportes' ? 'active' : '' %>">
+              <i class="bi bi-bar-chart"></i> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/reportes/por-area" class="<%= currentPath === '/reportes/por-area' ? 'active' : '' %>">
+              <i class="bi bi-diagram-3"></i> Por Área
+            </a>
+          </li>
+          <li>
+            <a href="/reportes/por-horario" class="<%= currentPath === '/reportes/por-horario' ? 'active' : '' %>">
+              <i class="bi bi-clock"></i> Por Horario
+            </a>
+          </li>
+          <li>
+            <a href="/reportes/altas-bajas" class="<%= currentPath === '/reportes/altas-bajas' ? 'active' : '' %>">
+              <i class="bi bi-arrow-left-right"></i> Altas y Bajas
+            </a>
+          </li>
+        </ul>
+      </li>
+      
+      <% if (user && user.rol && (user.rol.Nombre_Rol === 'SuperAdministrador' || user.rol.Nombre_Rol === 'Administrador')) { %>
+      <!-- Administración -->
+      <li class="nav-item has-submenu">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') ? 'active' : '' %>">
+          <i class="bi bi-gear"></i>
+          <span>Administración</span>
+          <i class="bi bi-chevron-down submenu-arrow"></i>
+        </a>
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') ? 'show' : '' %>">
+          <li>
+            <a href="/usuarios" class="<%= currentPath.startsWith('/usuarios') ? 'active' : '' %>">
+              <i class="bi bi-person-gear"></i> Usuarios
+            </a>
+          </li>
+          <% if (user.rol.Nombre_Rol === 'SuperAdministrador') { %>
+          <li>
+            <a href="/configuracion" class="<%= currentPath.startsWith('/configuracion') ? 'active' : '' %>">
+              <i class="bi bi-sliders"></i> Configuración
+            </a>
+          </li>
+          <li>
+            <a href="/bitacora" class="<%= currentPath.startsWith('/bitacora') ? 'active' : '' %>">
+              <i class="bi bi-journal-text"></i> Bitácora
+            </a>
+          </li>
+          <% } %>
+        </ul>
+      </li>
+      <% } %>
+    </ul>
+  </div>
+</nav>
+
+<!-- Overlay for mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>

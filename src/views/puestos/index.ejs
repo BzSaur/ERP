@@ -1,0 +1,92 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="mb-1">Catálogo de Puestos</h4>
+    <p class="text-muted mb-0">Administra los puestos de trabajo</p>
+  </div>
+  <a href="/puestos/crear" class="btn btn-primary">
+    <i class="bi bi-briefcase me-2"></i>
+    Nuevo Puesto
+  </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/puestos" method="GET" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Filtrar por Área</label>
+        <select class="form-select" name="area" onchange="this.form.submit()">
+          <option value="">Todas las áreas</option>
+          <% areas.forEach(function(a) { %>
+            <option value="<%= a.ID_Area %>" <%= filtros.area == a.ID_Area ? 'selected' : '' %>><%= a.Nombre_Area %></option>
+          <% }); %>
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabla de Puestos -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Nombre del Puesto</th>
+            <th>Área</th>
+            <th>Descripción</th>
+            <th class="text-end">Salario Base Ref.</th>
+            <th class="text-end">Salario Hora Ref.</th>
+            <th class="text-center">Empleados</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (puestos && puestos.length > 0) { %>
+            <% puestos.forEach(function(puesto) { %>
+            <tr>
+              <td><strong>#<%= puesto.ID_Puesto %></strong></td>
+              <td>
+                <i class="bi bi-briefcase text-success me-2"></i>
+                <strong><%= puesto.Nombre_Puesto %></strong>
+              </td>
+              <td>
+                <span class="badge bg-primary"><%= puesto.area ? puesto.area.Nombre_Area : '-' %></span>
+              </td>
+              <td><%= puesto.Descripcion || '-' %></td>
+              <td class="text-end">
+                <%= puesto.Salario_Base_Referencia ? '$' + parseFloat(puesto.Salario_Base_Referencia).toFixed(2) : '-' %>
+              </td>
+              <td class="text-end">
+                <%= puesto.Salario_Hora_Referencia ? '$' + parseFloat(puesto.Salario_Hora_Referencia).toFixed(2) : '-' %>
+              </td>
+              <td class="text-center">
+                <span class="badge bg-info"><%= puesto._count.empleados %></span>
+              </td>
+              <td class="text-end">
+                <a href="/puestos/<%= puesto.ID_Puesto %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <% if (puesto._count.empleados === 0) { %>
+                <form action="/puestos/<%= puesto.ID_Puesto %>/eliminar" method="POST" class="d-inline"
+                      onsubmit="return confirm('¿Eliminar este puesto?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="8" class="text-center text-muted py-4">No hay puestos registrados</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+

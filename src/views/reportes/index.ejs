@@ -1,0 +1,131 @@
+<!-- Header -->
+<div class="mb-4">
+  <h4 class="mb-1">Dashboard de Reportes</h4>
+  <p class="text-muted mb-0">Estadísticas y análisis del personal</p>
+</div>
+
+<!-- Estadísticas Generales -->
+<div class="row g-4 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card bg-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="stat-label">Total Empleados</h6>
+            <h2 class="stat-value"><%= estadisticas.totalEmpleados %></h2>
+          </div>
+          <div class="stat-icon">
+            <i class="bi bi-people-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="stat-label">Activos</h6>
+            <h2 class="stat-value"><%= estadisticas.empleadosActivos %></h2>
+          </div>
+          <div class="stat-icon">
+            <i class="bi bi-person-check-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card bg-danger">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="stat-label">Inactivos</h6>
+            <h2 class="stat-value"><%= estadisticas.empleadosInactivos %></h2>
+          </div>
+          <div class="stat-icon">
+            <i class="bi bi-person-x-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-sm-6 col-xl-3">
+    <div class="card stat-card bg-info">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="stat-label">Áreas / Puestos</h6>
+            <h2 class="stat-value"><%= estadisticas.totalAreas %> / <%= estadisticas.totalPuestos %></h2>
+          </div>
+          <div class="stat-icon">
+            <i class="bi bi-diagram-3-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Links a Reportes -->
+<div class="row g-4">
+  <div class="col-md-6 col-lg-3">
+    <a href="/reportes/por-area" class="text-decoration-none">
+      <div class="card h-100 hover-card">
+        <div class="card-body text-center py-4">
+          <div class="icon-circle bg-primary-soft mb-3">
+            <i class="bi bi-diagram-3 text-primary fs-1"></i>
+          </div>
+          <h5>Por Área</h5>
+          <p class="text-muted mb-0">Empleados agrupados por área</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  
+  <div class="col-md-6 col-lg-3">
+    <a href="/reportes/por-horario" class="text-decoration-none">
+      <div class="card h-100 hover-card">
+        <div class="card-body text-center py-4">
+          <div class="icon-circle bg-success-soft mb-3">
+            <i class="bi bi-clock text-success fs-1"></i>
+          </div>
+          <h5>Por Horario</h5>
+          <p class="text-muted mb-0">Empleados por tipo de horario</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  
+  <div class="col-md-6 col-lg-3">
+    <a href="/reportes/por-estatus" class="text-decoration-none">
+      <div class="card h-100 hover-card">
+        <div class="card-body text-center py-4">
+          <div class="icon-circle bg-warning-soft mb-3">
+            <i class="bi bi-flag text-warning fs-1"></i>
+          </div>
+          <h5>Por Estatus</h5>
+          <p class="text-muted mb-0">Empleados por estatus laboral</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  
+  <div class="col-md-6 col-lg-3">
+    <a href="/reportes/altas-bajas" class="text-decoration-none">
+      <div class="card h-100 hover-card">
+        <div class="card-body text-center py-4">
+          <div class="icon-circle bg-info-soft mb-3">
+            <i class="bi bi-arrow-left-right text-info fs-1"></i>
+          </div>
+          <h5>Altas y Bajas</h5>
+          <p class="text-muted mb-0">Movimientos del personal</p>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>

@@ -1,0 +1,53 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">Editar Horario</h2>
+    <p class="text-muted mb-0">Modificar datos del horario</p>
+  </div>
+  <a href="/horarios" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-body">
+    <form action="/horarios/<%= horario.ID_Tipo_Horario %>?_method=PUT" method="POST">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="Nombre_Horario" class="form-label">Nombre del Horario *</label>
+          <input type="text" class="form-control" id="Nombre_Horario" 
+                 name="Nombre_Horario" required maxlength="30"
+                 value="<%= horario.Nombre_Horario %>">
+        </div>
+        
+        <div class="col-md-3">
+          <label for="Horas_Semana" class="form-label">Horas por Semana</label>
+          <input type="number" class="form-control" id="Horas_Semana" 
+                 name="Horas_Semana" min="1" max="168"
+                 value="<%= horario.Horas_Semana || '' %>">
+        </div>
+        
+        <div class="col-md-12">
+          <label for="Descripcion" class="form-label">Descripción</label>
+          <textarea class="form-control" id="Descripcion" 
+                    name="Descripcion" rows="3" maxlength="255"><%= horario.Descripcion || '' %></textarea>
+        </div>
+      </div>
+      
+      <hr class="my-4">
+      
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Actualizar
+        </button>
+        <a href="/horarios" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

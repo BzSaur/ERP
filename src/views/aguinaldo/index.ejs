@@ -1,0 +1,214 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-gift me-2"></i>Aguinaldo <%= filtros.anio %></h2>
+    <p class="text-muted mb-0">Cálculo y pago de aguinaldo según LFT</p>
+  </div>
+  <div class="d-flex gap-2">
+    <form action="/aguinaldo/calcular" method="POST" class="d-inline">
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-calculator me-1"></i> Calcular Aguinaldo
+      </button>
+    </form>
+    <% if (totales.pendientes > 0) { %>
+      <form action="/aguinaldo/pagar-todos" method="POST" class="d-inline"
+            data-confirm="¿Marcar todos los aguinaldos como pagados?">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-cash-coin me-1"></i> Pagar Todos
+        </button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Resumen -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card stat-card bg-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Empleados</div>
+            <div class="stat-value"><%= totales.empleados %></div>
+          </div>
+          <i class="bi bi-people stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Total Bruto</div>
+            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.bruto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+          </div>
+          <i class="bi bi-currency-dollar stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-danger">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Total ISR</div>
+            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.isr.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+          </div>
+          <i class="bi bi-receipt stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card stat-card bg-info">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Total Neto</div>
+            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+          </div>
+          <i class="bi bi-cash-stack stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/aguinaldo" method="GET" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label for="anio" class="form-label">Año</label>
+        <select class="form-select" id="anio" name="anio">
+          <% for (let y = anioActual; y >= 2020; y--) { %>
+            <option value="<%= y %>" <%= filtros.anio == y ? 'selected' : '' %>><%= y %></option>
+          <% } %>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="estado" class="form-label">Estado</label>
+        <select class="form-select" id="estado" name="estado">
+          <option value="">Todos</option>
+          <option value="pendiente" <%= filtros.estado === 'pendiente' ? 'selected' : '' %>>Pendiente</option>
+          <option value="pagado" <%= filtros.estado === 'pagado' ? 'selected' : '' %>>Pagado</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/aguinaldo" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Info LFT -->
+<div class="alert alert-info mb-4">
+  <i class="bi bi-info-circle me-2"></i>
+  <strong>Art. 87 LFT:</strong> El aguinaldo mínimo es de 15 días de salario, 
+  pagado antes del 20 de diciembre. Si no se laboró el año completo, se paga proporcional.
+  Exención ISR: 30 UMAs ($<%= (30 * 108.57).toFixed(2) %>).
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">Detalle de Aguinaldos</h5>
+    <small class="text-muted">
+      Pagados: <span class="badge bg-success"><%= totales.pagados %></span>
+      Pendientes: <span class="badge bg-warning text-dark"><%= totales.pendientes %></span>
+    </small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th class="text-center">Días Lab.</th>
+            <th class="text-center">Días Agu.</th>
+            <th class="text-end">Salario Diario</th>
+            <th class="text-end">Bruto</th>
+            <th class="text-end">ISR</th>
+            <th class="text-end">Neto</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (aguinaldos.length === 0) { %>
+            <tr>
+              <td colspan="9" class="text-center py-4 text-muted">
+                <i class="bi bi-gift fs-1 d-block mb-2"></i>
+                No hay aguinaldos calculados para este año
+              </td>
+            </tr>
+          <% } else { %>
+            <% aguinaldos.forEach(a => { %>
+              <tr>
+                <td>
+                  <strong><%= a.empleado.Nombre %> <%= a.empleado.Apellido_Paterno %></strong>
+                </td>
+                <td class="text-center"><%= a.Dias_Laborados %></td>
+                <td class="text-center"><%= a.Dias_Aguinaldo %></td>
+                <td class="text-end">$<%= Number(a.Salario_Diario).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+                <td class="text-end">$<%= Number(a.Monto_Bruto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+                <td class="text-end text-danger">$<%= Number(a.Deduccion_ISR).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+                <td class="text-end"><strong>$<%= Number(a.Monto_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></td>
+                <td>
+                  <% if (a.Pagado) { %>
+                    <span class="badge bg-success">Pagado</span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <a href="/aguinaldo/<%= a.ID_Aguinaldo %>" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <% if (!a.Pagado) { %>
+                    <form action="/aguinaldo/<%= a.ID_Aguinaldo %>/pagar" method="POST" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-outline-success" title="Marcar pagado">
+                        <i class="bi bi-check-lg"></i>
+                      </button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+        <% if (aguinaldos.length > 0) { %>
+          <tfoot class="table-light">
+            <tr>
+              <th colspan="4" class="text-end">TOTALES:</th>
+              <th class="text-end">$<%= totales.bruto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+              <th class="text-end text-danger">$<%= totales.isr.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+              <th class="text-end"><strong>$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></th>
+              <th colspan="2"></th>
+            </tr>
+          </tfoot>
+        <% } %>
+      </table>
+    </div>
+  </div>
+</div>

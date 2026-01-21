@@ -1,0 +1,55 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/areas">Áreas</a></li>
+      <li class="breadcrumb-item active">Editar</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Editar Área: <%= area.Nombre_Area %></h4>
+</div>
+
+<!-- Formulario -->
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <form action="/areas/<%= area.ID_Area %>" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Nombre del Área <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre_Area" 
+                   value="<%= area.Nombre_Area %>" required>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Tipo de Área</label>
+            <select class="form-select" name="Tipo_Area">
+              <option value="">Seleccionar...</option>
+              <option value="PRODUCCION" <%= area.Tipo_Area === 'PRODUCCION' ? 'selected' : '' %>>Producción</option>
+              <option value="ADMINISTRATIVO" <%= area.Tipo_Area === 'ADMINISTRATIVO' ? 'selected' : '' %>>Administrativo</option>
+              <option value="COMERCIAL" <%= area.Tipo_Area === 'COMERCIAL' ? 'selected' : '' %>>Comercial</option>
+              <option value="OPERACIONES" <%= area.Tipo_Area === 'OPERACIONES' ? 'selected' : '' %>>Operaciones</option>
+              <option value="SISTEMAS" <%= area.Tipo_Area === 'SISTEMAS' ? 'selected' : '' %>>Sistemas</option>
+              <option value="OTRO" <%= area.Tipo_Area === 'OTRO' ? 'selected' : '' %>>Otro</option>
+            </select>
+          </div>
+          
+          <div class="mb-4">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="3"><%= area.Descripcion || '' %></textarea>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <a href="/areas" class="btn btn-outline-secondary">
+              <i class="bi bi-x-lg me-1"></i> Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+

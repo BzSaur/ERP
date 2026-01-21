@@ -1,0 +1,204 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/empleados">Empleados</a></li>
+        <li class="breadcrumb-item"><a href="/empleados/<%= empleado.ID_Empleado %>"><%= empleado.Nombre %></a></li>
+        <li class="breadcrumb-item active">Editar</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Editar Empleado</h4>
+  </div>
+</div>
+
+<!-- Formulario -->
+<form action="/empleados/<%= empleado.ID_Empleado %>" method="POST">
+  <div class="row g-4">
+    <!-- Datos Personales -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-person me-2"></i>
+            Datos Personales
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nombre(s) <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Nombre" value="<%= empleado.Nombre %>" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido Paterno <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Apellido_Paterno" value="<%= empleado.Apellido_Paterno %>" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido Materno</label>
+              <input type="text" class="form-control" name="Apellido_Materno" value="<%= empleado.Apellido_Materno || '' %>">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha de Nacimiento</label>
+              <input type="date" class="form-control" name="Fecha_Nacimiento" value="<%= empleado.Fecha_Nacimiento ? new Date(empleado.Fecha_Nacimiento).toISOString().split('T')[0] : '' %>">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nacionalidad <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Nacionalidad" required>
+                <% nacionalidades.forEach(function(n) { %>
+                  <option value="<%= n.ID_Nacionalidad %>" <%= n.ID_Nacionalidad === empleado.ID_Nacionalidad ? 'selected' : '' %>><%= n.Nombre_Nacionalidad %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Documentos -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-card-text me-2"></i>
+            Documentos de Identidad
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Tipo de Documento <span class="text-danger">*</span></label>
+              <select class="form-select" name="Tipo_Documento" required>
+                <option value="INE" <%= empleado.Tipo_Documento === 'INE' ? 'selected' : '' %>>INE</option>
+                <option value="PASAPORTE" <%= empleado.Tipo_Documento === 'PASAPORTE' ? 'selected' : '' %>>Pasaporte</option>
+                <option value="CEDULA" <%= empleado.Tipo_Documento === 'CEDULA' ? 'selected' : '' %>>Cédula Profesional</option>
+                <option value="OTRO" <%= empleado.Tipo_Documento === 'OTRO' ? 'selected' : '' %>>Otro</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Número de Documento <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Documento_Identidad" value="<%= empleado.Documento_Identidad %>" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">RFC</label>
+              <input type="text" class="form-control" name="RFC" maxlength="13" value="<%= empleado.RFC || '' %>">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">NSS</label>
+              <input type="text" class="form-control" name="NSS" maxlength="20" value="<%= empleado.NSS || '' %>">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Información Laboral -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-briefcase me-2"></i>
+            Información Laboral
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Área <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Area" id="selectArea" required>
+                <% areas.forEach(function(a) { %>
+                  <option value="<%= a.ID_Area %>" <%= a.ID_Area === empleado.ID_Area ? 'selected' : '' %>><%= a.Nombre_Area %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Puesto <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Puesto" id="selectPuesto" required>
+                <% puestos.forEach(function(p) { %>
+                  <option value="<%= p.ID_Puesto %>" data-area="<%= p.ID_Area %>" <%= p.ID_Puesto === empleado.ID_Puesto ? 'selected' : '' %>><%= p.Nombre_Puesto %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Tipo de Horario <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Tipo_Horario" required>
+                <% tiposHorario.forEach(function(t) { %>
+                  <option value="<%= t.ID_Tipo_Horario %>" <%= t.ID_Tipo_Horario === empleado.ID_Tipo_Horario ? 'selected' : '' %>><%= t.Nombre_Horario %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Estatus <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Estatus" required>
+                <% estatuses.forEach(function(e) { %>
+                  <option value="<%= e.ID_Estatus %>" <%= e.ID_Estatus === empleado.ID_Estatus ? 'selected' : '' %>><%= e.Nombre_Estatus %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="Fecha_Ingreso" value="<%= new Date(empleado.Fecha_Ingreso).toISOString().split('T')[0] %>" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha de Baja</label>
+              <input type="date" class="form-control" name="Fecha_Baja" value="<%= empleado.Fecha_Baja ? new Date(empleado.Fecha_Baja).toISOString().split('T')[0] : '' %>">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Salarios -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-currency-dollar me-2"></i>
+            Información Salarial
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Salario Diario</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Diario" value="<%= empleado.Salario_Diario || '' %>">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Salario por Hora</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Hora" value="<%= empleado.Salario_Hora || '' %>">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Horas Semanales</label>
+              <input type="number" class="form-control" name="Horas_Semanales_Contratadas" value="<%= empleado.Horas_Semanales_Contratadas || '' %>">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Botones -->
+  <div class="d-flex justify-content-between mt-4">
+    <form action="/empleados/<%= empleado.ID_Empleado %>/eliminar" method="POST" class="d-inline" 
+          onsubmit="return confirm('¿Estás seguro de eliminar este empleado? Esta acción no se puede deshacer.')">
+      <button type="submit" class="btn btn-outline-danger">
+        <i class="bi bi-trash me-1"></i> Eliminar
+      </button>
+    </form>
+    <div class="d-flex gap-2">
+      <a href="/empleados/<%= empleado.ID_Empleado %>" class="btn btn-outline-secondary">
+        <i class="bi bi-x-lg me-1"></i> Cancelar
+      </a>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+      </button>
+    </div>
+  </div>
+</form>
+

@@ -1,0 +1,203 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i><%= periodo.Nombre_Periodo %></h2>
+    <p class="text-muted mb-0">
+      <%= periodo.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
+      <%= periodo.Fecha_Fin.toLocaleDateString('es-MX') %>
+      | Pago: <%= periodo.Fecha_Pago.toLocaleDateString('es-MX') %>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <% if (periodo.Estado !== 'CERRADO') { %>
+      <form action="/nomina/periodos/<%= periodo.ID_Periodo %>/calcular" method="POST" class="d-inline">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-calculator me-1"></i> Calcular Nómina
+        </button>
+      </form>
+      <form action="/nomina/periodos/<%= periodo.ID_Periodo %>/cerrar" method="POST" class="d-inline"
+            data-confirm="¿Cerrar este periodo? Esta acción no se puede deshacer.">
+        <button type="submit" class="btn btn-warning">
+          <i class="bi bi-lock me-1"></i> Cerrar Periodo
+        </button>
+      </form>
+    <% } %>
+    <a href="/nomina/periodos" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Info del periodo -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <h3 class="text-primary mb-0"><%= totales.empleados %></h3>
+        <small class="text-muted">Empleados</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <h5 class="text-success mb-0">$<%= totales.percepciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h5>
+        <small class="text-muted">Total Percepciones</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <h5 class="text-danger mb-0">$<%= totales.deducciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h5>
+        <small class="text-muted">Total Deducciones</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card h-100 bg-primary text-white">
+      <div class="card-body text-center">
+        <h4 class="mb-0">$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h4>
+        <small>Total Neto a Pagar</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Estado del periodo -->
+<div class="alert 
+  <% if (periodo.Estado === 'PENDIENTE') { %>alert-warning<% } %>
+  <% if (periodo.Estado === 'PROCESANDO') { %>alert-info<% } %>
+  <% if (periodo.Estado === 'CERRADO') { %>alert-success<% } %>
+  mb-4">
+  <div class="d-flex align-items-center">
+    <% if (periodo.Estado === 'PENDIENTE') { %>
+      <i class="bi bi-hourglass-split fs-4 me-2"></i>
+      <div>
+        <strong>Periodo Pendiente</strong>
+        <p class="mb-0 small">Este periodo aún no ha sido procesado. Haz clic en "Calcular Nómina" para generar los cálculos.</p>
+      </div>
+    <% } else if (periodo.Estado === 'PROCESANDO') { %>
+      <i class="bi bi-gear fs-4 me-2"></i>
+      <div>
+        <strong>Nómina Calculada</strong>
+        <p class="mb-0 small">La nómina ha sido calculada. Revisa los montos y cierra el periodo cuando esté listo.</p>
+      </div>
+    <% } else { %>
+      <i class="bi bi-check-circle fs-4 me-2"></i>
+      <div>
+        <strong>Periodo Cerrado</strong>
+        <p class="mb-0 small">Este periodo ha sido cerrado y no puede modificarse.</p>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- Tabla de nóminas -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0"><i class="bi bi-people me-2"></i>Detalle de Nóminas</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th class="text-center">Días Trab.</th>
+            <th class="text-center">Horas Extra</th>
+            <th class="text-end">Percepciones</th>
+            <th class="text-end">Deducciones</th>
+            <th class="text-end">Neto</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (periodo.nominas.length === 0) { %>
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">
+                <i class="bi bi-calculator fs-1 d-block mb-2"></i>
+                No hay nóminas calculadas. Haz clic en "Calcular Nómina" para generar.
+              </td>
+            </tr>
+          <% } else { %>
+            <% periodo.nominas.forEach(n => { %>
+              <tr>
+                <td>
+                  <strong><%= n.empleado.Nombre %> <%= n.empleado.Apellido_Paterno %></strong>
+                </td>
+                <td class="text-center">
+                  <%= n.Dias_Trabajados %>
+                  <% if (n.Dias_Faltas > 0) { %>
+                    <span class="badge bg-danger ms-1">-<%= n.Dias_Faltas %></span>
+                  <% } %>
+                </td>
+                <td class="text-center">
+                  <% if (Number(n.Horas_Extra) > 0 || Number(n.Horas_Dobles) > 0 || Number(n.Horas_Triples) > 0) { %>
+                    <small>
+                      <% if (Number(n.Horas_Extra) > 0) { %><span class="badge bg-info"><%= n.Horas_Extra %>h</span><% } %>
+                      <% if (Number(n.Horas_Dobles) > 0) { %><span class="badge bg-warning"><%= n.Horas_Dobles %>h 2x</span><% } %>
+                      <% if (Number(n.Horas_Triples) > 0) { %><span class="badge bg-danger"><%= n.Horas_Triples %>h 3x</span><% } %>
+                    </small>
+                  <% } else { %>
+                    <span class="text-muted">-</span>
+                  <% } %>
+                </td>
+                <td class="text-end text-success">
+                  $<%= Number(n.Total_Percepciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>
+                </td>
+                <td class="text-end text-danger">
+                  $<%= Number(n.Total_Deducciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>
+                </td>
+                <td class="text-end">
+                  <strong>$<%= Number(n.Sueldo_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
+                <td>
+                  <% if (n.Estado === 'CALCULADO') { %>
+                    <span class="badge bg-secondary">Calculado</span>
+                  <% } else if (n.Estado === 'APROBADO') { %>
+                    <span class="badge bg-success">Aprobado</span>
+                  <% } else { %>
+                    <span class="badge bg-primary">Pagado</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <a href="/nomina/periodos/<%= periodo.ID_Periodo %>/empleado/<%= n.ID_Empleado %>" 
+                     class="btn btn-sm btn-outline-primary" title="Ver recibo">
+                    <i class="bi bi-file-earmark-text"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+        <% if (periodo.nominas.length > 0) { %>
+          <tfoot class="table-light">
+            <tr>
+              <th colspan="3" class="text-end">TOTALES:</th>
+              <th class="text-end text-success">$<%= totales.percepciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+              <th class="text-end text-danger">$<%= totales.deducciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+              <th class="text-end"><strong>$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></th>
+              <th colspan="2"></th>
+            </tr>
+          </tfoot>
+        <% } %>
+      </table>
+    </div>
+  </div>
+</div>

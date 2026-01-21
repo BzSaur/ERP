@@ -1,0 +1,91 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/reportes">Reportes</a></li>
+        <li class="breadcrumb-item active">Por Área</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Reporte de Empleados por Área</h4>
+  </div>
+  <button class="btn btn-outline-primary" onclick="window.print()">
+    <i class="bi bi-printer me-2"></i>Imprimir
+  </button>
+</div>
+
+<!-- Resumen -->
+<div class="row g-4 mb-4">
+  <% areas.forEach(function(area) { %>
+  <div class="col-md-6 col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="bi bi-diagram-3 text-primary me-2"></i>
+          <%= area.Nombre_Area %>
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Total:</span>
+          <strong><%= area.totalEmpleados %></strong>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-success">Activos:</span>
+          <span class="badge bg-success"><%= area.empleadosActivos %></span>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-secondary">Inactivos:</span>
+          <span class="badge bg-secondary"><%= area.empleadosInactivos %></span>
+        </div>
+        <hr>
+        <% const porcentaje = area.totalEmpleados > 0 ? Math.round(area.empleadosActivos / area.totalEmpleados * 100) : 0; %>
+        <div class="progress" style="height: 20px;">
+          <div class="progress-bar bg-success" role="progressbar" style="width: <%= porcentaje %>%">
+            <%= porcentaje %>%
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% }); %>
+</div>
+
+<!-- Detalle por Área -->
+<% areas.filter(function(a) { return a.totalEmpleados > 0; }).forEach(function(area) { %>
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-diagram-3 me-2"></i>
+      <%= area.Nombre_Area %>
+      <span class="badge bg-primary ms-2"><%= area.totalEmpleados %> empleados</span>
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th>Puesto</th>
+            <th>Estatus</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% area.empleados.forEach(function(emp) { %>
+          <tr>
+            <td><%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %></td>
+            <td><%= emp.puesto ? emp.puesto.Nombre_Puesto : '-' %></td>
+            <td>
+              <span class="badge <%= emp.estatus && emp.estatus.Nombre_Estatus === 'ACTIVO' ? 'bg-success' : 'bg-secondary' %>">
+                <%= emp.estatus ? emp.estatus.Nombre_Estatus : '-' %>
+              </span>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<% }); %>

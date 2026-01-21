@@ -1,0 +1,214 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/empleados">Empleados</a></li>
+        <li class="breadcrumb-item active">Nuevo</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Registrar Nuevo Empleado</h4>
+  </div>
+</div>
+
+<!-- Formulario -->
+<form action="/empleados" method="POST">
+  <div class="row g-4">
+    <!-- Datos Personales -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-person me-2"></i>
+            Datos Personales
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nombre(s) <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Nombre" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido Paterno <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Apellido_Paterno" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido Materno</label>
+              <input type="text" class="form-control" name="Apellido_Materno">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha de Nacimiento</label>
+              <input type="date" class="form-control" name="Fecha_Nacimiento">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nacionalidad <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Nacionalidad" required>
+                <option value="">Seleccionar...</option>
+                <% nacionalidades.forEach(function(n) { %>
+                  <option value="<%= n.ID_Nacionalidad %>"><%= n.Nombre_Nacionalidad %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Documentos -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-card-text me-2"></i>
+            Documentos de Identidad
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Tipo de Documento <span class="text-danger">*</span></label>
+              <select class="form-select" name="Tipo_Documento" required>
+                <option value="">Seleccionar...</option>
+                <option value="INE">INE</option>
+                <option value="PASAPORTE">Pasaporte</option>
+                <option value="CEDULA">Cédula Profesional</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Número de Documento <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Documento_Identidad" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">RFC</label>
+              <input type="text" class="form-control" name="RFC" maxlength="13" placeholder="XXXX000000XXX">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">NSS (Número Seguro Social)</label>
+              <input type="text" class="form-control" name="NSS" maxlength="20">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Información Laboral -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-briefcase me-2"></i>
+            Información Laboral
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Área <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Area" id="selectArea" required>
+                <option value="">Seleccionar...</option>
+                <% areas.forEach(function(a) { %>
+                  <option value="<%= a.ID_Area %>"><%= a.Nombre_Area %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Puesto <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Puesto" id="selectPuesto" required>
+                <option value="">Seleccionar área primero...</option>
+                <% puestos.forEach(function(p) { %>
+                  <option value="<%= p.ID_Puesto %>" data-area="<%= p.ID_Area %>"><%= p.Nombre_Puesto %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Tipo de Horario <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Tipo_Horario" required>
+                <option value="">Seleccionar...</option>
+                <% tiposHorario.forEach(function(t) { %>
+                  <option value="<%= t.ID_Tipo_Horario %>"><%= t.Nombre_Horario %><% if (t.Horas_Semana) { %> (<%= t.Horas_Semana %> hrs/sem)<% } %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Estatus <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Estatus" required>
+                <% estatuses.forEach(function(e) { %>
+                  <option value="<%= e.ID_Estatus %>" <%= e.Nombre_Estatus === 'ACTIVO' ? 'selected' : '' %>><%= e.Nombre_Estatus %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="Fecha_Ingreso" value="<%= new Date().toISOString().split('T')[0] %>" required>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Salarios -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-currency-dollar me-2"></i>
+            Información Salarial
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Salario Diario</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Diario">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Salario por Hora</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Hora">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Horas Semanales Contratadas</label>
+              <input type="number" class="form-control" name="Horas_Semanales_Contratadas">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Botones -->
+  <div class="d-flex justify-content-end gap-2 mt-4">
+    <a href="/empleados" class="btn btn-outline-secondary">
+      <i class="bi bi-x-lg me-1"></i> Cancelar
+    </a>
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i> Guardar Empleado
+    </button>
+  </div>
+</form>
+
+<script>
+  // Filtrar puestos por área
+  document.getElementById('selectArea').addEventListener('change', function() {
+    const areaId = this.value;
+    const puestoSelect = document.getElementById('selectPuesto');
+    const options = puestoSelect.querySelectorAll('option[data-area]');
+    
+    puestoSelect.value = '';
+    
+    options.forEach(option => {
+      if (!areaId || option.dataset.area === areaId) {
+        option.style.display = '';
+      } else {
+        option.style.display = 'none';
+      }
+    });
+  });
+</script>

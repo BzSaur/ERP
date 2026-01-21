@@ -1,0 +1,64 @@
+<!-- Navbar -->
+<nav class="navbar">
+  <!-- Mobile toggle -->
+  <button class="btn-icon d-lg-none" id="mobileMenuToggle" title="Menú">
+    <i class="bi bi-list"></i>
+  </button>
+  
+  <!-- Page Title -->
+  <h1 class="page-title"><%= typeof title !== 'undefined' ? title : 'Dashboard' %></h1>
+  
+  <!-- Right side -->
+  <div class="d-flex align-items-center gap-2 ms-auto">
+    <!-- Notifications -->
+    <div class="dropdown">
+      <button class="btn-icon" data-bs-toggle="dropdown" title="Notificaciones">
+        <i class="bi bi-bell"></i>
+        <span class="badge-dot"></span>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end notification-dropdown">
+        <h6 class="dropdown-header">Notificaciones</h6>
+        <div class="dropdown-divider"></div>
+        <a href="#" class="dropdown-item">
+          <div class="notification-item">
+            <i class="bi bi-info-circle text-info"></i>
+            <div>
+              <p class="mb-0">Sistema actualizado</p>
+              <small class="text-muted">Hace 5 minutos</small>
+            </div>
+          </div>
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="#" class="dropdown-item text-center">Ver todas</a>
+      </div>
+    </div>
+    
+    <!-- User Dropdown -->
+    <% if (user) { %>
+    <div class="dropdown">
+      <button class="user-dropdown-toggle" data-bs-toggle="dropdown">
+        <div class="user-avatar-sm">
+          <i class="bi bi-person"></i>
+        </div>
+        <span class="d-none d-md-inline"><%= user.Nombre_Completo %></span>
+        <i class="bi bi-chevron-down"></i>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end">
+        <div class="dropdown-header">
+          <strong><%= user.Nombre_Completo %></strong>
+          <br>
+          <small class="text-muted"><%= user.Email_Office365 %></small>
+        </div>
+        <div class="dropdown-divider"></div>
+        <a href="/perfil" class="dropdown-item">
+          <i class="bi bi-person me-2"></i> Mi Perfil
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="/auth/logout" class="dropdown-item text-danger">
+          <i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión
+        </a>
+      </div>
+    </div>
+    <% } %>
+  </div>
+</nav>

@@ -1,0 +1,223 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">Horas Adicionales</h2>
+    <p class="text-muted mb-0">Gestión de horas extra, dobles, triples y festivas</p>
+  </div>
+  <a href="/horas-adicionales/crear" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i> Registrar Horas
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Resumen -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2">
+    <div class="card stat-card bg-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Presencial</div>
+            <div class="stat-value"><%= (totales.presencial || 0).toFixed(1) %></div>
+          </div>
+          <i class="bi bi-building stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card stat-card bg-secondary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">En Línea</div>
+            <div class="stat-value"><%= (totales.enLinea || 0).toFixed(1) %></div>
+          </div>
+          <i class="bi bi-laptop stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card stat-card bg-info">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Extra</div>
+            <div class="stat-value"><%= (totales.extra || 0).toFixed(1) %></div>
+          </div>
+          <i class="bi bi-clock-history stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card stat-card bg-warning">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Dobles</div>
+            <div class="stat-value"><%= (totales.doble || 0).toFixed(1) %></div>
+          </div>
+          <i class="bi bi-clock stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card stat-card bg-danger">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Triples</div>
+            <div class="stat-value"><%= (totales.triple || 0).toFixed(1) %></div>
+          </div>
+          <i class="bi bi-alarm stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/horas-adicionales" method="GET" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label for="empleado" class="form-label">Empleado</label>
+        <select class="form-select" id="empleado" name="empleado">
+          <option value="">Todos</option>
+          <% empleados.forEach(emp => { %>
+            <option value="<%= emp.ID_Empleado %>" <%= filtros.empleado == emp.ID_Empleado ? 'selected' : '' %>>
+              <%= emp.Nombre %> <%= emp.Apellido_Paterno %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="fecha_inicio" class="form-label">Desde</label>
+        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" 
+               value="<%= filtros.fecha_inicio || '' %>">
+      </div>
+      <div class="col-md-2">
+        <label for="fecha_fin" class="form-label">Hasta</label>
+        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" 
+               value="<%= filtros.fecha_fin || '' %>">
+      </div>
+      <div class="col-md-2">
+        <label for="tipo" class="form-label">Tipo</label>
+        <select class="form-select" id="tipo" name="tipo">
+          <option value="">Todos</option>
+          <option value="PRESENCIAL" <%= filtros.tipo === 'PRESENCIAL' ? 'selected' : '' %>>Presencial</option>
+          <option value="EN_LINEA" <%= filtros.tipo === 'EN_LINEA' ? 'selected' : '' %>>En Línea</option>
+          <option value="EXTRA" <%= filtros.tipo === 'EXTRA' ? 'selected' : '' %>>Extra</option>
+          <option value="DOBLE" <%= filtros.tipo === 'DOBLE' ? 'selected' : '' %>>Doble</option>
+          <option value="TRIPLE" <%= filtros.tipo === 'TRIPLE' ? 'selected' : '' %>>Triple</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/horas-adicionales" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Empleado</th>
+            <th>Tipo</th>
+            <th>Horas</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (horasAdicionales.length === 0) { %>
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">
+                <i class="bi bi-clock-history fs-1 d-block mb-2"></i>
+                No hay registros de horas adicionales
+              </td>
+            </tr>
+          <% } else { %>
+            <% horasAdicionales.forEach(hora => { %>
+              <tr>
+                <td><%= hora.Fecha.toLocaleDateString('es-MX') %></td>
+                <td>
+                  <strong><%= hora.empleado.Nombre %> <%= hora.empleado.Apellido_Paterno %></strong>
+                </td>
+                <td>
+                  <% if (hora.Tipo_Hora === 'PRESENCIAL') { %>
+                    <span class="badge bg-primary">Presencial</span>
+                  <% } else if (hora.Tipo_Hora === 'EN_LINEA') { %>
+                    <span class="badge bg-secondary">En Línea</span>
+                  <% } else if (hora.Tipo_Hora === 'EXTRA') { %>
+                    <span class="badge bg-info">Extra</span>
+                  <% } else if (hora.Tipo_Hora === 'DOBLE') { %>
+                    <span class="badge bg-warning">Doble</span>
+                  <% } else if (hora.Tipo_Hora === 'TRIPLE') { %>
+                    <span class="badge bg-danger">Triple</span>
+                  <% } else { %>
+                    <span class="badge bg-dark"><%= hora.Tipo_Hora %></span>
+                  <% } %>
+                </td>
+                <td><strong><%= Number(hora.Cantidad_Horas).toFixed(1) %></strong> hrs</td>
+                <td><%= hora.Descripcion || '-' %></td>
+                <td>
+                  <% if (hora.Aprobado) { %>
+                    <span class="badge bg-success"><i class="bi bi-check"></i> Aprobado</span>
+                  <% } else { %>
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <% if (!hora.Aprobado) { %>
+                    <form action="/horas-adicionales/<%= hora.ID_Horas %>/aprobar" method="POST" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar">
+                        <i class="bi bi-check-lg"></i>
+                      </button>
+                    </form>
+                  <% } %>
+                  <a href="/horas-adicionales/<%= hora.ID_Horas %>/editar" 
+                     class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <form action="/horas-adicionales/<%= hora.ID_Horas %>?_method=DELETE" 
+                        method="POST" class="d-inline" 
+                        data-confirm="¿Eliminar este registro?">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

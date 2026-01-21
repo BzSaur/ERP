@@ -1,0 +1,70 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/puestos">Puestos</a></li>
+      <li class="breadcrumb-item active">Editar</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Editar Puesto: <%= puesto.Nombre_Puesto %></h4>
+</div>
+
+<!-- Formulario -->
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <form action="/puestos/<%= puesto.ID_Puesto %>" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Nombre del Puesto <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre_Puesto" 
+                   value="<%= puesto.Nombre_Puesto %>" required>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Área <span class="text-danger">*</span></label>
+            <select class="form-select" name="ID_Area" required>
+              <% areas.forEach(function(a) { %>
+                <option value="<%= a.ID_Area %>" <%= a.ID_Area === puesto.ID_Area ? 'selected' : '' %>><%= a.Nombre_Area %></option>
+              <% }); %>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="3"><%= puesto.Descripcion || '' %></textarea>
+          </div>
+          
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label">Salario Base de Referencia</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Base_Referencia"
+                       value="<%= puesto.Salario_Base_Referencia || '' %>">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Salario Hora de Referencia</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Hora_Referencia"
+                       value="<%= puesto.Salario_Hora_Referencia || '' %>">
+              </div>
+            </div>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <a href="/puestos" class="btn btn-outline-secondary">
+              <i class="bi bi-x-lg me-1"></i> Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+

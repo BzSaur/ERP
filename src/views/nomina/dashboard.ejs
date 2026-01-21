@@ -1,0 +1,214 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-cash-stack me-2"></i>Dashboard de Nómina</h2>
+    <p class="text-muted mb-0">Resumen del sistema de nómina</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/nomina/periodos/crear" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i> Nuevo Periodo
+    </a>
+    <a href="/nomina/periodos" class="btn btn-outline-secondary">
+      <i class="bi bi-list me-1"></i> Ver Periodos
+    </a>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Estadísticas -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card stat-card bg-primary">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Empleados Activos</div>
+            <div class="stat-value"><%= stats.empleadosActivos %></div>
+          </div>
+          <i class="bi bi-people stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Periodos este Año</div>
+            <div class="stat-value"><%= stats.periodosAnio %></div>
+          </div>
+          <i class="bi bi-calendar-check stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <% if (stats.periodoPendiente) { %>
+      <div class="card stat-card bg-warning">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Próximo Pago</div>
+              <div class="stat-value" style="font-size: 1rem;">
+                <%= stats.periodoPendiente.Fecha_Pago.toLocaleDateString('es-MX') %>
+              </div>
+              <small><%= stats.periodoPendiente.Nombre_Periodo %></small>
+            </div>
+            <i class="bi bi-clock-history stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="card stat-card bg-secondary">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Próximo Pago</div>
+              <div class="stat-value" style="font-size: 1rem;">Sin periodos</div>
+              <small>Crea un nuevo periodo</small>
+            </div>
+            <i class="bi bi-clock stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- Accesos rápidos -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <a href="/nomina/periodos" class="card h-100 text-decoration-none hover-shadow">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-calendar3 fs-1 text-primary mb-2 d-block"></i>
+        <h6 class="mb-1">Periodos</h6>
+        <small class="text-muted">Gestión de periodos</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="/vacaciones" class="card h-100 text-decoration-none hover-shadow">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-sun fs-1 text-success mb-2 d-block"></i>
+        <h6 class="mb-1">Vacaciones</h6>
+        <small class="text-muted">Control de vacaciones</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="/aguinaldo" class="card h-100 text-decoration-none hover-shadow">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-gift fs-1 text-warning mb-2 d-block"></i>
+        <h6 class="mb-1">Aguinaldo</h6>
+        <small class="text-muted">Cálculo de aguinaldo</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3">
+    <a href="/finiquito" class="card h-100 text-decoration-none hover-shadow">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-file-earmark-text fs-1 text-danger mb-2 d-block"></i>
+        <h6 class="mb-1">Finiquito</h6>
+        <small class="text-muted">Cálculo de finiquito</small>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- Últimos periodos -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Últimos Periodos</h5>
+    <a href="/nomina/periodos" class="btn btn-sm btn-outline-primary">Ver todos</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Periodo</th>
+            <th>Tipo</th>
+            <th>Fechas</th>
+            <th class="text-end">Empleados</th>
+            <th class="text-end">Total Neto</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (periodosConTotales.length === 0) { %>
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">
+                <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
+                No hay periodos de nómina registrados
+              </td>
+            </tr>
+          <% } else { %>
+            <% periodosConTotales.forEach(p => { %>
+              <tr>
+                <td><strong><%= p.Nombre_Periodo %></strong></td>
+                <td>
+                  <% if (p.Tipo_Periodo === 'QUINCENAL') { %>
+                    <span class="badge bg-primary">Quincenal</span>
+                  <% } else if (p.Tipo_Periodo === 'SEMANAL') { %>
+                    <span class="badge bg-info">Semanal</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary">Mensual</span>
+                  <% } %>
+                </td>
+                <td>
+                  <small>
+                    <%= p.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
+                    <%= p.Fecha_Fin.toLocaleDateString('es-MX') %>
+                  </small>
+                </td>
+                <td class="text-end"><%= p.empleados %></td>
+                <td class="text-end">
+                  <strong>$<%= p.totalNeto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
+                <td>
+                  <% if (p.Estado === 'PENDIENTE') { %>
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  <% } else if (p.Estado === 'PROCESANDO') { %>
+                    <span class="badge bg-info">Procesando</span>
+                  <% } else { %>
+                    <span class="badge bg-success">Cerrado</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <a href="/nomina/periodos/<%= p.ID_Periodo %>" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+.hover-shadow {
+  transition: all 0.2s ease;
+}
+.hover-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+</style>

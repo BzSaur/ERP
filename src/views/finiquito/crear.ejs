@@ -1,0 +1,242 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-calculator me-2"></i>Calcular Finiquito/Liquidación</h2>
+    <p class="text-muted mb-0">Ingrese los datos para calcular las prestaciones por terminación laboral</p>
+  </div>
+  <a href="/finiquito" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Regresar
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Datos de Baja</h5>
+      </div>
+      <div class="card-body">
+        <form action="/finiquito" method="POST" id="formFiniquito">
+          <div class="row g-3">
+            <!-- Empleado -->
+            <div class="col-md-12">
+              <label for="ID_Empleado" class="form-label">Empleado <span class="text-danger">*</span></label>
+              <select class="form-select" id="ID_Empleado" name="ID_Empleado" required>
+                <option value="">-- Seleccione un empleado --</option>
+                <% empleados.forEach(e => { %>
+                  <option value="<%= e.ID_Empleado %>" 
+                          data-fecha-ingreso="<%= e.Fecha_Ingreso.toISOString().split('T')[0] %>"
+                          data-sueldo="<%= Number(e.Sueldo) %>">
+                    <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %> 
+                    - <%= e.departamento?.Nombre || 'Sin departamento' %>
+                    ($<%= Number(e.Sueldo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>)
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+
+            <!-- Tipo -->
+            <div class="col-md-6">
+              <label for="Tipo" class="form-label">Tipo de Terminación <span class="text-danger">*</span></label>
+              <select class="form-select" id="Tipo" name="Tipo" required>
+                <option value="FINIQUITO">Finiquito (Renuncia voluntaria)</option>
+                <option value="LIQUIDACION">Liquidación (Despido injustificado)</option>
+              </select>
+            </div>
+
+            <!-- Fecha de Baja -->
+            <div class="col-md-6">
+              <label for="Fecha_Baja" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="Fecha_Baja" name="Fecha_Baja" 
+                     value="<%= new Date().toISOString().split('T')[0] %>" required>
+            </div>
+
+            <!-- Motivo -->
+            <div class="col-md-12">
+              <label for="Motivo_Baja" class="form-label">Motivo de Baja <span class="text-danger">*</span></label>
+              <select class="form-select" id="Motivo_Baja" name="Motivo_Baja" required>
+                <optgroup label="Finiquito">
+                  <option value="Renuncia voluntaria">Renuncia voluntaria</option>
+                  <option value="Término de contrato">Término de contrato temporal</option>
+                  <option value="Mutuo acuerdo">Mutuo acuerdo</option>
+                  <option value="Jubilación">Jubilación</option>
+                </optgroup>
+                <optgroup label="Liquidación">
+                  <option value="Despido injustificado">Despido injustificado</option>
+                  <option value="Recorte de personal">Recorte de personal</option>
+                  <option value="Cierre de empresa">Cierre de empresa</option>
+                  <option value="Reestructuración">Reestructuración organizacional</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="col-md-12">
+              <label for="Observaciones" class="form-label">Observaciones</label>
+              <textarea class="form-control" id="Observaciones" name="Observaciones" rows="3"
+                        placeholder="Información adicional sobre la terminación laboral..."></textarea>
+            </div>
+          </div>
+
+          <!-- Info del Empleado -->
+          <div id="infoEmpleado" class="mt-4" style="display: none;">
+            <hr>
+            <h6 class="text-muted mb-3"><i class="bi bi-person-badge me-1"></i> Información del Empleado Seleccionado</h6>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                  <small class="text-muted d-block">Fecha de Ingreso</small>
+                  <strong id="displayFechaIngreso">-</strong>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                  <small class="text-muted d-block">Antigüedad Aproximada</small>
+                  <strong id="displayAntiguedad">-</strong>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                  <small class="text-muted d-block">Sueldo Mensual</small>
+                  <strong id="displaySueldo">-</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="d-flex justify-content-end gap-2">
+            <a href="/finiquito" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-calculator me-1"></i> Calcular Prestaciones
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de ayuda -->
+  <div class="col-lg-4">
+    <div class="card bg-light">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i> Información Legal</h6>
+      </div>
+      <div class="card-body small">
+        <h6 class="text-primary">Finiquito (Art. 76, 80, 87 LFT)</h6>
+        <ul class="ps-3 mb-3">
+          <li>Días trabajados no pagados</li>
+          <li>Vacaciones proporcionales según antigüedad</li>
+          <li>Prima vacacional (25% mínimo)</li>
+          <li>Aguinaldo proporcional (15 días mínimo)</li>
+        </ul>
+
+        <h6 class="text-warning">Liquidación (Art. 48, 50, 162 LFT)</h6>
+        <ul class="ps-3 mb-3">
+          <li><strong>Incluye todo lo del finiquito</strong></li>
+          <li><strong>Indemnización constitucional:</strong> 3 meses de salario integrado</li>
+          <li><strong>Prima de antigüedad:</strong> 12 días de salario por año trabajado (topado a 2 salarios mínimos)</li>
+        </ul>
+
+        <div class="alert alert-info mb-0">
+          <small>
+            <i class="bi bi-info-circle me-1"></i>
+            El cálculo se realiza automáticamente considerando la fecha de ingreso, 
+            sueldo y la fecha de baja seleccionada.
+          </small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de vacaciones -->
+    <div class="card mt-3">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-calendar-check me-1"></i> Días de Vacaciones (LFT)</h6>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Año</th>
+              <th class="text-center">Días</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td class="text-center">12</td></tr>
+            <tr><td>2</td><td class="text-center">14</td></tr>
+            <tr><td>3</td><td class="text-center">16</td></tr>
+            <tr><td>4</td><td class="text-center">18</td></tr>
+            <tr><td>5</td><td class="text-center">20</td></tr>
+            <tr><td>6-10</td><td class="text-center">22</td></tr>
+            <tr><td>11-15</td><td class="text-center">24</td></tr>
+            <tr><td>16+</td><td class="text-center">+2 cada 5 años</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const empleadoSelect = document.getElementById('ID_Empleado');
+  const fechaBajaInput = document.getElementById('Fecha_Baja');
+  const tipoSelect = document.getElementById('Tipo');
+  const motivoSelect = document.getElementById('Motivo_Baja');
+  const infoEmpleado = document.getElementById('infoEmpleado');
+
+  function updateEmpleadoInfo() {
+    const option = empleadoSelect.options[empleadoSelect.selectedIndex];
+    
+    if (!option.value) {
+      infoEmpleado.style.display = 'none';
+      return;
+    }
+
+    const fechaIngreso = new Date(option.dataset.fechaIngreso);
+    const fechaBaja = new Date(fechaBajaInput.value);
+    const sueldo = parseFloat(option.dataset.sueldo);
+
+    // Calcular antigüedad
+    let anos = fechaBaja.getFullYear() - fechaIngreso.getFullYear();
+    let meses = fechaBaja.getMonth() - fechaIngreso.getMonth();
+    
+    if (meses < 0) {
+      anos--;
+      meses += 12;
+    }
+    if (fechaBaja.getDate() < fechaIngreso.getDate()) {
+      meses--;
+      if (meses < 0) {
+        anos--;
+        meses += 12;
+      }
+    }
+
+    document.getElementById('displayFechaIngreso').textContent = fechaIngreso.toLocaleDateString('es-MX');
+    document.getElementById('displayAntiguedad').textContent = `${anos} años, ${meses} meses`;
+    document.getElementById('displaySueldo').textContent = '$' + sueldo.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+    infoEmpleado.style.display = 'block';
+  }
+
+  // Actualizar motivos según tipo
+  tipoSelect.addEventListener('change', function() {
+    if (this.value === 'FINIQUITO') {
+      motivoSelect.value = 'Renuncia voluntaria';
+    } else {
+      motivoSelect.value = 'Despido injustificado';
+    }
+  });
+
+  empleadoSelect.addEventListener('change', updateEmpleadoInfo);
+  fechaBajaInput.addEventListener('change', updateEmpleadoInfo);
+});
+</script>

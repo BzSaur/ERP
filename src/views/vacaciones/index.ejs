@@ -1,0 +1,240 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-sun me-2"></i>Vacaciones</h2>
+    <p class="text-muted mb-0">Gestión de vacaciones de empleados</p>
+  </div>
+  <div class="d-flex gap-2">
+    <form action="/vacaciones/generar" method="POST" class="d-inline">
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-arrow-repeat me-1"></i> Generar Vacaciones
+      </button>
+    </form>
+    <a href="/vacaciones/elegibilidad" class="btn btn-outline-info">
+      <i class="bi bi-people me-1"></i> Ver Elegibilidad
+    </a>
+    <a href="/vacaciones/crear" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i> Registrar
+    </a>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<!-- Estadísticas -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card stat-card bg-warning">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Pendientes</div>
+            <div class="stat-value"><%= stats.pendientes %></div>
+          </div>
+          <i class="bi bi-hourglass-split stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card stat-card bg-info">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">En Curso</div>
+            <div class="stat-value"><%= stats.enCurso %></div>
+          </div>
+          <i class="bi bi-airplane stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card stat-card bg-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="stat-label">Tomadas</div>
+            <div class="stat-value"><%= stats.tomadas %></div>
+          </div>
+          <i class="bi bi-check-circle stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/vacaciones" method="GET" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label for="empleado" class="form-label">Empleado</label>
+        <select class="form-select" id="empleado" name="empleado">
+          <option value="">Todos</option>
+          <% empleados.forEach(emp => { %>
+            <option value="<%= emp.ID_Empleado %>" <%= filtros.empleado == emp.ID_Empleado ? 'selected' : '' %>>
+              <%= emp.Nombre %> <%= emp.Apellido_Paterno %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="anio" class="form-label">Año</label>
+        <select class="form-select" id="anio" name="anio">
+          <option value="">Todos</option>
+          <% for (let y = new Date().getFullYear(); y >= 2020; y--) { %>
+            <option value="<%= y %>" <%= filtros.anio == y ? 'selected' : '' %>><%= y %></option>
+          <% } %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="estado" class="form-label">Estado</label>
+        <select class="form-select" id="estado" name="estado">
+          <option value="">Todos</option>
+          <option value="PENDIENTE" <%= filtros.estado === 'PENDIENTE' ? 'selected' : '' %>>Pendiente</option>
+          <option value="EN_CURSO" <%= filtros.estado === 'EN_CURSO' ? 'selected' : '' %>>En Curso</option>
+          <option value="TOMADAS" <%= filtros.estado === 'TOMADAS' ? 'selected' : '' %>>Tomadas</option>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/vacaciones" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th class="text-center">Año</th>
+            <th class="text-center">Días Corresp.</th>
+            <th class="text-center">Días Tomados</th>
+            <th class="text-center">Días Pend.</th>
+            <th>Fechas</th>
+            <th>Estado</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (vacaciones.length === 0) { %>
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">
+                <i class="bi bi-sun fs-1 d-block mb-2"></i>
+                No hay registros de vacaciones
+              </td>
+            </tr>
+          <% } else { %>
+            <% vacaciones.forEach(v => { %>
+              <tr>
+                <td>
+                  <strong><%= v.empleado.Nombre %> <%= v.empleado.Apellido_Paterno %></strong>
+                </td>
+                <td class="text-center"><%= v.Anio %></td>
+                <td class="text-center"><%= v.Dias_Correspondientes %></td>
+                <td class="text-center"><%= v.Dias_Tomados %></td>
+                <td class="text-center">
+                  <strong class="<%= v.Dias_Pendientes > 0 ? 'text-success' : 'text-muted' %>">
+                    <%= v.Dias_Pendientes %>
+                  </strong>
+                </td>
+                <td>
+                  <% if (v.Fecha_Inicio && v.Fecha_Fin) { %>
+                    <small>
+                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
+                      <%= v.Fecha_Fin.toLocaleDateString('es-MX') %>
+                    </small>
+                  <% } else { %>
+                    <span class="text-muted">-</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (v.Estado === 'PENDIENTE') { %>
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  <% } else if (v.Estado === 'EN_CURSO') { %>
+                    <span class="badge bg-info">En Curso</span>
+                  <% } else if (v.Estado === 'TOMADAS') { %>
+                    <span class="badge bg-success">Tomadas</span>
+                  <% } else { %>
+                    <span class="badge bg-danger">Vencidas</span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <% if (v.Estado === 'EN_CURSO') { %>
+                    <form action="/vacaciones/<%= v.ID_Vacacion %>/aprobar" method="POST" class="d-inline">
+                      <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar">
+                        <i class="bi bi-check-lg"></i>
+                      </button>
+                    </form>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Info LFT -->
+<div class="card mt-4">
+  <div class="card-header">
+    <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i> Días de Vacaciones según LFT México 2024</h6>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Antigüedad</th><th>Días</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1 año</td><td>12 días</td></tr>
+            <tr><td>2 años</td><td>14 días</td></tr>
+            <tr><td>3 años</td><td>16 días</td></tr>
+            <tr><td>4 años</td><td>18 días</td></tr>
+            <tr><td>5 años</td><td>20 días</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Antigüedad</th><th>Días</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>6-10 años</td><td>22 días</td></tr>
+            <tr><td>11-15 años</td><td>24 días</td></tr>
+            <tr><td>16-20 años</td><td>26 días</td></tr>
+            <tr><td>21-25 años</td><td>28 días</td></tr>
+            <tr><td>26-30 años</td><td>30 días</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="mb-0 small text-muted">
+      <i class="bi bi-asterisk"></i> Prima vacacional: 25% mínimo sobre salario de vacaciones (Art. 80 LFT)
+    </p>
+  </div>
+</div>

@@ -1,0 +1,223 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-receipt me-2"></i>Recibo de Nómina</h2>
+    <p class="text-muted mb-0"><%= nomina.periodo.Nombre_Periodo %></p>
+  </div>
+  <div class="d-flex gap-2">
+    <button onclick="window.print()" class="btn btn-outline-primary">
+      <i class="bi bi-printer me-1"></i> Imprimir
+    </button>
+    <a href="/nomina/periodos/<%= nomina.periodo.ID_Periodo %>" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+  </div>
+</div>
+
+<div class="card" id="recibo">
+  <div class="card-body">
+    <!-- Encabezado -->
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <h4 class="text-primary mb-2">SIMOD</h4>
+        <p class="mb-0 text-muted">Sistema Integral de Módulos</p>
+        <p class="mb-0 text-muted small">Recibo de Nómina</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <h5 class="mb-1"><%= nomina.periodo.Nombre_Periodo %></h5>
+        <p class="mb-0 text-muted">
+          Periodo: <%= nomina.periodo.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
+          <%= nomina.periodo.Fecha_Fin.toLocaleDateString('es-MX') %>
+        </p>
+        <p class="mb-0 text-muted">Fecha de Pago: <%= nomina.periodo.Fecha_Pago.toLocaleDateString('es-MX') %></p>
+      </div>
+    </div>
+    
+    <hr>
+    
+    <!-- Datos del empleado -->
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <h6 class="text-muted mb-2">DATOS DEL EMPLEADO</h6>
+        <p class="mb-1"><strong><%= nomina.empleado.Nombre %> <%= nomina.empleado.Apellido_Paterno %> <%= nomina.empleado.Apellido_Materno || '' %></strong></p>
+        <% if (nomina.empleado.puesto) { %>
+          <p class="mb-1"><i class="bi bi-briefcase me-1"></i> <%= nomina.empleado.puesto.Nombre_Puesto %></p>
+        <% } %>
+        <% if (nomina.empleado.area) { %>
+          <p class="mb-0"><i class="bi bi-building me-1"></i> <%= nomina.empleado.area.Nombre_Area %></p>
+        <% } %>
+      </div>
+      <div class="col-md-6">
+        <h6 class="text-muted mb-2">RESUMEN DEL PERIODO</h6>
+        <div class="row">
+          <div class="col-6">
+            <p class="mb-1">Días trabajados: <strong><%= nomina.Dias_Trabajados %></strong></p>
+            <p class="mb-1">Días de falta: <strong><%= nomina.Dias_Faltas %></strong></p>
+          </div>
+          <div class="col-6">
+            <p class="mb-1">Horas normales: <strong><%= Number(nomina.Horas_Normales).toFixed(1) %></strong></p>
+            <% if (Number(nomina.Horas_Extra) > 0) { %>
+              <p class="mb-1">Horas extra: <strong><%= Number(nomina.Horas_Extra).toFixed(1) %></strong></p>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <hr>
+    
+    <!-- Percepciones y Deducciones -->
+    <div class="row">
+      <div class="col-md-6">
+        <h6 class="text-success mb-3"><i class="bi bi-plus-circle me-1"></i> PERCEPCIONES</h6>
+        <table class="table table-sm">
+          <tbody>
+            <tr>
+              <td>Salario Base</td>
+              <td class="text-end">$<%= Number(nomina.Salario_Base).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+            <% if (Number(nomina.Pago_Horas_Extra) > 0) { %>
+              <tr>
+                <td>Pago Horas Extra (1.5x)</td>
+                <td class="text-end">$<%= Number(nomina.Pago_Horas_Extra).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Pago_Horas_Dobles) > 0) { %>
+              <tr>
+                <td>Pago Horas Dobles (2x)</td>
+                <td class="text-end">$<%= Number(nomina.Pago_Horas_Dobles).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Pago_Horas_Triples) > 0) { %>
+              <tr>
+                <td>Pago Horas Triples (3x)</td>
+                <td class="text-end">$<%= Number(nomina.Pago_Horas_Triples).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Bono_Puntualidad) > 0) { %>
+              <tr>
+                <td>Bono de Puntualidad</td>
+                <td class="text-end">$<%= Number(nomina.Bono_Puntualidad).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Bono_Asistencia) > 0) { %>
+              <tr>
+                <td>Bono de Asistencia</td>
+                <td class="text-end">$<%= Number(nomina.Bono_Asistencia).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Prima_Vacacional) > 0) { %>
+              <tr>
+                <td>Prima Vacacional</td>
+                <td class="text-end">$<%= Number(nomina.Prima_Vacacional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Aguinaldo_Proporcional) > 0) { %>
+              <tr>
+                <td>Aguinaldo Proporcional</td>
+                <td class="text-end">$<%= Number(nomina.Aguinaldo_Proporcional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+          </tbody>
+          <tfoot>
+            <tr class="table-success">
+              <th>Total Percepciones</th>
+              <th class="text-end">$<%= Number(nomina.Total_Percepciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      
+      <div class="col-md-6">
+        <h6 class="text-danger mb-3"><i class="bi bi-dash-circle me-1"></i> DEDUCCIONES</h6>
+        <table class="table table-sm">
+          <tbody>
+            <% if (Number(nomina.Deduccion_IMSS) > 0) { %>
+              <tr>
+                <td>IMSS (Cuota obrero)</td>
+                <td class="text-end">$<%= Number(nomina.Deduccion_IMSS).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Deduccion_ISR) > 0) { %>
+              <tr>
+                <td>ISR</td>
+                <td class="text-end">$<%= Number(nomina.Deduccion_ISR).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Deduccion_Infonavit) > 0) { %>
+              <tr>
+                <td>INFONAVIT</td>
+                <td class="text-end">$<%= Number(nomina.Deduccion_Infonavit).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Deduccion_Fonacot) > 0) { %>
+              <tr>
+                <td>FONACOT</td>
+                <td class="text-end">$<%= Number(nomina.Deduccion_Fonacot).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+            <% if (Number(nomina.Otras_Deducciones) > 0) { %>
+              <tr>
+                <td>Otras Deducciones</td>
+                <td class="text-end">$<%= Number(nomina.Otras_Deducciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+          </tbody>
+          <tfoot>
+            <tr class="table-danger">
+              <th>Total Deducciones</th>
+              <th class="text-end">$<%= Number(nomina.Total_Deducciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    
+    <hr>
+    
+    <!-- Total Neto -->
+    <div class="row">
+      <div class="col-md-6 offset-md-6">
+        <div class="card bg-primary text-white">
+          <div class="card-body text-center py-4">
+            <h6 class="mb-2">NETO A PAGAR</h6>
+            <h2 class="mb-0">$<%= Number(nomina.Sueldo_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h2>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Firmas -->
+    <div class="row mt-5">
+      <div class="col-md-4 text-center">
+        <div style="border-top: 1px solid #ccc; padding-top: 10px; margin-top: 50px;">
+          <p class="mb-0 small">Elaboró</p>
+        </div>
+      </div>
+      <div class="col-md-4 text-center">
+        <div style="border-top: 1px solid #ccc; padding-top: 10px; margin-top: 50px;">
+          <p class="mb-0 small">Autorizó</p>
+        </div>
+      </div>
+      <div class="col-md-4 text-center">
+        <div style="border-top: 1px solid #ccc; padding-top: 10px; margin-top: 50px;">
+          <p class="mb-0 small">Recibí Conforme</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@media print {
+  .btn, nav, .sidebar, header {
+    display: none !important;
+  }
+  #recibo {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  body {
+    background: white !important;
+  }
+}
+</style>

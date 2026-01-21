@@ -1,0 +1,178 @@
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-people-fill me-2"></i>Empleados</h2>
+    <p class="text-muted mb-0">Gestión del personal de la empresa</p>
+  </div>
+  <a href="/empleados/nuevo" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i> Nuevo Empleado
+  </a>
+</div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+  <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i><%= success %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  <% } %>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+  <div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i><%= error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  <% } %>
+
+  <!-- Filtros -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <form method="GET" action="/empleados" class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Buscar</label>
+          <input type="text" name="buscar" class="form-control" placeholder="Nombre, apellido, número..." value="<%= filtros.buscar || '' %>">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Área</label>
+          <select name="area" class="form-select">
+            <option value="">Todas las áreas</option>
+            <% if (typeof areas !== 'undefined' && areas) { %>
+              <% areas.forEach(function(area) { %>
+                <option value="<%= area.ID_Area %>" <%= filtros.area == area.ID_Area ? 'selected' : '' %>><%= area.Nombre_Area %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Estatus</label>
+          <select name="estatus" class="form-select">
+            <option value="">Todos</option>
+            <% if (typeof estatusList !== 'undefined' && estatusList) { %>
+              <% estatusList.forEach(function(est) { %>
+                <option value="<%= est.ID_Estatus %>" <%= filtros.estatus == est.ID_Estatus ? 'selected' : '' %>><%= est.Nombre_Estatus %></option>
+              <% }); %>
+            <% } %>
+          </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
+          <button type="submit" class="btn btn-outline-primary">
+            <i class="bi bi-search me-1"></i> Filtrar
+          </button>
+          <a href="/empleados" class="btn btn-outline-secondary">
+            <i class="bi bi-x-lg me-1"></i> Limpiar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabla de empleados -->
+  <div class="card">
+    <div class="card-header">
+      <h5 class="card-title mb-0">
+        <i class="bi bi-table me-2"></i>Lista de Empleados
+        <span class="badge bg-secondary ms-2"><%= pagination.total %></span>
+      </h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>No. Empleado</th>
+            <th>Nombre</th>
+            <th>RFC</th>
+            <th>Área</th>
+            <th>Puesto</th>
+            <th>Horario</th>
+            <th>Estatus</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (typeof empleados !== 'undefined' && empleados && empleados.length > 0) { %>
+            <% empleados.forEach(function(emp) { %>
+              <tr>
+                <td><strong><%= emp.Numero_Empleado %></strong></td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="avatar-circle me-2">
+                      <%= emp.Nombre ? emp.Nombre.charAt(0).toUpperCase() : '?' %><%= emp.Apellido_Paterno ? emp.Apellido_Paterno.charAt(0).toUpperCase() : '' %>
+                    </div>
+                    <div>
+                      <div><%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %></div>
+                      <small class="text-muted"><%= emp.Correo_Electronico || '' %></small>
+                    </div>
+                  </div>
+                </td>
+                <td><%= emp.RFC || '-' %></td>
+                <td><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
+                <td><%= emp.puesto ? emp.puesto.Nombre_Puesto : '-' %></td>
+                <td><%= emp.tipo_horario ? emp.tipo_horario.Nombre_Horario : '-' %></td>
+                <td>
+                  <% if (emp.estatus && emp.estatus.Nombre_Estatus === 'ACTIVO') { %>
+                    <span class="badge bg-success"><%= emp.estatus.Nombre_Estatus %></span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><%= emp.estatus ? emp.estatus.Nombre_Estatus : '-' %></span>
+                  <% } %>
+                </td>
+                <td class="text-end">
+                  <a href="/empleados/<%= emp.ID_Empleado %>" class="btn btn-sm btn-outline-info" title="Ver">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <a href="/empleados/<%= emp.ID_Empleado %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">No se encontraron empleados</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <% if (pagination.totalPages > 1) { %>
+    <!-- Paginación -->
+    <div class="card-footer">
+      <nav>
+        <ul class="pagination pagination-sm mb-0 justify-content-center">
+          <li class="page-item <%= pagination.page <= 1 ? 'disabled' : '' %>">
+            <a class="page-link" href="?page=<%= pagination.page - 1 %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+          <% for (let p = 1; p <= pagination.totalPages; p++) { %>
+            <li class="page-item <%= p === pagination.page ? 'active' : '' %>">
+              <a class="page-link" href="?page=<%= p %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>"><%= p %></a>
+            </li>
+          <% } %>
+          <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>">
+            <a class="page-link" href="?page=<%= pagination.page + 1 %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <p class="text-center text-muted small mb-0 mt-2">
+        Mostrando página <%= pagination.page %> de <%= pagination.totalPages %> (<%= pagination.total %> registros)
+      </p>
+    </div>
+    <% } %>
+  </div>
+
+<style>
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  background: var(--color-primary, #1e3a8a);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+</style>
