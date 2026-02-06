@@ -10,7 +10,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "seed:catalogos": "node prisma/seed-catalogos.js",
+    "seed:config": "node prisma/seed-configuracion.js",
+    "seed:all": "npm run seed && npm run seed:catalogos && npm run seed:config"
   },
   "keywords": [
     "ERP",
@@ -31,11 +34,13 @@
     "express-rate-limit": "^7.1.5",
     "express-session": "^1.17.3",
     "helmet": "^7.1.0",
+    "multer": "^2.0.2",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.11.3",
     "winston": "^3.11.0",
-    "winston-daily-rotate-file": "^4.7.1"
+    "winston-daily-rotate-file": "^4.7.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",

@@ -123,8 +123,9 @@ model Empleados {
   ID_Tipo_Horario             Int
   
   // Salarios
-  Salario_Diario              Decimal?  @db.Decimal(10, 2)
-  Salario_Hora                Decimal?  @db.Decimal(10, 2)
+  Salario_Mensual             Decimal?  @db.Decimal(10, 2)  // Salario mensual base
+  Salario_Diario              Decimal?  @db.Decimal(10, 2)  // Calculado: Mensual/30
+  Salario_Hora                Decimal?  @db.Decimal(10, 2)  // Calculado: Diario/8
   Horas_Semanales_Contratadas Int?
   
   // Estatus
@@ -153,6 +154,9 @@ model Empleados {
   vacaciones        Vacaciones[]
   aguinaldos        Aguinaldo[]
   finiquitos        Finiquito_Liquidacion[]
+  incidencias       Empleados_Incidencias[]
+  prestamos         Empleados_Prestamos[]
+  evaluaciones      Evaluaciones_Desempeno[]   @relation("EvaluacionEmpleado")
   
   @@index([ID_Nacionalidad])
   @@index([ID_Puesto])
@@ -219,28 +223,60 @@ model Empleados_Documentos {
 // ============================================================
 
 model Empleados_Asistencia {
-  ID_Asistencia     Int       @id @default(autoincrement())
-  ID_Empleado       Int
-  Fecha             DateTime  @db.Date
-  Hora_Entrada      DateTime?
-  Hora_Salida       DateTime?
-  Horas_Trabajadas  Decimal?  @db.Decimal(8, 2)
-  Horas_Extras      Decimal?  @db.Decimal(8, 2)
-  Minutos_Retardo   Int?      @default(0)
-  Presente          Boolean   @default(true)
-  Justificado       Boolean   @default(false)
-  Motivo_Falta      String?   @db.VarChar(255)
-  Observaciones     String?   @db.VarChar(255)
-  CreatedAt         DateTime  @default(now())
-  CreatedBy         String?   @db.VarChar(100)
+  ID_Asistencia       Int       @id @default(autoincrement())
+  ID_Empleado         Int
+  Fecha               DateTime  @db.Date
+  Hora_Entrada        DateTime?
+  Hora_Salida         DateTime?
+  Hora_Comida_Salida  DateTime? // Salida a comer
+  Hora_Comida_Entrada DateTime? // Regreso de comer
+  Horas_Trabajadas    Decimal?  @db.Decimal(8, 2)
+  Horas_Extras        Decimal?  @db.Decimal(8, 2)
+  Minutos_Retardo     Int?      @default(0)
+  Retardo             Boolean   @default(false)
+  Presente            Boolean   @default(true)
+  Justificado         Boolean   @default(false)
+  Motivo_Falta        String?   @db.VarChar(255)
+  Ubicacion_Entrada   String?   @db.VarChar(20)  // RAM1, RAM2
+  Ubicacion_Salida    String?   @db.VarChar(20)  // RAM1, RAM2
+  Notas               String?   @db.VarChar(500)
+  Observaciones       String?   @db.VarChar(255)
+  CreatedAt           DateTime  @default(now())
+  CreatedBy           String?   @db.VarChar(100)
+  UpdatedAt           DateTime? @updatedAt
   
   // Relaciones
-  empleado          Empleados @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  empleado            Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  historial_checadas  Historial_Checadas[]
   
   @@unique([ID_Empleado, Fecha])
   @@index([ID_Empleado])
   @@index([Fecha])
+  @@index([Ubicacion_Entrada])
+  @@index([Ubicacion_Salida])
   @@map("Empleados_Asistencia")
+}
+
+// Historial de checadas individuales del biométrico
+model Historial_Checadas {
+  ID_Checada      Int       @id @default(autoincrement())
+  ID_Asistencia   Int
+  Tipo_Checada    String    @db.VarChar(30)   // ENTRADA, SALIDA, COMIDA_SALIDA, COMIDA_ENTRADA
+  Fecha_Hora      DateTime
+  Ubicacion       String    @db.VarChar(20)   // RAM1, RAM2
+  Dispositivo     String?   @db.VarChar(100)  // Identificador del dispositivo biométrico
+  Estado          String    @db.VarChar(30)   // A_TIEMPO, TOLERANCIA, RETARDO, SALIDA_TEMPRANA
+  IP_Dispositivo  String?   @db.VarChar(45)
+  CreatedAt       DateTime  @default(now())
+  
+  // Relaciones
+  asistencia      Empleados_Asistencia @relation(fields: [ID_Asistencia], references: [ID_Asistencia], onDelete: Cascade)
+  
+  @@index([ID_Asistencia])
+  @@index([Tipo_Checada])
+  @@index([Ubicacion])
+  @@index([Fecha_Hora])
+  @@map("Historial_Checadas")
 }
 
 // ============================================================
@@ -327,6 +363,9 @@ model App_Usuarios {
   vacaciones_aprobadas Vacaciones[]              @relation("VacacionesAprobadas")
   aguinaldos_calculados Aguinaldo[]              @relation("AguinaldoCalculado")
   finiquitos_aprobados Finiquito_Liquidacion[]   @relation("FiniquitoAprobado")
+  incidencias_aprobadas Empleados_Incidencias[]  @relation("IncidenciaAprobada")
+  prestamos_aprobados Empleados_Prestamos[]      @relation("PrestamoAprobado")
+  evaluaciones_realizadas Evaluaciones_Desempeno[] @relation("EvaluacionEvaluador")
   
   @@index([Email_Office365])
   @@index([ID_Rol])
@@ -627,4 +666,260 @@ model Dias_Festivos {
   @@unique([Fecha])
   @@index([Anio])
   @@map("Dias_Festivos")
+}
+
+// ============================================================
+// INCIDENCIAS DE EMPLEADOS
+// Faltas, Permisos, Incapacidades, Suspensiones
+// ============================================================
+
+model Cat_Tipo_Incidencia {
+  ID_Tipo_Incidencia   Int       @id @default(autoincrement())
+  Codigo               String    @unique @db.VarChar(20)  // FALTA, PERMISO_CG, PERMISO_SG, INCAP_EG, INCAP_RT, etc.
+  Nombre               String    @db.VarChar(50)
+  Descripcion          String?   @db.VarChar(255)
+  Con_Goce_Sueldo      Boolean   @default(false)
+  Requiere_Documento   Boolean   @default(false)
+  Afecta_Puntualidad   Boolean   @default(true)
+  Afecta_Asistencia    Boolean   @default(true)
+  Dias_Maximos         Int?                              // Límite de días permitidos (null = sin límite)
+  Activo               Boolean   @default(true)
+  CreatedAt            DateTime  @default(now())
+  
+  // Relaciones
+  incidencias          Empleados_Incidencias[]
+  
+  @@map("Cat_Tipo_Incidencia")
+}
+
+model Empleados_Incidencias {
+  ID_Incidencia        Int       @id @default(autoincrement())
+  ID_Empleado          Int
+  ID_Tipo_Incidencia   Int
+  Fecha_Inicio         DateTime  @db.Date
+  Fecha_Fin            DateTime  @db.Date
+  Dias_Totales         Int
+  Con_Goce_Sueldo      Boolean   @default(false)
+  
+  // Documentación de soporte
+  Folio_Documento      String?   @db.VarChar(50)         // Folio de incapacidad IMSS, etc.
+  Tiene_Documento      Boolean   @default(false)
+  Observaciones        String?   @db.VarChar(500)
+  
+  // Aprobación
+  Estado               String    @default("PENDIENTE") @db.VarChar(20)  // PENDIENTE, APROBADA, RECHAZADA
+  Aprobado_Por         Int?
+  Fecha_Aprobacion     DateTime?
+  Motivo_Rechazo       String?   @db.VarChar(255)
+  
+  // Auditoría
+  CreatedAt            DateTime  @default(now())
+  UpdatedAt            DateTime  @updatedAt
+  CreatedBy            String?   @db.VarChar(100)
+  
+  // Relaciones
+  empleado             Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  tipo_incidencia      Cat_Tipo_Incidencia  @relation(fields: [ID_Tipo_Incidencia], references: [ID_Tipo_Incidencia])
+  aprobado_usuario     App_Usuarios?        @relation("IncidenciaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
+  
+  @@index([ID_Empleado])
+  @@index([ID_Tipo_Incidencia])
+  @@index([Fecha_Inicio])
+  @@index([Estado])
+  @@map("Empleados_Incidencias")
+}
+
+// ============================================================
+// TABLAS DE ISR - Para cálculo correcto de impuestos
+// Según LISR Art. 96 y tablas mensuales/quincenales del SAT
+// ============================================================
+
+model Tablas_ISR {
+  ID_Tabla             Int       @id @default(autoincrement())
+  Anio_Fiscal          Int                               // Año fiscal (2025, 2026, etc.)
+  Tipo_Tabla           String    @db.VarChar(20)         // MENSUAL, QUINCENAL, SEMANAL, DIARIA
+  Limite_Inferior      Decimal   @db.Decimal(12, 2)
+  Limite_Superior      Decimal   @db.Decimal(12, 2)
+  Cuota_Fija           Decimal   @db.Decimal(12, 2)
+  Porcentaje_Excedente Decimal   @db.Decimal(6, 4)       // Ej: 0.0640 = 6.40%
+  Activo               Boolean   @default(true)
+  CreatedAt            DateTime  @default(now())
+  UpdatedAt            DateTime  @updatedAt
+  
+  @@unique([Anio_Fiscal, Tipo_Tabla, Limite_Inferior])
+  @@index([Anio_Fiscal])
+  @@index([Tipo_Tabla])
+  @@map("Tablas_ISR")
+}
+
+// ============================================================
+// SUBSIDIO AL EMPLEO - Tabla para cálculo según LISR
+// ============================================================
+
+model Tablas_Subsidio_Empleo {
+  ID_Subsidio          Int       @id @default(autoincrement())
+  Anio_Fiscal          Int
+  Tipo_Tabla           String    @db.VarChar(20)         // MENSUAL, QUINCENAL, SEMANAL, DIARIA
+  Limite_Inferior      Decimal   @db.Decimal(12, 2)
+  Limite_Superior      Decimal   @db.Decimal(12, 2)
+  Subsidio             Decimal   @db.Decimal(12, 2)      // Cantidad de subsidio
+  Activo               Boolean   @default(true)
+  CreatedAt            DateTime  @default(now())
+  UpdatedAt            DateTime  @updatedAt
+  
+  @@unique([Anio_Fiscal, Tipo_Tabla, Limite_Inferior])
+  @@index([Anio_Fiscal])
+  @@map("Tablas_Subsidio_Empleo")
+}
+
+// ============================================================
+// PRÉSTAMOS A EMPLEADOS
+// ============================================================
+
+model Empleados_Prestamos {
+  ID_Prestamo          Int       @id @default(autoincrement())
+  ID_Empleado          Int
+  Tipo_Prestamo        String    @db.VarChar(30)         // EMPRESA, CAJA_AHORRO, ADELANTO_NOMINA
+  Monto_Original       Decimal   @db.Decimal(12, 2)
+  Monto_Pendiente      Decimal   @db.Decimal(12, 2)
+  Numero_Pagos         Int                               // Total de pagos (quincenas/semanas)
+  Pagos_Realizados     Int       @default(0)
+  Monto_Por_Pago       Decimal   @db.Decimal(12, 2)
+  Tasa_Interes         Decimal   @default(0) @db.Decimal(6, 4)  // 0 = sin interés
+  Fecha_Inicio         DateTime  @db.Date
+  Fecha_Fin_Estimada   DateTime  @db.Date
+  Estado               String    @default("ACTIVO") @db.VarChar(20)  // ACTIVO, LIQUIDADO, CANCELADO
+  Motivo               String?   @db.VarChar(255)
+  
+  // Aprobación
+  Aprobado_Por         Int?
+  Fecha_Aprobacion     DateTime?
+  
+  // Auditoría
+  CreatedAt            DateTime  @default(now())
+  UpdatedAt            DateTime  @updatedAt
+  CreatedBy            String?   @db.VarChar(100)
+  
+  // Relaciones
+  empleado             Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  aprobado_usuario     App_Usuarios? @relation("PrestamoAprobado", fields: [Aprobado_Por], references: [ID_Usuario])
+  pagos                Prestamos_Pagos[]
+  
+  @@index([ID_Empleado])
+  @@index([Estado])
+  @@map("Empleados_Prestamos")
+}
+
+model Prestamos_Pagos {
+  ID_Pago              Int       @id @default(autoincrement())
+  ID_Prestamo          Int
+  Numero_Pago          Int
+  Monto_Pago           Decimal   @db.Decimal(12, 2)
+  Monto_Capital        Decimal   @db.Decimal(12, 2)
+  Monto_Interes        Decimal   @default(0) @db.Decimal(12, 2)
+  Saldo_Restante       Decimal   @db.Decimal(12, 2)
+  ID_Nomina            Int?                              // Referencia a nómina donde se descontó
+  Fecha_Pago           DateTime?
+  Pagado               Boolean   @default(false)
+  CreatedAt            DateTime  @default(now())
+  
+  // Relaciones
+  prestamo             Empleados_Prestamos @relation(fields: [ID_Prestamo], references: [ID_Prestamo], onDelete: Cascade)
+  
+  @@index([ID_Prestamo])
+  @@map("Prestamos_Pagos")
+}
+
+// ============================================================
+// EVALUACIONES DE DESEMPEÑO
+// ============================================================
+
+model Cat_Competencias {
+  ID_Competencia       Int       @id @default(autoincrement())
+  Nombre               String    @db.VarChar(50)
+  Descripcion          String?   @db.VarChar(255)
+  Tipo                 String    @db.VarChar(20)         // CORE, TECNICA, LIDERAZGO
+  Peso_Defecto         Decimal   @default(1) @db.Decimal(5, 2)
+  Activo               Boolean   @default(true)
+  CreatedAt            DateTime  @default(now())
+  
+  // Relaciones
+  evaluaciones         Evaluacion_Competencias[]
+  
+  @@map("Cat_Competencias")
+}
+
+model Evaluaciones_Desempeno {
+  ID_Evaluacion        Int       @id @default(autoincrement())
+  ID_Empleado          Int
+  ID_Evaluador         Int
+  Periodo              String    @db.VarChar(20)         // "2026-Q1", "2026-S1", "2026"
+  Tipo_Evaluacion      String    @db.VarChar(30)         // MENSUAL, TRIMESTRAL, SEMESTRAL, ANUAL
+  Fecha_Evaluacion     DateTime  @db.Date
+  
+  // Puntuaciones
+  Puntaje_Competencias Decimal?  @db.Decimal(5, 2)       // Promedio de competencias
+  Puntaje_KPIs         Decimal?  @db.Decimal(5, 2)       // Cumplimiento de objetivos
+  Puntaje_Final        Decimal?  @db.Decimal(5, 2)       // Puntaje ponderado final
+  
+  // Clasificación
+  Clasificacion        String?   @db.VarChar(30)         // EXCEPCIONAL, SOBRESALIENTE, ESPERADO, EN_DESARROLLO, DEFICIENTE
+  
+  // Feedback
+  Fortalezas           String?   @db.Text
+  Areas_Mejora         String?   @db.Text
+  Comentarios          String?   @db.Text
+  Plan_Desarrollo      String?   @db.Text
+  
+  // Estado
+  Estado               String    @default("BORRADOR") @db.VarChar(20)  // BORRADOR, ENVIADA, FIRMADA
+  Fecha_Firma          DateTime?
+  
+  // Auditoría
+  CreatedAt            DateTime  @default(now())
+  UpdatedAt            DateTime  @updatedAt
+  
+  // Relaciones
+  empleado             Empleados     @relation("EvaluacionEmpleado", fields: [ID_Empleado], references: [ID_Empleado])
+  evaluador            App_Usuarios  @relation("EvaluacionEvaluador", fields: [ID_Evaluador], references: [ID_Usuario])
+  competencias         Evaluacion_Competencias[]
+  objetivos            Evaluacion_Objetivos[]
+  
+  @@unique([ID_Empleado, Periodo, Tipo_Evaluacion])
+  @@index([ID_Empleado])
+  @@index([ID_Evaluador])
+  @@index([Periodo])
+  @@map("Evaluaciones_Desempeno")
+}
+
+model Evaluacion_Competencias {
+  ID                   Int       @id @default(autoincrement())
+  ID_Evaluacion        Int
+  ID_Competencia       Int
+  Puntaje              Decimal   @db.Decimal(3, 1)       // 1.0 - 5.0
+  Peso                 Decimal   @db.Decimal(5, 2)       // Peso en evaluación
+  Comentario           String?   @db.VarChar(500)
+  
+  // Relaciones
+  evaluacion           Evaluaciones_Desempeno @relation(fields: [ID_Evaluacion], references: [ID_Evaluacion], onDelete: Cascade)
+  competencia          Cat_Competencias       @relation(fields: [ID_Competencia], references: [ID_Competencia])
+  
+  @@unique([ID_Evaluacion, ID_Competencia])
+  @@map("Evaluacion_Competencias")
+}
+
+model Evaluacion_Objetivos {
+  ID                   Int       @id @default(autoincrement())
+  ID_Evaluacion        Int
+  Descripcion_KPI      String    @db.VarChar(255)
+  Meta                 String    @db.VarChar(100)
+  Resultado            String?   @db.VarChar(100)
+  Porcentaje_Logro     Decimal?  @db.Decimal(5, 2)       // 0 - 100+
+  Peso                 Decimal   @db.Decimal(5, 2)
+  Comentario           String?   @db.VarChar(500)
+  
+  // Relaciones
+  evaluacion           Evaluaciones_Desempeno @relation(fields: [ID_Evaluacion], references: [ID_Evaluacion], onDelete: Cascade)
+  
+  @@map("Evaluacion_Objetivos")
 }

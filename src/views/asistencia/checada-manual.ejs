@@ -1,0 +1,176 @@
+<%- include('../partials/navbar') %>
+<%- include('../partials/sidebar', { active: 'asistencia' }) %>
+
+<main class="main-content">
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-1">
+                        <li class="breadcrumb-item"><a href="/asistencia">Asistencia</a></li>
+                        <li class="breadcrumb-item active">Checada Manual</li>
+                    </ol>
+                </nav>
+                <h1 class="h3 mb-0">Registrar Checada Manual</h1>
+            </div>
+            <a href="/asistencia" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+        </div>
+
+        <!-- Alertas -->
+        <% if (typeof messages !== 'undefined') { %>
+            <% if (messages.error) { %>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <%= messages.error %>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <% } %>
+            <% if (messages.success) { %>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <%= messages.success %>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <% } %>
+        <% } %>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-hand-index me-2"></i>Datos de la Checada
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/asistencia/checada-manual" method="POST">
+                            <!-- Empleado -->
+                            <div class="mb-3">
+                                <label for="empleadoId" class="form-label">Empleado <span class="text-danger">*</span></label>
+                                <select class="form-select" id="empleadoId" name="empleadoId" required>
+                                    <option value="">Seleccionar empleado...</option>
+                                    <% empleados.forEach(emp => { %>
+                                        <option value="<%= emp.ID_Empleado %>">
+                                            #<%= emp.Numero_Empleado %> - <%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>
+                                        </option>
+                                    <% }); %>
+                                </select>
+                            </div>
+
+                            <!-- Tipo de Checada -->
+                            <div class="mb-3">
+                                <label for="tipoChecada" class="form-label">Tipo de Checada <span class="text-danger">*</span></label>
+                                <select class="form-select" id="tipoChecada" name="tipoChecada" required>
+                                    <option value="">Seleccionar tipo...</option>
+                                    <option value="ENTRADA">🟢 Entrada</option>
+                                    <option value="SALIDA">🔵 Salida</option>
+                                </select>
+                            </div>
+
+                            <!-- Ubicación -->
+                            <div class="mb-3">
+                                <label for="ubicacion" class="form-label">Ubicación <span class="text-danger">*</span></label>
+                                <select class="form-select" id="ubicacion" name="ubicacion" required>
+                                    <option value="">Seleccionar ubicación...</option>
+                                    <option value="RAM1">RAM1</option>
+                                    <option value="RAM2">RAM2</option>
+                                </select>
+                            </div>
+
+                            <div class="row">
+                                <!-- Fecha -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="fecha" class="form-label">Fecha <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="fecha" name="fecha" 
+                                           value="<%= new Date().toISOString().split('T')[0] %>" required>
+                                </div>
+
+                                <!-- Hora -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="hora" class="form-label">Hora <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control" id="hora" name="hora" 
+                                           value="<%= new Date().toTimeString().substring(0,5) %>" required>
+                                </div>
+                            </div>
+
+                            <!-- Botones -->
+                            <div class="d-flex gap-2 mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i>Registrar Checada
+                                </button>
+                                <a href="/asistencia" class="btn btn-outline-secondary">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de información -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm bg-light">
+                    <div class="card-body">
+                        <h5 class="mb-3">
+                            <i class="bi bi-info-circle me-2"></i>Información
+                        </h5>
+                        <ul class="mb-0">
+                            <li class="mb-2">
+                                <strong>Entrada:</strong> Registro de entrada laboral (hora límite: 8:15 am)
+                            </li>
+                            <li class="mb-2">
+                                <strong>Salida:</strong> Registro de salida laboral (17:00 hrs)
+                            </li>
+                        </ul>
+                        <p class="text-muted small mt-2 mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            La comida es dentro de la empresa, no requiere registro.
+                        </p>
+                        
+                        <hr>
+                        
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Nota:</strong> Las checadas manuales quedan registradas con el identificador "MANUAL" 
+                            para distinguirlas de las checadas del reloj biométrico.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Horarios de referencia -->
+                <div class="card border-0 shadow-sm mt-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock me-2"></i>Horarios de Referencia
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <td><i class="bi bi-sunrise text-warning me-2"></i>Entrada</td>
+                                    <td class="text-end"><strong>8:00 am</strong></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-clock-history text-muted me-2"></i>Tolerancia</td>
+                                    <td class="text-end"><strong>15 min</strong></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-cup-hot text-info me-2"></i>Comida</td>
+                                    <td class="text-end"><strong>Dentro de empresa</strong></td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-sunset text-primary me-2"></i>Salida</td>
+                                    <td class="text-end"><strong>5:00 pm</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<%- include('../partials/footer') %>

@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import passport from './middleware/auth.js';
 import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
+import { helmetConfig, apiLimiter, getSessionConfig } from './config/security.js';
+import config from './config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,12 +16,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ============================================================
+// SEGURIDAD - Headers y Rate Limiting
+// ============================================================
+app.use(helmetConfig);
+app.use('/api', apiLimiter); // Rate limiting para endpoints API
+
+// ============================================================
 // CONFIGURACIÓN DE MIDDLEWARES
 // ============================================================
 
 // Parsear body
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Archivos estáticos
 app.use(express.static(path.join(__dirname, '../public')));
@@ -33,18 +41,10 @@ app.set('layout extractScripts', true);
 app.set('layout extractStyles', true);
 
 // ============================================================
-// CONFIGURACIÓN DE SESIÓN
+// CONFIGURACIÓN DE SESIÓN SEGURA
 // ============================================================
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'secret-key-development',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 // 24 horas
-  }
-}));
+const sessionConfig = getSessionConfig(config.sessionSecret);
+app.use(session(sessionConfig));
 
 // ============================================================
 // CONFIGURACIÓN DE PASSPORT
@@ -62,8 +62,9 @@ app.use(flash());
 // ============================================================
 app.use((req, res, next) => {
   res.locals.user = req.user || null;
-  res.locals.appName = process.env.APP_NAME || 'ERP - Recursos Humanos';
+  res.locals.appName = config.appName;
   res.locals.currentPath = req.path;
+  res.locals.currentYear = new Date().getFullYear();
   // Flash messages - join arrays into strings for easier template usage
   const successMsgs = req.flash('success');
   const errorMsgs = req.flash('error');

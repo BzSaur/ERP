@@ -1,9 +1,14 @@
 import 'dotenv/config';
+import { validateEnv, config } from './src/config/env.js';
 import app from './src/app.js';
 import { testConnection } from './src/config/database.js';
 
-const PORT = process.env.PORT || 3001;
-const HOST = process.env.HOST || 'localhost';
+// ============================================================
+// VALIDAR VARIABLES DE ENTORNO
+// ============================================================
+validateEnv();
+
+const { port: PORT, host: HOST, nodeEnv } = config;
 
 // ============================================================
 // INICIAR SERVIDOR
@@ -26,7 +31,7 @@ async function startServer() {
       console.log('🚀 ERP - GESTIÓN DE RECURSOS HUMANOS');
       console.log('============================================================');
       console.log(`📍 Servidor corriendo en: http://${HOST}:${PORT}`);
-      console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌍 Entorno: ${nodeEnv}`);
       console.log('============================================================');
       console.log('');
     });

@@ -13,6 +13,8 @@ import nominaRoutes from './nomina.js';
 import vacacionesRoutes from './vacaciones.js';
 import aguinaldoRoutes from './aguinaldo.js';
 import finiquitoRoutes from './finiquito.js';
+import asistenciaRoutes from './asistencia.js';
+import checadorRoutes from './checador.js';
 import { isAuthenticated } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 
@@ -89,6 +91,8 @@ router.use('/nomina', nominaRoutes);
 router.use('/vacaciones', vacacionesRoutes);
 router.use('/aguinaldo', aguinaldoRoutes);
 router.use('/finiquito', finiquitoRoutes);
+router.use('/asistencia', asistenciaRoutes);
+router.use('/checador', checadorRoutes);
 
 // Bitácora (para SuperAdmin)
 router.get('/bitacora', isAuthenticated, async (req, res) => {

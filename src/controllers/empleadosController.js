@@ -115,12 +115,40 @@ export const store = async (req, res, next) => {
       ID_Puesto,
       ID_Area,
       ID_Tipo_Horario,
+      Salario_Mensual,
       Salario_Diario,
       Salario_Hora,
       Horas_Semanales_Contratadas,
       ID_Estatus,
       Fecha_Ingreso
     } = req.body;
+
+    // Calcular salarios si se proporciona el mensual
+    let salarioMensual = Salario_Mensual ? parseFloat(Salario_Mensual) : null;
+    let salarioDiario = Salario_Diario ? parseFloat(Salario_Diario) : null;
+    let salarioHora = Salario_Hora ? parseFloat(Salario_Hora) : null;
+
+    // Si no hay salario mensual, intentar obtenerlo del puesto
+    if (!salarioMensual && ID_Puesto) {
+      const puesto = await prisma.cat_Puestos.findUnique({
+        where: { ID_Puesto: parseInt(ID_Puesto) },
+        select: { Salario_Base_Referencia: true, Salario_Hora_Referencia: true }
+      });
+      
+      if (puesto?.Salario_Base_Referencia) {
+        salarioMensual = parseFloat(puesto.Salario_Base_Referencia);
+        salarioDiario = salarioMensual / 30;
+        salarioHora = salarioDiario / 8;
+      }
+    }
+
+    // Si hay mensual pero no diario/hora, calcularlos
+    if (salarioMensual && !salarioDiario) {
+      salarioDiario = salarioMensual / 30;
+    }
+    if (salarioDiario && !salarioHora) {
+      salarioHora = salarioDiario / 8;
+    }
 
     const empleado = await prisma.empleados.create({
       data: {
@@ -136,15 +164,17 @@ export const store = async (req, res, next) => {
         ID_Puesto: parseInt(ID_Puesto),
         ID_Area: parseInt(ID_Area),
         ID_Tipo_Horario: parseInt(ID_Tipo_Horario),
-        Salario_Diario: Salario_Diario ? parseFloat(Salario_Diario) : null,
-        Salario_Hora: Salario_Hora ? parseFloat(Salario_Hora) : null,
-        Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : null,
+        Salario_Mensual: salarioMensual,
+        Salario_Diario: salarioDiario,
+        Salario_Hora: salarioHora,
+        Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : 48,
         ID_Estatus: parseInt(ID_Estatus) || 1,
         Fecha_Ingreso: new Date(Fecha_Ingreso),
         CreatedBy: req.user?.Email_Office365 || 'Sistema'
       }
     });
 
+    req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente`);
     res.redirect(`/empleados/${empleado.ID_Empleado}`);
   } catch (error) {
     next(error);

@@ -1,0 +1,185 @@
+<div class="container-fluid py-4">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-1">
+        <i class="bi bi-upload text-primary me-2"></i>Importar Checador
+      </h2>
+      <p class="text-muted mb-0">
+        Suba los archivos XLSX de los checadores biométricos (RAM1 y/o RAM2) para calcular automáticamente las horas trabajadas.
+      </p>
+    </div>
+  </div>
+
+  <!-- Flash Messages -->
+  <% if (typeof messages !== 'undefined') { %>
+    <% if (messages.error) { %>
+      <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle"></i> <%= messages.error %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    <% } %>
+    <% if (messages.success) { %>
+      <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle"></i> <%= messages.success %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    <% } %>
+  <% } %>
+
+  <!-- Formulario de carga -->
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <form action="/checador/procesar" method="POST" enctype="multipart/form-data" id="formChecador">
+        <div class="row g-4">
+          
+          <!-- Archivo RAM1 -->
+          <div class="col-md-6">
+            <div class="card border-primary h-100">
+              <div class="card-header bg-primary text-white text-center">
+                <i class="bi bi-building fs-4"></i>
+                <h5 class="mb-0 mt-1">Checador RAM1</h5>
+              </div>
+              <div class="card-body text-center p-4">
+                <div class="upload-zone" id="dropZoneRAM1">
+                  <input type="file" name="ram1" id="fileRAM1" accept=".xlsx,.xls" class="d-none">
+                  <div class="upload-placeholder" id="placeholderRAM1">
+                    <i class="bi bi-file-earmark-spreadsheet fs-1 text-primary"></i>
+                    <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
+                    <p class="text-muted small">o haz clic para seleccionar</p>
+                    <span class="badge bg-light text-dark">.xlsx</span>
+                  </div>
+                  <div class="upload-selected d-none" id="selectedRAM1">
+                    <i class="bi bi-file-earmark-check fs-1 text-success"></i>
+                    <p class="mt-2 mb-0 fw-semibold text-success" id="fileNameRAM1"></p>
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearFile('RAM1')">
+                      <i class="bi bi-x"></i> Quitar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Archivo RAM2 -->
+          <div class="col-md-6">
+            <div class="card border-success h-100">
+              <div class="card-header bg-success text-white text-center">
+                <i class="bi bi-building fs-4"></i>
+                <h5 class="mb-0 mt-1">Checador RAM2</h5>
+              </div>
+              <div class="card-body text-center p-4">
+                <div class="upload-zone" id="dropZoneRAM2">
+                  <input type="file" name="ram2" id="fileRAM2" accept=".xlsx,.xls" class="d-none">
+                  <div class="upload-placeholder" id="placeholderRAM2">
+                    <i class="bi bi-file-earmark-spreadsheet fs-1 text-success"></i>
+                    <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
+                    <p class="text-muted small">o haz clic para seleccionar</p>
+                    <span class="badge bg-light text-dark">.xlsx</span>
+                  </div>
+                  <div class="upload-selected d-none" id="selectedRAM2">
+                    <i class="bi bi-file-earmark-check fs-1 text-success"></i>
+                    <p class="mt-2 mb-0 fw-semibold text-success" id="fileNameRAM2"></p>
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearFile('RAM2')">
+                      <i class="bi bi-x"></i> Quitar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Info -->
+        <div class="card border-0 shadow-sm mt-4">
+          <div class="card-body">
+            <h6 class="card-title"><i class="bi bi-info-circle text-info me-1"></i> Información</h6>
+            <ul class="mb-0 small text-muted">
+              <li>Puede subir <strong>uno o ambos</strong> archivos de checador</li>
+              <li>Si sube ambos, el sistema combinará automáticamente las checadas</li>
+              <li>Se resta automáticamente <strong>1 hora de comida</strong> (14:00 - 15:00) cuando aplica</li>
+              <li>El horario estándar es de <strong>08:00 a 17:00</strong> (8 horas efectivas)</li>
+              <li>Retardos mayores a 15 minutos se marcan automáticamente</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Botón -->
+        <div class="text-center mt-4">
+          <button type="submit" class="btn btn-primary btn-lg px-5" id="btnProcesar" disabled>
+            <i class="bi bi-calculator"></i> Calcular Horas
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- contentFor('script') %>
+<script>
+  // Drag & Drop y selección de archivos
+  ['RAM1', 'RAM2'].forEach(function(checador) {
+    const dropZone = document.getElementById('dropZone' + checador);
+    const fileInput = document.getElementById('file' + checador);
+    const placeholder = document.getElementById('placeholder' + checador);
+    const selected = document.getElementById('selected' + checador);
+    const fileName = document.getElementById('fileName' + checador);
+
+    // Click para seleccionar
+    dropZone.addEventListener('click', function() {
+      fileInput.click();
+    });
+
+    // Drag & Drop
+    dropZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', function() {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        showFile(checador, e.dataTransfer.files[0].name);
+      }
+    });
+
+    // File selected
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) {
+        showFile(checador, fileInput.files[0].name);
+      }
+    });
+  });
+
+  function showFile(checador, name) {
+    document.getElementById('placeholder' + checador).classList.add('d-none');
+    document.getElementById('selected' + checador).classList.remove('d-none');
+    document.getElementById('fileName' + checador).textContent = name;
+    updateButton();
+  }
+
+  function clearFile(checador) {
+    document.getElementById('file' + checador).value = '';
+    document.getElementById('placeholder' + checador).classList.remove('d-none');
+    document.getElementById('selected' + checador).classList.add('d-none');
+    updateButton();
+  }
+
+  function updateButton() {
+    var hasRAM1 = document.getElementById('fileRAM1').files.length > 0;
+    var hasRAM2 = document.getElementById('fileRAM2').files.length > 0;
+    document.getElementById('btnProcesar').disabled = !(hasRAM1 || hasRAM2);
+  }
+
+  // Loading state on submit
+  document.getElementById('formChecador').addEventListener('submit', function() {
+    var btn = document.getElementById('btnProcesar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+  });
+</script>

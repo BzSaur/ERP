@@ -1,0 +1,264 @@
+<%- include('../partials/navbar') %>
+<%- include('../partials/sidebar', { active: 'asistencia' }) %>
+
+<main class="main-content">
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-1">Control de Asistencia</h1>
+                <p class="text-muted mb-0">
+                    Resumen del día: <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+                </p>
+            </div>
+            <div>
+                <a href="/asistencia/checada-manual" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Checada Manual
+                </a>
+            </div>
+        </div>
+
+        <!-- Tarjetas de resumen -->
+        <div class="row mb-4">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1 small text-uppercase">Presentes</p>
+                                <h2 class="mb-0 text-success"><%= resumen.totalPresentes %></h2>
+                            </div>
+                            <div class="bg-success bg-opacity-10 p-3 rounded">
+                                <i class="bi bi-person-check text-success fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <%= resumen.porcentajeAsistencia %>% de asistencia
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1 small text-uppercase">Ausentes</p>
+                                <h2 class="mb-0 text-danger"><%= resumen.totalAusentes %></h2>
+                            </div>
+                            <div class="bg-danger bg-opacity-10 p-3 rounded">
+                                <i class="bi bi-person-x text-danger fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                De <%= resumen.totalEmpleadosActivos %> empleados activos
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1 small text-uppercase">Retardos</p>
+                                <h2 class="mb-0 text-warning"><%= resumen.conRetardo %></h2>
+                            </div>
+                            <div class="bg-warning bg-opacity-10 p-3 rounded">
+                                <i class="bi bi-clock-history text-warning fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Después de tolerancia (15 min)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1 small text-uppercase">Por Ubicación</p>
+                                <h5 class="mb-0">
+                                    <span class="badge bg-info me-1">RAM1: <%= resumen.porUbicacion.RAM1 || 0 %></span>
+                                    <span class="badge bg-secondary">RAM2: <%= resumen.porUbicacion.RAM2 || 0 %></span>
+                                </h5>
+                            </div>
+                            <div class="bg-info bg-opacity-10 p-3 rounded">
+                                <i class="bi bi-geo-alt text-info fs-4"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <a href="/asistencia/por-ubicacion" class="text-decoration-none small">
+                                Ver detalle <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Últimas checadas -->
+            <div class="col-lg-8 mb-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock me-2"></i>Últimas Checadas
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Hora</th>
+                                        <th>Empleado</th>
+                                        <th>Tipo</th>
+                                        <th>Ubicación</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% if (ultimasChecadas && ultimasChecadas.length > 0) { %>
+                                        <% ultimasChecadas.forEach(checada => { %>
+                                            <tr>
+                                                <td>
+                                                    <strong>
+                                                        <%= new Date(checada.Fecha_Hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) %>
+                                                    </strong>
+                                                    <br>
+                                                    <small class="text-muted">
+                                                        <%= new Date(checada.Fecha_Hora).toLocaleDateString('es-MX') %>
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <a href="/asistencia/empleado/<%= checada.asistencia.empleado.ID_Empleado %>" 
+                                                       class="text-decoration-none">
+                                                        <%= checada.asistencia.empleado.Nombre %> 
+                                                        <%= checada.asistencia.empleado.Apellido_Paterno %>
+                                                    </a>
+                                                    <br>
+                                                    <small class="text-muted">
+                                                        #<%= checada.asistencia.empleado.Numero_Empleado %>
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <% if (checada.Tipo_Checada === 'ENTRADA') { %>
+                                                        <span class="badge bg-success">Entrada</span>
+                                                    <% } else { %>
+                                                        <span class="badge bg-primary">Salida</span>
+                                                    <% } %>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-<%= checada.Ubicacion === 'RAM1' ? 'info' : 'secondary' %>">
+                                                        <%= checada.Ubicacion %>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <% if (checada.Estado === 'A_TIEMPO') { %>
+                                                        <span class="text-success">
+                                                            <i class="bi bi-check-circle-fill"></i> A tiempo
+                                                        </span>
+                                                    <% } else if (checada.Estado === 'TOLERANCIA') { %>
+                                                        <span class="text-warning">
+                                                            <i class="bi bi-exclamation-circle-fill"></i> Tolerancia
+                                                        </span>
+                                                    <% } else if (checada.Estado === 'RETARDO') { %>
+                                                        <span class="text-danger">
+                                                            <i class="bi bi-x-circle-fill"></i> Retardo
+                                                        </span>
+                                                    <% } else { %>
+                                                        <span class="text-muted">
+                                                            <i class="bi bi-dash-circle"></i> <%= checada.Estado %>
+                                                        </span>
+                                                    <% } %>
+                                                </td>
+                                            </tr>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-4 text-muted">
+                                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                                No hay checadas registradas hoy
+                                            </td>
+                                        </tr>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel lateral -->
+            <div class="col-lg-4">
+                <!-- Accesos rápidos -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-lightning me-2"></i>Acciones Rápidas
+                        </h5>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <a href="/asistencia/checada-manual" class="list-group-item list-group-item-action">
+                            <i class="bi bi-plus-circle me-2"></i>Registrar Checada Manual
+                        </a>
+                        <a href="/asistencia/por-ubicacion" class="list-group-item list-group-item-action">
+                            <i class="bi bi-geo-alt me-2"></i>Reporte por Ubicación
+                        </a>
+                        <a href="/reportes" class="list-group-item list-group-item-action">
+                            <i class="bi bi-file-earmark-bar-graph me-2"></i>Reportes Generales
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Detalle del día -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-list-check me-2"></i>Detalle del Día
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Con entrada registrada:</span>
+                            <strong><%= resumen.conEntrada %></strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Con salida registrada:</span>
+                            <strong><%= resumen.conSalida %></strong>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Empleados activos:</span>
+                            <strong><%= resumen.totalEmpleadosActivos %></strong>
+                        </div>
+                        <div class="progress mt-3" style="height: 25px;">
+                            <div class="progress-bar bg-success" 
+                                 role="progressbar" 
+                                 style="width: <%= resumen.porcentajeAsistencia %>%"
+                                 aria-valuenow="<%= resumen.porcentajeAsistencia %>" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                <%= resumen.porcentajeAsistencia %>% Asistencia
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<%- include('../partials/footer') %>

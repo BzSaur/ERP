@@ -158,24 +158,39 @@
           </h5>
         </div>
         <div class="card-body">
+          <div class="alert alert-info small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Nota:</strong> Al seleccionar un puesto, el salario se cargará automáticamente según la plantilla. 
+            Puede modificarlo si es necesario.
+          </div>
           <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Salario Mensual</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" name="Salario_Mensual" id="salarioMensual" placeholder="Se carga del puesto">
+              </div>
+              <small class="text-muted">Base mensual</small>
+            </div>
             <div class="col-md-6">
               <label class="form-label">Salario Diario</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                <input type="number" step="0.01" class="form-control" name="Salario_Diario">
+                <input type="number" step="0.01" class="form-control" name="Salario_Diario" id="salarioDiario" readonly>
               </div>
+              <small class="text-muted">Se calcula automáticamente</small>
             </div>
             <div class="col-md-6">
               <label class="form-label">Salario por Hora</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                <input type="number" step="0.01" class="form-control" name="Salario_Hora">
+                <input type="number" step="0.01" class="form-control" name="Salario_Hora" id="salarioHora" readonly>
               </div>
+              <small class="text-muted">Se calcula automáticamente</small>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Horas Semanales Contratadas</label>
-              <input type="number" class="form-control" name="Horas_Semanales_Contratadas">
+              <label class="form-label">Horas Semanales</label>
+              <input type="number" class="form-control" name="Horas_Semanales_Contratadas" value="48">
             </div>
           </div>
         </div>
@@ -195,6 +210,17 @@
 </form>
 
 <script>
+  // Datos de puestos con salarios
+  const puestosData = {
+    <% puestos.forEach(function(p) { %>
+    '<%= p.ID_Puesto %>': { 
+      area: '<%= p.ID_Area %>', 
+      salarioBase: <%= p.Salario_Base_Referencia || 0 %>,
+      salarioHora: <%= p.Salario_Hora_Referencia || 0 %>
+    },
+    <% }); %>
+  };
+
   // Filtrar puestos por área
   document.getElementById('selectArea').addEventListener('change', function() {
     const areaId = this.value;
@@ -202,6 +228,7 @@
     const options = puestoSelect.querySelectorAll('option[data-area]');
     
     puestoSelect.value = '';
+    limpiarSalarios();
     
     options.forEach(option => {
       if (!areaId || option.dataset.area === areaId) {
@@ -211,4 +238,45 @@
       }
     });
   });
+
+  // Cargar salario al seleccionar puesto
+  document.getElementById('selectPuesto').addEventListener('change', function() {
+    const puestoId = this.value;
+    const salarioMensualInput = document.getElementById('salarioMensual');
+    const salarioDiarioInput = document.getElementById('salarioDiario');
+    const salarioHoraInput = document.getElementById('salarioHora');
+    
+    if (puestoId && puestosData[puestoId]) {
+      const puesto = puestosData[puestoId];
+      
+      if (puesto.salarioBase > 0) {
+        salarioMensualInput.value = puesto.salarioBase.toFixed(2);
+        calcularSalarios(puesto.salarioBase);
+      } else {
+        limpiarSalarios();
+      }
+    } else {
+      limpiarSalarios();
+    }
+  });
+
+  // Recalcular al cambiar salario mensual
+  document.getElementById('salarioMensual').addEventListener('input', function() {
+    const mensual = parseFloat(this.value) || 0;
+    calcularSalarios(mensual);
+  });
+
+  function calcularSalarios(mensual) {
+    const diario = mensual / 30;
+    const hora = diario / 8;
+    
+    document.getElementById('salarioDiario').value = diario.toFixed(2);
+    document.getElementById('salarioHora').value = hora.toFixed(2);
+  }
+
+  function limpiarSalarios() {
+    document.getElementById('salarioMensual').value = '';
+    document.getElementById('salarioDiario').value = '';
+    document.getElementById('salarioHora').value = '';
+  }
 </script>

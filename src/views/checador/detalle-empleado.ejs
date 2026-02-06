@@ -1,0 +1,295 @@
+<div class="container-fluid py-4">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1">
+          <li class="breadcrumb-item"><a href="/checador">Checador</a></li>
+          <li class="breadcrumb-item active"><%= empleado.nombre %></li>
+        </ol>
+      </nav>
+      <h2 class="mb-1">
+        <i class="bi bi-person-badge text-primary me-2"></i><%= empleado.nombre %>
+      </h2>
+      <p class="text-muted mb-0">
+        ID Checador: <strong>#<%= empleado.idChecador %></strong>
+        &nbsp;|&nbsp; Periodo: <strong><%= rangoFechas.inicioStr %></strong> al <strong><%= rangoFechas.finStr %></strong>
+        <% if (empleado.ubicacion) { %>
+          &nbsp;|&nbsp; <span class="badge bg-info"><%= empleado.ubicacion %></span>
+        <% } %>
+      </p>
+    </div>
+    <div>
+      <button onclick="window.history.back()" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+      </button>
+    </div>
+  </div>
+
+  <!-- Resumen del empleado -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card bg-primary">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Horas Trabajadas</div>
+              <div class="stat-value"><%= empleado.totalHorasTrabajadas.toFixed(1) %></div>
+              <div class="stat-label" style="font-size:0.7rem; margin-top:2px">(<%= formatearHoras(empleado.totalHorasTrabajadas) %>)</div>
+            </div>
+            <i class="bi bi-clock-fill stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card bg-success">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Días Trabajados</div>
+              <div class="stat-value"><%= empleado.totalDiasTrabajados %></div>
+            </div>
+            <i class="bi bi-calendar-check-fill stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card bg-danger">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Días Ausente</div>
+              <div class="stat-value"><%= empleado.totalDiasAusente %></div>
+            </div>
+            <i class="bi bi-calendar-x-fill stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card stat-card bg-warning">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="stat-label">Retardos</div>
+              <div class="stat-value"><%= empleado.totalRetardos %></div>
+            </div>
+            <i class="bi bi-exclamation-triangle-fill stat-icon"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Promedio por día -->
+  <% if (empleado.totalDiasTrabajados > 0) { %>
+    <div class="alert alert-info d-flex align-items-center mb-4">
+      <i class="bi bi-bar-chart-fill me-2 fs-5"></i>
+      <div>
+        Promedio: <strong><%= (empleado.totalHorasTrabajadas / empleado.totalDiasTrabajados).toFixed(1) %> horas/día</strong>
+        &nbsp;|&nbsp;
+        <% const diasIncompletos = empleado.dias.filter(d => d.incompleta).length; %>
+        <% if (diasIncompletos > 0) { %>
+          <span class="text-warning"><strong><%= diasIncompletos %></strong> día(s) con checada incompleta</span>
+        <% } else { %>
+          <span class="text-success">Todas las checadas completas</span>
+        <% } %>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Detalle por día -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white">
+      <h5 class="mb-0"><i class="bi bi-calendar3"></i> Detalle por Día</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Fecha</th>
+            <th>Día</th>
+            <th class="text-center">Entrada</th>
+            <th class="text-center">Salida</th>
+            <th class="text-center">Checadas</th>
+            <th class="text-center">Hrs Bruto</th>
+            <th class="text-center">Comida</th>
+            <th class="text-center">Hrs Neto</th>
+            <th class="text-center">Retardo</th>
+            <th>Estado</th>
+            <th>Notas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% empleado.dias.forEach(function(dia) { %>
+            <%
+              const esDom = dia.nombreDia && dia.nombreDia.toLowerCase().startsWith('dom');
+              let rowClass = '';
+              if (esDom) rowClass = 'table-light';
+              else if (!dia.presente) rowClass = 'table-danger';
+              else if (dia.incompleta) rowClass = 'table-warning';
+              else if (dia.jornadaCompleta) rowClass = '';
+            %>
+            <tr class="<%= rowClass %>">
+              <td>
+                <% if (dia.fecha) { %>
+                  <%= dia.fecha.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) %>
+                <% } else { %>
+                  Día <%= dia.diaNum %>
+                <% } %>
+              </td>
+              <td>
+                <% if (esDom) { %>
+                  <span class="badge bg-secondary"><%= dia.nombreDia %></span>
+                <% } else { %>
+                  <%= dia.nombreDia %>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.entrada) { %>
+                  <span class="<%= dia.retardo ? 'text-danger fw-bold' : 'text-success' %>">
+                    <%= dia.entrada %>
+                  </span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.salida) { %>
+                  <%= dia.salida %>
+                <% } else if (dia.presente) { %>
+                  <span class="text-warning"><i class="bi bi-question-circle"></i> Sin registro</span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.totalChecadas && dia.totalChecadas > 2) { %>
+                  <span class="badge bg-info" title="Checadas intermedias: <%= (dia.checadasIntermedias || []).join(', ') %>">
+                    <%= dia.totalChecadas %>
+                  </span>
+                <% } else if (dia.presente) { %>
+                  <span class="text-muted"><%= dia.totalChecadas || (dia.entrada ? 1 : 0) %></span>
+                <% } else { %>
+                  <span class="text-muted">0</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.horasTrabajadasBruto > 0) { %>
+                  <small class="text-muted"><%= dia.horasTrabajadasBruto.toFixed(1) %>h</small>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.minutosComidaDescontados > 0) { %>
+                  <small class="text-danger">-<%= dia.minutosComidaDescontados %>m</small>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td class="text-center fw-bold">
+                <% if (dia.horasTrabajadas > 0) { %>
+                  <span class="<%= dia.jornadaCompleta ? 'text-success' : 'text-primary' %>">
+                    <%= dia.horasTrabajadas.toFixed(2) %>h
+                  </span>
+                <% } else { %>
+                  <span class="text-muted">0</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (dia.retardo) { %>
+                  <span class="badge bg-warning text-dark"><%= dia.minutosRetardo %> min</span>
+                <% } else if (dia.presente && dia.entrada) { %>
+                  <i class="bi bi-check-circle text-success"></i>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (esDom) { %>
+                  <span class="badge bg-secondary">Descanso</span>
+                <% } else if (!dia.presente) { %>
+                  <span class="badge bg-danger">Ausente</span>
+                <% } else if (dia.incompleta) { %>
+                  <span class="badge bg-warning text-dark">Incompleta</span>
+                <% } else if (dia.jornadaCompleta) { %>
+                  <span class="badge bg-success">Completa</span>
+                <% } else { %>
+                  <span class="badge bg-info">Parcial</span>
+                <% } %>
+              </td>
+              <td>
+                <small class="text-muted"><%= dia.notas || '' %></small>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+        <tfoot class="table-totals-footer">
+          <tr>
+            <td colspan="5" class="text-end fw-bold">TOTALES:</td>
+            <td class="text-center">
+              <%
+                let totalBruto = 0;
+                empleado.dias.forEach(function(d) { totalBruto += d.horasTrabajadasBruto || 0; });
+              %>
+              <small><%= totalBruto.toFixed(1) %>h</small>
+            </td>
+            <td class="text-center">
+              <%
+                let totalComida = 0;
+                empleado.dias.forEach(function(d) { totalComida += d.minutosComidaDescontados || 0; });
+              %>
+              <small>-<%= totalComida %>m</small>
+            </td>
+            <td class="text-center fw-bold"><%= empleado.totalHorasTrabajadas.toFixed(2) %>h</td>
+            <td class="text-center"><%= empleado.totalRetardos %></td>
+            <td colspan="2">
+              <small><%= empleado.totalDiasTrabajados %> días trabajados, <%= empleado.totalDiasAusente %> ausencias</small>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- Checadas crudas -->
+  <div class="card border-0 shadow-sm mt-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="bi bi-list-ul"></i> Todas las Checadas Registradas</h6>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseChecadas">
+        <i class="bi bi-eye"></i> Mostrar/Ocultar
+      </button>
+    </div>
+    <div class="collapse" id="collapseChecadas">
+      <div class="card-body">
+        <div class="row g-2">
+          <% empleado.dias.forEach(function(dia) { %>
+            <% if (dia.checadasRaw) { %>
+              <div class="col-md-3 col-sm-4">
+                <div class="border rounded p-2 text-center bg-light">
+                  <div class="fw-bold small">
+                    <% if (dia.fecha) { %>
+                      <%= dia.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: '2-digit' }) %>
+                    <% } else { %>
+                      Día <%= dia.diaNum %> (<%= dia.nombreDia %>)
+                    <% } %>
+                  </div>
+                  <div class="mt-1">
+                    <% dia.checadas.forEach(function(ch, idx) { %>
+                      <span class="badge bg-<%= idx === 0 ? 'success' : (idx === dia.checadas.length - 1 ? 'danger' : 'secondary') %> me-1">
+                        <%= ch.horaStr %>
+                      </span>
+                    <% }); %>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          <% }); %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
