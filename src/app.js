@@ -1,6 +1,7 @@
 import express from 'express';
 import session from 'express-session';
 import flash from 'connect-flash';
+import methodOverride from 'method-override';
 import expressLayouts from 'express-ejs-layouts';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -28,6 +29,7 @@ app.use('/api', apiLimiter); // Rate limiting para endpoints API
 // Parsear body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(methodOverride('_method')); // Support for PUT/DELETE in forms
 
 // Archivos estáticos
 app.use(express.static(path.join(__dirname, '../public')));
@@ -75,6 +77,18 @@ app.use((req, res, next) => {
     error: errorMsgs.length > 0 ? errorMsgs.join(', ') : null,
     info: infoMsgs.length > 0 ? infoMsgs.join(', ') : null,
     warning: warningMsgs.length > 0 ? warningMsgs.join(', ') : null
+  };
+  // Helper para plantillas: verificar roles de usuario de forma normalizada
+  res.locals.hasRole = (...roles) => {
+    try {
+      if (!req.user || !req.user.rol || !req.user.rol.Nombre_Rol) return false;
+      const current = String(req.user.rol.Nombre_Rol).toUpperCase().replace(/\s+/g, '_');
+      // SuperAdministrador tiene acceso a todo
+      if (current.includes('SUPER')) return true;
+      return roles.some(r => String(r).toUpperCase().replace(/\s+/g, '_') === current);
+    } catch (e) {
+      return false;
+    }
   };
   next();
 });

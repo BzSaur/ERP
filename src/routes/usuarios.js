@@ -1,16 +1,12 @@
 import { Router } from 'express';
 import * as usuariosController from '../controllers/usuariosController.js';
-import { isAuthenticated, isAdmin } from '../middleware/auth.js';
+import { isAuthenticated, isSuperAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-// ============================================================
-// RUTAS DE USUARIOS DEL SISTEMA
-// Todas las rutas requieren autenticación y rol de admin
-// ============================================================
-
-// Middleware para verificar que es admin o superadmin
+// Todas las rutas requieren autenticación + rol SUPER_ADMIN únicamente
 router.use(isAuthenticated);
+router.use(isSuperAdmin);
 
 // GET /usuarios - Listar usuarios
 router.get('/', usuariosController.index);

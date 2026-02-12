@@ -2,179 +2,93 @@
  * Configuración de Winston Logger
  * ERP - Recursos Humanos
  * 
- * Logs en archivo con rotación diaria
+ * Logs SOLO en consola/terminal
  */
 
 import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Directorio de logs
-const logsDir = path.join(__dirname, '../../logs');
-
-// Formato personalizado para logs
-const customFormat = winston.format.combine(
+// Formato para consola con colores
+const consoleFormat = winston.format.combine(
+  winston.format.colorize(),
   winston.format.timestamp({
-    format: 'YYYY-MM-DD HH:mm:ss'
+    format: 'HH:mm:ss'
   }),
-  winston.format.errors({ stack: true }),
-  winston.format.printf(({ level, message, timestamp, stack, ...metadata }) => {
-    let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+  winston.format.printf(({ level, message, timestamp, ...metadata }) => {
+    let log = `${timestamp} ${level}: ${message}`;
     
+    // Agregar metadata si existe (sin hacer el log muy largo)
     if (Object.keys(metadata).length > 0) {
-      log += ` ${JSON.stringify(metadata)}`;
-    }
-    
-    if (stack) {
-      log += `\n${stack}`;
+      const meta = JSON.stringify(metadata, null, 0);
+      if (meta.length < 200) {
+        log += ` ${meta}`;
+      }
     }
     
     return log;
   })
 );
 
-// Transporte para logs de aplicación
-const applicationTransport = new DailyRotateFile({
-  filename: path.join(logsDir, 'application-%DATE%.log'),
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '30d',
-  level: 'info'
-});
-
-// Transporte para logs de errores
-const errorTransport = new DailyRotateFile({
-  filename: path.join(logsDir, 'error-%DATE%.log'),
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '30d',
-  level: 'error'
-});
-
-// Transporte para logs de acceso/seguridad
-const accessTransport = new DailyRotateFile({
-  filename: path.join(logsDir, 'access-%DATE%.log'),
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '90d', // Retener 90 días para auditoría
-  level: 'info'
-});
-
-// Transporte para logs de base de datos
-const databaseTransport = new DailyRotateFile({
-  filename: path.join(logsDir, 'database-%DATE%.log'),
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '30d',
-  level: 'info'
-});
-
-// Logger principal de la aplicación
+// Logger principal - SOLO CONSOLA
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: customFormat,
+  format: consoleFormat,
   transports: [
-    applicationTransport,
-    errorTransport
+    new winston.transports.Console()
   ],
   exitOnError: false
 });
 
-// Logger de acceso/seguridad (logins, acciones de usuario)
+// Logger de acceso - SOLO CONSOLA
 export const accessLogger = winston.createLogger({
   level: 'info',
-  format: customFormat,
-  transports: [accessTransport],
+  format: consoleFormat,
+  transports: [
+    new winston.transports.Console()
+  ],
   exitOnError: false
 });
 
-// Logger de base de datos
+// Logger de base de datos - SOLO CONSOLA (pero no se usa para evitar ruido)
 export const dbLogger = winston.createLogger({
   level: 'info',
-  format: customFormat,
-  transports: [databaseTransport],
+  format: consoleFormat,
+  transports: [
+    new winston.transports.Console()
+  ],
   exitOnError: false
 });
 
-// Agregar transporte de consola en desarrollo
-if (process.env.NODE_ENV !== 'production') {
-  const consoleFormat = winston.format.combine(
-    winston.format.colorize(),
-    winston.format.timestamp({
-      format: 'HH:mm:ss'
-    }),
-    winston.format.printf(({ level, message, timestamp }) => {
-      return `${timestamp} ${level}: ${message}`;
-    })
-  );
-
-  logger.add(new winston.transports.Console({
-    format: consoleFormat
-  }));
-}
-
-// Funciones de utilidad para logging estructurado
+// Funciones de utilidad para logging en consola
 export const logAccess = {
   login: (userId, email, ip, success = true) => {
-    accessLogger.info(`LOGIN ${success ? 'SUCCESS' : 'FAILED'}`, {
-      userId,
-      email,
-      ip,
-      action: 'LOGIN',
-      success
-    });
+    if (success) {
+      accessLogger.info(`LOGIN: ${email} desde ${ip}`);
+    } else {
+      accessLogger.warn(`LOGIN FALLIDO: ${email} desde ${ip}`);
+    }
   },
   
   logout: (userId, email) => {
-    accessLogger.info(`LOGOUT`, {
-      userId,
-      email,
-      action: 'LOGOUT'
-    });
+    accessLogger.info(`LOGOUT: ${email}`);
   },
   
   action: (userId, action, resource, details = {}) => {
-    accessLogger.info(`USER ACTION: ${action}`, {
-      userId,
-      action,
-      resource,
-      ...details
-    });
+    const detailsStr = details.nombre ? ` - ${details.nombre}` : '';
+    accessLogger.info(`${action}: ${resource}${detailsStr}`);
   },
   
   unauthorized: (ip, path, reason) => {
-    accessLogger.warn(`UNAUTHORIZED ACCESS ATTEMPT`, {
-      ip,
-      path,
-      reason,
-      action: 'UNAUTHORIZED'
-    });
+    accessLogger.warn(`ACCESO DENEGADO: ${path} desde ${ip} - ${reason}`);
   }
 };
 
 export const logDb = {
   query: (operation, model, duration) => {
-    dbLogger.info(`DB ${operation}`, {
-      model,
-      duration: `${duration}ms`,
-      operation
-    });
+    // No loggear queries para evitar ruido
   },
   
   error: (operation, model, error) => {
-    dbLogger.error(`DB ERROR: ${operation}`, {
-      model,
-      error: error.message,
-      operation
-    });
+    // No loggear errores de DB para evitar ruido
   }
 };
 

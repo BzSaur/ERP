@@ -141,33 +141,96 @@
     <div class="card">
       <div class="card-header">
         <h5 class="card-title mb-0">
-          <i class="bi bi-telephone me-2"></i>
+          <i class="bi bi-envelope me-2"></i>
           Información de Contacto
         </h5>
       </div>
       <div class="card-body">
-        <% if (empleado.contacto) { %>
         <table class="table table-borderless mb-0">
           <tr>
             <td class="text-muted" style="width: 40%">Email Personal</td>
-            <td><%= empleado.contacto.Email_Personal || '-' %></td>
+            <td><%= empleado.Email_Personal || '-' %></td>
           </tr>
           <tr>
             <td class="text-muted">Email Corporativo</td>
-            <td><%= empleado.contacto.Email_Corporativo || '-' %></td>
+            <td><%= empleado.Email_Corporativo || '-' %></td>
           </tr>
           <tr>
             <td class="text-muted">Teléfono Celular</td>
-            <td><%= empleado.contacto.Telefono_Celular || '-' %></td>
-          </tr>
-          <tr>
-            <td class="text-muted">Teléfono Fijo</td>
-            <td><%= empleado.contacto.Telefono_Fijo || '-' %></td>
+            <td><%= empleado.Telefono_Celular || '-' %></td>
           </tr>
         </table>
-        <% } else { %>
-        <p class="text-muted mb-0">Sin información de contacto registrada</p>
-        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contacto de Emergencia -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-hospital me-2"></i>
+          Contacto de Emergencia
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 40%">Nombre Completo</td>
+            <td><%= empleado.Nombre_Emergencia || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Parentesco</td>
+            <td><%= empleado.Parentesco_Emergencia || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Teléfono</td>
+            <td><%= empleado.Telefono_Emergencia || '-' %></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dirección -->
+  <div class="col-lg-12">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-geo-alt me-2"></i>
+          Dirección
+        </h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width: 20%">Calle</td>
+            <td><%= empleado.Calle || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Número Exterior / Interior</td>
+            <td>
+              <%= empleado.Numero_Exterior || '-' %>
+              <% if (empleado.Numero_Interior) { %> / <%= empleado.Numero_Interior %><% } %>
+            </td>
+          </tr>
+          <tr>
+            <td class="text-muted">Colonia</td>
+            <td><%= empleado.Colonia || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Ciudad</td>
+            <td><%= empleado.Ciudad || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Estado</td>
+            <td><%= empleado.Entidad_Federativa || '-' %></td>
+          </tr>
+          <tr>
+            <td class="text-muted">Código Postal</td>
+            <td><%= empleado.Codigo_Postal || '-' %></td>
+          </tr>
+        </table>
       </div>
     </div>
   </div>

@@ -4,9 +4,7 @@
  * Mínimo 15 días de salario, pagado antes del 20 de diciembre
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database.js';
 
 // Días de aguinaldo según LFT (mínimo 15)
 const DIAS_AGUINALDO_LFT = 15;

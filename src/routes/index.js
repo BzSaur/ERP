@@ -1,36 +1,25 @@
 import { Router } from 'express';
 import authRoutes from './auth.js';
+import catalogosRoutes from './catalogos.js';
 import empleadosRoutes from './empleados.js';
-import areasRoutes from './areas.js';
-import puestosRoutes from './puestos.js';
-import reportesRoutes from './reportes.js';
 import usuariosRoutes from './usuarios.js';
-import nacionalidadesRoutes from './nacionalidades.js';
-import horariosRoutes from './horarios.js';
-import horasAdicionalesRoutes from './horasAdicionales.js';
-import configuracionRoutes from './configuracion.js';
-import nominaRoutes from './nomina.js';
-import vacacionesRoutes from './vacaciones.js';
-import aguinaldoRoutes from './aguinaldo.js';
-import finiquitoRoutes from './finiquito.js';
+import nominaModuleRoutes from './nominaModule.js';
 import asistenciaRoutes from './asistencia.js';
 import checadorRoutes from './checador.js';
+import reportesRoutes from './reportes.js';
+import configuracionRoutes from './configuracion.js';
+import auditoriaRoutes from './auditoria.js';
 import { isAuthenticated } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 
 const router = Router();
 
-// ============================================================
-// RUTAS PRINCIPALES
-// ============================================================
-
-// Rutas de autenticación
+// Auth
 router.use('/auth', authRoutes);
 
-// Home - Dashboard principal
+// Dashboard
 router.get('/', isAuthenticated, async (req, res, next) => {
   try {
-    // Estadísticas para el dashboard
     const [
       totalEmpleados,
       empleadosActivos,
@@ -69,7 +58,7 @@ router.get('/', isAuthenticated, async (req, res, next) => {
   }
 });
 
-// Perfil del usuario
+// Perfil
 router.get('/perfil', isAuthenticated, (req, res) => {
   res.render('perfil', {
     title: 'Mi Perfil',
@@ -77,29 +66,23 @@ router.get('/perfil', isAuthenticated, (req, res) => {
   });
 });
 
-// Rutas de módulos
+// Módulos
+router.use('/', catalogosRoutes);         // /areas, /puestos, /horarios, /nacionalidades
 router.use('/empleados', empleadosRoutes);
-router.use('/areas', areasRoutes);
-router.use('/puestos', puestosRoutes);
-router.use('/reportes', reportesRoutes);
 router.use('/usuarios', usuariosRoutes);
-router.use('/nacionalidades', nacionalidadesRoutes);
-router.use('/horarios', horariosRoutes);
-router.use('/horas-adicionales', horasAdicionalesRoutes);
-router.use('/configuracion', configuracionRoutes);
-router.use('/nomina', nominaRoutes);
-router.use('/vacaciones', vacacionesRoutes);
-router.use('/aguinaldo', aguinaldoRoutes);
-router.use('/finiquito', finiquitoRoutes);
+router.use('/', nominaModuleRoutes);       // /nomina, /vacaciones, /aguinaldo, /finiquito, /horas-adicionales
 router.use('/asistencia', asistenciaRoutes);
 router.use('/checador', checadorRoutes);
+router.use('/reportes', reportesRoutes);
+router.use('/configuracion', configuracionRoutes);
+router.use('/auditoria', auditoriaRoutes);
 
-// Bitácora (para SuperAdmin)
+// Bitácora
 router.get('/bitacora', isAuthenticated, async (req, res) => {
   try {
     const registros = await prisma.bitacora_Accesos.findMany({
       include: { usuario: { select: { Nombre_Completo: true, Email_Office365: true } } },
-      orderBy: { Fecha_Hora: 'desc' },
+      orderBy: { FechaHora: 'desc' },
       take: 100
     });
     res.render('bitacora', { title: 'Bitácora de Accesos', registros });

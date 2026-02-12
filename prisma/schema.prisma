@@ -1,5 +1,8 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// ============================================================
+// ERP RAM - Schema de Base de Datos (Simplificado)
+// 23 tablas: Catálogos + Core + Asistencia + Nómina + Fiscal
+// Lógica de permisos y reglas de negocio en middleware/controllers
+// ============================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -19,10 +22,10 @@ model Cat_Roles {
   Nombre_Rol    String   @unique @db.VarChar(30)
   Descripcion   String?  @db.VarChar(255)
   CreatedAt     DateTime @default(now())
-  
+
   // Relaciones
-  app_usuarios       App_Usuarios[]
-  
+  app_usuarios  App_Usuarios[]
+
   @@map("Cat_Roles")
 }
 
@@ -31,25 +34,24 @@ model Cat_Estatus_Empleado {
   Nombre_Estatus String   @unique @db.VarChar(30)
   Descripcion    String?  @db.VarChar(255)
   CreatedAt      DateTime @default(now())
-  
+
   // Relaciones
   empleados      Empleados[]
-  
+
   @@map("Cat_Estatus_Empleado")
 }
 
 model Cat_Areas {
-  ID_Area         Int      @id @default(autoincrement())
-  Nombre_Area     String   @unique @db.VarChar(100)
-  Descripcion     String?  @db.VarChar(255)
-  Tipo_Area       String?  @db.VarChar(50)
-  CreatedAt       DateTime @default(now())
-  
+  ID_Area     Int      @id @default(autoincrement())
+  Nombre_Area String   @unique @db.VarChar(100)
+  Descripcion String?  @db.VarChar(255)
+  Tipo_Area   String?  @db.VarChar(50)
+  CreatedAt   DateTime @default(now())
+
   // Relaciones
-  puestos         Cat_Puestos[]
-  empleados       Empleados[]
-  escala_salarial Escala_Salarial[]
-  
+  puestos   Cat_Puestos[]
+  empleados Empleados[]
+
   @@map("Cat_Areas")
 }
 
@@ -59,10 +61,10 @@ model Cat_Tipo_Horario {
   Descripcion     String?  @db.VarChar(255)
   Horas_Semana    Int?
   CreatedAt       DateTime @default(now())
-  
+
   // Relaciones
-  empleados       Empleados[]
-  
+  empleados Empleados[]
+
   @@map("Cat_Tipo_Horario")
 }
 
@@ -72,10 +74,10 @@ model Cat_Nacionalidades {
   Codigo_ISO2         String?  @unique @db.Char(2)
   Codigo_ISO3         String?  @unique @db.Char(3)
   CreatedAt           DateTime @default(now())
-  
+
   // Relaciones
-  empleados           Empleados[]
-  
+  empleados Empleados[]
+
   @@map("Cat_Nacionalidades")
 }
 
@@ -87,66 +89,99 @@ model Cat_Puestos {
   Salario_Base_Referencia Decimal? @db.Decimal(10, 2)
   Salario_Hora_Referencia Decimal? @db.Decimal(10, 2)
   CreatedAt               DateTime @default(now())
-  
+
   // Relaciones
-  area            Cat_Areas         @relation(fields: [ID_Area], references: [ID_Area])
-  empleados       Empleados[]
-  escala_salarial Escala_Salarial[]
-  
+  area      Cat_Areas   @relation(fields: [ID_Area], references: [ID_Area])
+  empleados Empleados[]
+
   @@index([ID_Area])
   @@map("Cat_Puestos")
 }
 
+model Cat_Tipo_Incidencia {
+  ID_Tipo_Incidencia Int      @id @default(autoincrement())
+  Codigo             String   @unique @db.VarChar(20)
+  Nombre             String   @db.VarChar(50)
+  Descripcion        String?  @db.VarChar(255)
+  Con_Goce_Sueldo    Boolean  @default(false)
+  Requiere_Documento Boolean  @default(false)
+  Afecta_Puntualidad Boolean  @default(true)
+  Afecta_Asistencia  Boolean  @default(true)
+  Dias_Maximos       Int?
+  Activo             Boolean  @default(true)
+  CreatedAt          DateTime @default(now())
+
+  // Relaciones
+  incidencias Empleados_Incidencias[]
+
+  @@map("Cat_Tipo_Incidencia")
+}
+
 // ============================================================
-// TABLA PRINCIPAL: EMPLEADOS
+// EMPLEADOS (Tabla central - incluye contacto y dirección)
 // ============================================================
 
 model Empleados {
   ID_Empleado                 Int       @id @default(autoincrement())
-  
+
   // Datos personales
   Nombre                      String    @db.VarChar(50)
   Apellido_Paterno            String    @db.VarChar(50)
   Apellido_Materno            String?   @db.VarChar(50)
   Fecha_Nacimiento            DateTime?
-  
+
   // Identidad
   ID_Nacionalidad             Int
   Documento_Identidad         String    @unique @db.VarChar(50)
   Tipo_Documento              String    @db.VarChar(20)
   RFC                         String?   @db.VarChar(13)
   NSS                         String?   @db.VarChar(20)
-  
+
+  // Contacto (consolidado de Empleados_Contacto)
+  Email_Personal              String?   @db.VarChar(100)
+  Email_Corporativo           String?   @db.VarChar(100)
+  Telefono_Celular            String?   @db.VarChar(20)
+  Telefono_Emergencia         String?   @db.VarChar(20)
+  Nombre_Emergencia           String?   @db.VarChar(100)
+  Parentesco_Emergencia       String?   @db.VarChar(50)
+
+  // Dirección (consolidado de Empleados_Contacto)
+  Calle                       String?   @db.VarChar(100)
+  Numero_Exterior             String?   @db.VarChar(10)
+  Numero_Interior             String?   @db.VarChar(10)
+  Colonia                     String?   @db.VarChar(50)
+  Ciudad                      String?   @db.VarChar(50)
+  Entidad_Federativa          String?   @db.VarChar(50)
+  Codigo_Postal               String?   @db.VarChar(10)
+
   // Relación laboral
   ID_Puesto                   Int
   ID_Area                     Int
   ID_Tipo_Horario             Int
-  
+
   // Salarios
-  Salario_Mensual             Decimal?  @db.Decimal(10, 2)  // Salario mensual base
-  Salario_Diario              Decimal?  @db.Decimal(10, 2)  // Calculado: Mensual/30
-  Salario_Hora                Decimal?  @db.Decimal(10, 2)  // Calculado: Diario/8
+  Salario_Mensual             Decimal?  @db.Decimal(10, 2)
+  Salario_Diario              Decimal?  @db.Decimal(10, 2)
+  Salario_Hora                Decimal?  @db.Decimal(10, 2)
   Horas_Semanales_Contratadas Int?
-  
+
   // Estatus
   ID_Estatus                  Int       @default(1)
   Fecha_Ingreso               DateTime
   Fecha_Baja                  DateTime?
-  
+
   // Auditoría
   CreatedAt                   DateTime  @default(now())
   UpdatedAt                   DateTime  @updatedAt
   CreatedBy                   String?   @db.VarChar(100)
   UpdatedBy                   String?   @db.VarChar(100)
-  
+
   // Relaciones
-  nacionalidad      Cat_Nacionalidades         @relation(fields: [ID_Nacionalidad], references: [ID_Nacionalidad])
-  puesto            Cat_Puestos                @relation(fields: [ID_Puesto], references: [ID_Puesto])
-  area              Cat_Areas                  @relation(fields: [ID_Area], references: [ID_Area])
-  tipo_horario      Cat_Tipo_Horario           @relation(fields: [ID_Tipo_Horario], references: [ID_Tipo_Horario])
-  estatus           Cat_Estatus_Empleado       @relation(fields: [ID_Estatus], references: [ID_Estatus])
-  contacto          Empleados_Contacto?
-  documentos        Empleados_Documentos[]
+  nacionalidad      Cat_Nacionalidades          @relation(fields: [ID_Nacionalidad], references: [ID_Nacionalidad])
+  puesto            Cat_Puestos                 @relation(fields: [ID_Puesto], references: [ID_Puesto])
+  area              Cat_Areas                   @relation(fields: [ID_Area], references: [ID_Area])
+  tipo_horario      Cat_Tipo_Horario            @relation(fields: [ID_Tipo_Horario], references: [ID_Tipo_Horario])
+  estatus           Cat_Estatus_Empleado        @relation(fields: [ID_Estatus], references: [ID_Estatus])
   app_usuario       App_Usuarios?
   asistencia        Empleados_Asistencia[]
   horas_adicionales Empleados_Horas_Adicionales[]
@@ -156,8 +191,7 @@ model Empleados {
   finiquitos        Finiquito_Liquidacion[]
   incidencias       Empleados_Incidencias[]
   prestamos         Empleados_Prestamos[]
-  evaluaciones      Evaluaciones_Desempeno[]   @relation("EvaluacionEmpleado")
-  
+
   @@index([ID_Nacionalidad])
   @@index([ID_Puesto])
   @@index([ID_Area])
@@ -167,176 +201,7 @@ model Empleados {
 }
 
 // ============================================================
-// CONTACTO EMPLEADO - Teléfono de emergencia, sin país
-// ============================================================
-
-model Empleados_Contacto {
-  ID_Contacto         Int      @id @default(autoincrement())
-  ID_Empleado         Int      @unique
-  Email_Personal      String?  @db.VarChar(100)
-  Email_Corporativo   String?  @db.VarChar(100)
-  Telefono_Celular    String?  @db.VarChar(20)
-  Telefono_Emergencia String?  @db.VarChar(20)
-  Nombre_Emergencia   String?  @db.VarChar(100)
-  Parentesco_Emergencia String? @db.VarChar(50)
-  
-  // Dirección
-  Calle             String?  @db.VarChar(100)
-  Numero_Exterior   String?  @db.VarChar(10)
-  Numero_Interior   String?  @db.VarChar(10)
-  Colonia           String?  @db.VarChar(50)
-  Ciudad            String?  @db.VarChar(50)
-  Estado            String?  @db.VarChar(50)
-  Codigo_Postal     String?  @db.VarChar(10)
-  
-  CreatedAt         DateTime @default(now())
-  UpdatedAt         DateTime @updatedAt
-  
-  // Relaciones
-  empleado          Empleados @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  
-  @@map("Empleados_Contacto")
-}
-
-// ============================================================
-// DOCUMENTOS EMPLEADO - Simplificado (solo tipo: INE o DNI)
-// ============================================================
-
-model Empleados_Documentos {
-  ID_Documento      Int       @id @default(autoincrement())
-  ID_Empleado       Int
-  Tipo_Documento    String    @db.VarChar(50)  // INE, DNI, PASAPORTE
-  Tiene_Documento   Boolean   @default(true)
-  Observaciones     String?   @db.VarChar(255)
-  Activo            Boolean   @default(true)
-  CreatedAt         DateTime  @default(now())
-  
-  // Relaciones
-  empleado          Empleados @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  
-  @@index([ID_Empleado])
-  @@map("Empleados_Documentos")
-}
-
-// ============================================================
-// ASISTENCIA Y CONTROL DE HORAS
-// ============================================================
-
-model Empleados_Asistencia {
-  ID_Asistencia       Int       @id @default(autoincrement())
-  ID_Empleado         Int
-  Fecha               DateTime  @db.Date
-  Hora_Entrada        DateTime?
-  Hora_Salida         DateTime?
-  Hora_Comida_Salida  DateTime? // Salida a comer
-  Hora_Comida_Entrada DateTime? // Regreso de comer
-  Horas_Trabajadas    Decimal?  @db.Decimal(8, 2)
-  Horas_Extras        Decimal?  @db.Decimal(8, 2)
-  Minutos_Retardo     Int?      @default(0)
-  Retardo             Boolean   @default(false)
-  Presente            Boolean   @default(true)
-  Justificado         Boolean   @default(false)
-  Motivo_Falta        String?   @db.VarChar(255)
-  Ubicacion_Entrada   String?   @db.VarChar(20)  // RAM1, RAM2
-  Ubicacion_Salida    String?   @db.VarChar(20)  // RAM1, RAM2
-  Notas               String?   @db.VarChar(500)
-  Observaciones       String?   @db.VarChar(255)
-  CreatedAt           DateTime  @default(now())
-  CreatedBy           String?   @db.VarChar(100)
-  UpdatedAt           DateTime? @updatedAt
-  
-  // Relaciones
-  empleado            Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  historial_checadas  Historial_Checadas[]
-  
-  @@unique([ID_Empleado, Fecha])
-  @@index([ID_Empleado])
-  @@index([Fecha])
-  @@index([Ubicacion_Entrada])
-  @@index([Ubicacion_Salida])
-  @@map("Empleados_Asistencia")
-}
-
-// Historial de checadas individuales del biométrico
-model Historial_Checadas {
-  ID_Checada      Int       @id @default(autoincrement())
-  ID_Asistencia   Int
-  Tipo_Checada    String    @db.VarChar(30)   // ENTRADA, SALIDA, COMIDA_SALIDA, COMIDA_ENTRADA
-  Fecha_Hora      DateTime
-  Ubicacion       String    @db.VarChar(20)   // RAM1, RAM2
-  Dispositivo     String?   @db.VarChar(100)  // Identificador del dispositivo biométrico
-  Estado          String    @db.VarChar(30)   // A_TIEMPO, TOLERANCIA, RETARDO, SALIDA_TEMPRANA
-  IP_Dispositivo  String?   @db.VarChar(45)
-  CreatedAt       DateTime  @default(now())
-  
-  // Relaciones
-  asistencia      Empleados_Asistencia @relation(fields: [ID_Asistencia], references: [ID_Asistencia], onDelete: Cascade)
-  
-  @@index([ID_Asistencia])
-  @@index([Tipo_Checada])
-  @@index([Ubicacion])
-  @@index([Fecha_Hora])
-  @@map("Historial_Checadas")
-}
-
-// ============================================================
-// HORAS ADICIONALES (PRESENCIAL / EN LÍNEA) - Para Sistemas
-// ============================================================
-
-model Empleados_Horas_Adicionales {
-  ID_Horas          Int       @id @default(autoincrement())
-  ID_Empleado       Int
-  Fecha             DateTime  @db.Date
-  Tipo_Hora         String    @db.VarChar(50)  // PRESENCIAL, EN_LINEA
-  Cantidad_Horas    Decimal   @db.Decimal(8, 2)
-  Descripcion       String?   @db.VarChar(255)
-  Aprobado          Boolean   @default(false)
-  Aprobado_Por      Int?
-  Fecha_Aprobacion  DateTime?
-  CreatedAt         DateTime  @default(now())
-  CreatedBy         String?   @db.VarChar(100)
-  
-  // Relaciones
-  empleado          Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  aprobado_usuario  App_Usuarios? @relation("HorasAprobadas", fields: [Aprobado_Por], references: [ID_Usuario], onDelete: SetNull)
-  
-  @@index([ID_Empleado])
-  @@index([Fecha])
-  @@map("Empleados_Horas_Adicionales")
-}
-
-// ============================================================
-// ESCALA SALARIAL POR ÁREA Y PUESTO
-// ============================================================
-
-model Escala_Salarial {
-  ID_Escala         Int       @id @default(autoincrement())
-  ID_Area           Int
-  ID_Puesto         Int
-  Salario_Base      Decimal   @db.Decimal(10, 2)
-  Salario_Diario    Decimal   @db.Decimal(10, 2)
-  Valor_Hora        Decimal   @db.Decimal(10, 2)
-  Valor_Hora_Extra  Decimal   @db.Decimal(10, 2)
-  Vigente_Desde     DateTime  @db.Date
-  Vigente_Hasta     DateTime? @db.Date
-  Activo            Boolean   @default(true)
-  Aprobado_Por      Int
-  CreatedAt         DateTime  @default(now())
-  UpdatedAt         DateTime  @updatedAt
-  
-  // Relaciones
-  area              Cat_Areas    @relation(fields: [ID_Area], references: [ID_Area])
-  puesto            Cat_Puestos  @relation(fields: [ID_Puesto], references: [ID_Puesto])
-  aprobado_usuario  App_Usuarios @relation("EscalaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
-  
-  @@unique([ID_Area, ID_Puesto, Vigente_Desde])
-  @@index([ID_Area])
-  @@index([ID_Puesto])
-  @@map("Escala_Salarial")
-}
-
-// ============================================================
-// USUARIOS Y AUDITORÍA
+// USUARIOS Y ACCESOS
 // ============================================================
 
 model App_Usuarios {
@@ -350,123 +215,234 @@ model App_Usuarios {
   Password        String    @db.VarChar(255)
   CreatedAt       DateTime  @default(now())
   UpdatedAt       DateTime  @updatedAt
-  
+
   // Relaciones
-  rol              Cat_Roles                     @relation(fields: [ID_Rol], references: [ID_Rol])
-  empleado         Empleados?                    @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: SetNull)
-  bitacora         Bitacora_Auditoria[]
-  bitacora_accesos Bitacora_Accesos[]
-  escala_aprobadas Escala_Salarial[]             @relation("EscalaAprobada")
-  horas_aprobadas  Empleados_Horas_Adicionales[] @relation("HorasAprobadas")
-  periodos_cerrados Periodos_Nomina[]            @relation("PeriodoCerrado")
-  nominas_aprobadas Nomina[]                     @relation("NominaAprobada")
-  vacaciones_aprobadas Vacaciones[]              @relation("VacacionesAprobadas")
-  aguinaldos_calculados Aguinaldo[]              @relation("AguinaldoCalculado")
-  finiquitos_aprobados Finiquito_Liquidacion[]   @relation("FiniquitoAprobado")
-  incidencias_aprobadas Empleados_Incidencias[]  @relation("IncidenciaAprobada")
-  prestamos_aprobados Empleados_Prestamos[]      @relation("PrestamoAprobado")
-  evaluaciones_realizadas Evaluaciones_Desempeno[] @relation("EvaluacionEvaluador")
-  
+  rol                    Cat_Roles                     @relation(fields: [ID_Rol], references: [ID_Rol])
+  empleado               Empleados?                    @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: SetNull)
+  bitacora_accesos       Bitacora_Accesos[]
+  bitacora_cambios       Bitacora_Cambios[]
+  horas_aprobadas        Empleados_Horas_Adicionales[] @relation("HorasAprobadas")
+  periodos_cerrados      Periodos_Nomina[]             @relation("PeriodoCerrado")
+  nominas_aprobadas      Nomina[]                      @relation("NominaAprobada")
+  vacaciones_aprobadas   Vacaciones[]                  @relation("VacacionesAprobadas")
+  aguinaldos_calculados  Aguinaldo[]                   @relation("AguinaldoCalculado")
+  finiquitos_aprobados   Finiquito_Liquidacion[]       @relation("FiniquitoAprobado")
+  incidencias_aprobadas  Empleados_Incidencias[]       @relation("IncidenciaAprobada")
+  prestamos_aprobados    Empleados_Prestamos[]         @relation("PrestamoAprobado")
+
   @@index([Email_Office365])
   @@index([ID_Rol])
   @@index([Activo])
   @@map("App_Usuarios")
 }
 
-model Bitacora_Auditoria {
-  ID_Log           Int       @id @default(autoincrement())
-  ID_Usuario       Int
-  Email_Usuario    String    @db.VarChar(100)
-  Tabla_Afectada   String    @db.VarChar(100)
-  ID_Registro      Int?
-  Accion           String    @db.VarChar(50)
-  Datos_Anteriores String?
-  Datos_Nuevos     String?
-  IP_Usuario       String?   @db.VarChar(45)
-  Navegador        String?   @db.VarChar(255)
-  FechaHora        DateTime  @default(now())
-  
-  // Relaciones
-  usuario          App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario])
-  
-  @@index([ID_Usuario])
-  @@index([FechaHora])
-  @@index([Tabla_Afectada])
-  @@map("Bitacora_Auditoria")
-}
-
-// ============================================================
-// BITÁCORA DE ACCESOS (Login/Logout/Seguridad)
-// ============================================================
-
 model Bitacora_Accesos {
-  ID_Acceso         Int       @id @default(autoincrement())
-  ID_Usuario        Int
-  Email_Usuario     String    @db.VarChar(100)
-  Accion            String    @db.VarChar(100)  // LOGIN, LOGOUT, LOGIN_FALLIDO
-  IP_Usuario        String?   @db.VarChar(45)
-  User_Agent        String?   @db.VarChar(500)
-  Exitoso           Boolean   @default(true)
-  Motivo_Error      String?   @db.Text
-  FechaHora         DateTime  @default(now())
-  
+  ID_Acceso     Int      @id @default(autoincrement())
+  ID_Usuario    Int
+  Email_Usuario String   @db.VarChar(100)
+  Accion        String   @db.VarChar(100)
+  IP_Usuario    String?  @db.VarChar(45)
+  User_Agent    String?  @db.VarChar(500)
+  Exitoso       Boolean  @default(true)
+  Motivo_Error  String?  @db.Text
+  FechaHora     DateTime @default(now())
+
   // Relaciones
-  usuario           App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
-  
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+
   @@index([ID_Usuario])
   @@index([FechaHora])
   @@map("Bitacora_Accesos")
 }
 
+model Bitacora_Cambios {
+  ID_Cambio      Int      @id @default(autoincrement())
+  ID_Usuario     Int
+  Email_Usuario  String   @db.VarChar(100)
+  Rol_Usuario    String   @db.VarChar(50)
+  Accion         String   @db.VarChar(20)  // CREATE, UPDATE, DELETE
+  Tabla          String   @db.VarChar(100)
+  ID_Registro    String   @db.VarChar(50)  // ID del registro afectado
+  Descripcion    String   @db.Text         // Descripción del cambio
+  Datos_Previos  Json?                     // JSON con datos antes del cambio (UPDATE/DELETE)
+  Datos_Nuevos   Json?                     // JSON con datos después del cambio (CREATE/UPDATE)
+  IP_Usuario     String?  @db.VarChar(45)
+  FechaHora      DateTime @default(now())
+
+  // Relaciones
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+
+  @@index([ID_Usuario])
+  @@index([Tabla])
+  @@index([Accion])
+  @@index([FechaHora])
+  @@map("Bitacora_Cambios")
+}
+
 // ============================================================
-// SISTEMA DE NÓMINA
+// ASISTENCIA Y CONTROL DE HORAS
 // ============================================================
 
-// Periodos de Nómina (Quincenales, Semanales, Mensuales)
-model Periodos_Nomina {
-  ID_Periodo         Int       @id @default(autoincrement())
-  Nombre_Periodo     String    @db.VarChar(100)  // "Quincena 1 - Enero 2025"
-  Tipo_Periodo       String    @db.VarChar(20)   // SEMANAL, QUINCENAL, MENSUAL
+model Empleados_Asistencia {
+  ID_Asistencia       Int       @id @default(autoincrement())
+  ID_Empleado         Int
+  Fecha               DateTime  @db.Date
+  Hora_Entrada        DateTime?
+  Hora_Salida         DateTime?
+  Hora_Comida_Salida  DateTime?
+  Hora_Comida_Entrada DateTime?
+  Horas_Trabajadas    Decimal?  @db.Decimal(8, 2)
+  Horas_Extras        Decimal?  @db.Decimal(8, 2)
+  Minutos_Retardo     Int?      @default(0)
+  Retardo             Boolean   @default(false)
+  Presente            Boolean   @default(true)
+  Justificado         Boolean   @default(false)
+  Motivo_Falta        String?   @db.VarChar(255)
+  Ubicacion_Entrada   String?   @db.VarChar(20)
+  Ubicacion_Salida    String?   @db.VarChar(20)
+  Notas               String?   @db.VarChar(500)
+  Observaciones       String?   @db.VarChar(255)
+  CreatedAt           DateTime  @default(now())
+  CreatedBy           String?   @db.VarChar(100)
+  UpdatedAt           DateTime? @updatedAt
+
+  // Relaciones
+  empleado           Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  historial_checadas Historial_Checadas[]
+
+  @@unique([ID_Empleado, Fecha])
+  @@index([ID_Empleado])
+  @@index([Fecha])
+  @@index([Ubicacion_Entrada])
+  @@index([Ubicacion_Salida])
+  @@map("Empleados_Asistencia")
+}
+
+model Historial_Checadas {
+  ID_Checada     Int      @id @default(autoincrement())
+  ID_Asistencia  Int
+  Tipo_Checada   String   @db.VarChar(30)
+  Fecha_Hora     DateTime
+  Ubicacion      String   @db.VarChar(20)
+  Dispositivo    String?  @db.VarChar(100)
+  Estado         String   @db.VarChar(30)
+  IP_Dispositivo String?  @db.VarChar(45)
+  CreatedAt      DateTime @default(now())
+
+  // Relaciones
+  asistencia Empleados_Asistencia @relation(fields: [ID_Asistencia], references: [ID_Asistencia], onDelete: Cascade)
+
+  @@index([ID_Asistencia])
+  @@index([Tipo_Checada])
+  @@index([Ubicacion])
+  @@index([Fecha_Hora])
+  @@map("Historial_Checadas")
+}
+
+model Empleados_Horas_Adicionales {
+  ID_Horas         Int       @id @default(autoincrement())
+  ID_Empleado      Int
+  Fecha            DateTime  @db.Date
+  Tipo_Hora        String    @db.VarChar(50)
+  Cantidad_Horas   Decimal   @db.Decimal(8, 2)
+  Descripcion      String?   @db.VarChar(255)
+  Aprobado         Boolean   @default(false)
+  Aprobado_Por     Int?
+  Fecha_Aprobacion DateTime?
+  CreatedAt        DateTime  @default(now())
+  CreatedBy        String?   @db.VarChar(100)
+
+  // Relaciones
+  empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  aprobado_usuario App_Usuarios? @relation("HorasAprobadas", fields: [Aprobado_Por], references: [ID_Usuario], onDelete: SetNull)
+
+  @@index([ID_Empleado])
+  @@index([Fecha])
+  @@map("Empleados_Horas_Adicionales")
+}
+
+// ============================================================
+// INCIDENCIAS (Faltas, Permisos, Incapacidades)
+// ============================================================
+
+model Empleados_Incidencias {
+  ID_Incidencia      Int       @id @default(autoincrement())
+  ID_Empleado        Int
+  ID_Tipo_Incidencia Int
   Fecha_Inicio       DateTime  @db.Date
   Fecha_Fin          DateTime  @db.Date
-  Fecha_Pago         DateTime  @db.Date
-  Dias_Periodo       Int
-  Estado             String    @default("PENDIENTE") @db.VarChar(20)  // PENDIENTE, PROCESANDO, CERRADO
-  Cerrado_Por        Int?
-  Fecha_Cierre       DateTime?
+  Dias_Totales       Int
+  Con_Goce_Sueldo    Boolean   @default(false)
+  Folio_Documento    String?   @db.VarChar(50)
+  Tiene_Documento    Boolean   @default(false)
   Observaciones      String?   @db.VarChar(500)
+  Estado             String    @default("PENDIENTE") @db.VarChar(20)
+  Aprobado_Por       Int?
+  Fecha_Aprobacion   DateTime?
+  Motivo_Rechazo     String?   @db.VarChar(255)
   CreatedAt          DateTime  @default(now())
+  UpdatedAt          DateTime  @updatedAt
   CreatedBy          String?   @db.VarChar(100)
-  
+
   // Relaciones
-  nominas            Nomina[]
-  cerrado_usuario    App_Usuarios? @relation("PeriodoCerrado", fields: [Cerrado_Por], references: [ID_Usuario])
-  
+  empleado         Empleados           @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  tipo_incidencia  Cat_Tipo_Incidencia @relation(fields: [ID_Tipo_Incidencia], references: [ID_Tipo_Incidencia])
+  aprobado_usuario App_Usuarios?       @relation("IncidenciaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
+
+  @@index([ID_Empleado])
+  @@index([ID_Tipo_Incidencia])
+  @@index([Fecha_Inicio])
+  @@index([Estado])
+  @@map("Empleados_Incidencias")
+}
+
+// ============================================================
+// NÓMINA
+// ============================================================
+
+model Periodos_Nomina {
+  ID_Periodo     Int       @id @default(autoincrement())
+  Nombre_Periodo String    @db.VarChar(100)
+  Tipo_Periodo   String    @db.VarChar(20)
+  Fecha_Inicio   DateTime  @db.Date
+  Fecha_Fin      DateTime  @db.Date
+  Fecha_Pago     DateTime  @db.Date
+  Dias_Periodo   Int
+  Estado         String    @default("PENDIENTE") @db.VarChar(20)
+  Cerrado_Por    Int?
+  Fecha_Cierre   DateTime?
+  Observaciones  String?   @db.VarChar(500)
+  CreatedAt      DateTime  @default(now())
+  CreatedBy      String?   @db.VarChar(100)
+
+  // Relaciones
+  nominas         Nomina[]
+  cerrado_usuario App_Usuarios? @relation("PeriodoCerrado", fields: [Cerrado_Por], references: [ID_Usuario])
+
   @@unique([Fecha_Inicio, Fecha_Fin])
   @@index([Estado])
   @@index([Fecha_Pago])
   @@map("Periodos_Nomina")
 }
 
-// Nómina por Empleado
 model Nomina {
   ID_Nomina              Int       @id @default(autoincrement())
   ID_Periodo             Int
   ID_Empleado            Int
-  
+
   // Días trabajados
   Dias_Trabajados        Int       @default(0)
   Dias_Faltas            Int       @default(0)
   Dias_Incapacidad       Int       @default(0)
   Dias_Vacaciones        Int       @default(0)
-  
+
   // Horas
   Horas_Normales         Decimal   @default(0) @db.Decimal(8, 2)
   Horas_Extra            Decimal   @default(0) @db.Decimal(8, 2)
   Horas_Dobles           Decimal   @default(0) @db.Decimal(8, 2)
   Horas_Triples          Decimal   @default(0) @db.Decimal(8, 2)
-  
-  // Percepciones (ingresos)
+
+  // Percepciones
   Salario_Base           Decimal   @db.Decimal(12, 2)
   Pago_Horas_Extra       Decimal   @default(0) @db.Decimal(12, 2)
   Pago_Horas_Dobles      Decimal   @default(0) @db.Decimal(12, 2)
@@ -477,7 +453,7 @@ model Nomina {
   Prima_Vacacional       Decimal   @default(0) @db.Decimal(12, 2)
   Aguinaldo_Proporcional Decimal   @default(0) @db.Decimal(12, 2)
   Total_Percepciones     Decimal   @db.Decimal(12, 2)
-  
+
   // Deducciones
   Deduccion_IMSS         Decimal   @default(0) @db.Decimal(12, 2)
   Deduccion_ISR          Decimal   @default(0) @db.Decimal(12, 2)
@@ -485,27 +461,27 @@ model Nomina {
   Deduccion_Fonacot      Decimal   @default(0) @db.Decimal(12, 2)
   Otras_Deducciones      Decimal   @default(0) @db.Decimal(12, 2)
   Total_Deducciones      Decimal   @db.Decimal(12, 2)
-  
-  // Neto a pagar
+
+  // Neto
   Sueldo_Neto            Decimal   @db.Decimal(12, 2)
-  
-  // Estatus
-  Estado                 String    @default("CALCULADO") @db.VarChar(20)  // CALCULADO, APROBADO, PAGADO
+
+  // Estado
+  Estado                 String    @default("CALCULADO") @db.VarChar(20)
   Aprobado_Por           Int?
   Fecha_Aprobacion       DateTime?
   Pagado                 Boolean   @default(false)
   Fecha_Pago             DateTime?
-  
+
   // Auditoría
   CreatedAt              DateTime  @default(now())
   UpdatedAt              DateTime  @updatedAt
   CreatedBy              String?   @db.VarChar(100)
-  
+
   // Relaciones
-  periodo            Periodos_Nomina @relation(fields: [ID_Periodo], references: [ID_Periodo])
-  empleado           Empleados       @relation(fields: [ID_Empleado], references: [ID_Empleado])
-  aprobado_usuario   App_Usuarios?   @relation("NominaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
-  
+  periodo          Periodos_Nomina @relation(fields: [ID_Periodo], references: [ID_Periodo])
+  empleado         Empleados       @relation(fields: [ID_Empleado], references: [ID_Empleado])
+  aprobado_usuario App_Usuarios?   @relation("NominaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
+
   @@unique([ID_Periodo, ID_Empleado])
   @@index([ID_Periodo])
   @@index([ID_Empleado])
@@ -514,262 +490,133 @@ model Nomina {
 }
 
 // ============================================================
-// VACACIONES
+// PRESTACIONES LABORALES
 // ============================================================
 
 model Vacaciones {
-  ID_Vacacion        Int       @id @default(autoincrement())
-  ID_Empleado        Int
-  Anio               Int                          // Año de antigüedad que corresponde
-  Dias_Correspondientes Int                       // Según LFT: 12, 14, 16, etc.
-  Dias_Tomados       Int       @default(0)
-  Dias_Pendientes    Int
+  ID_Vacacion           Int       @id @default(autoincrement())
+  ID_Empleado           Int
+  Anio                  Int
+  Dias_Correspondientes Int
+  Dias_Tomados          Int       @default(0)
+  Dias_Pendientes       Int
   Prima_Vacacional_Pagada Boolean @default(false)
-  Fecha_Inicio       DateTime? @db.Date           // Si tomó vacaciones
-  Fecha_Fin          DateTime? @db.Date
-  Estado             String    @default("PENDIENTE") @db.VarChar(20)  // PENDIENTE, EN_CURSO, TOMADAS, VENCIDAS
-  Aprobado_Por       Int?
-  Fecha_Aprobacion   DateTime?
-  Observaciones      String?   @db.VarChar(500)
-  CreatedAt          DateTime  @default(now())
-  UpdatedAt          DateTime  @updatedAt
-  
+  Fecha_Inicio          DateTime? @db.Date
+  Fecha_Fin             DateTime? @db.Date
+  Estado                String    @default("PENDIENTE") @db.VarChar(20)
+  Aprobado_Por          Int?
+  Fecha_Aprobacion      DateTime?
+  Observaciones         String?   @db.VarChar(500)
+  CreatedAt             DateTime  @default(now())
+  UpdatedAt             DateTime  @updatedAt
+
   // Relaciones
-  empleado           Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
-  aprobado_usuario   App_Usuarios? @relation("VacacionesAprobadas", fields: [Aprobado_Por], references: [ID_Usuario])
-  
+  empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
+  aprobado_usuario App_Usuarios? @relation("VacacionesAprobadas", fields: [Aprobado_Por], references: [ID_Usuario])
+
   @@unique([ID_Empleado, Anio])
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Vacaciones")
 }
 
-// ============================================================
-// AGUINALDO
-// ============================================================
-
 model Aguinaldo {
-  ID_Aguinaldo         Int       @id @default(autoincrement())
-  ID_Empleado          Int
-  Anio                 Int                        // Año fiscal
-  Fecha_Ingreso        DateTime  @db.Date
-  Fecha_Corte          DateTime  @db.Date         // 20 de diciembre por ley
-  Dias_Laborados       Int                        // Días trabajados en el año
-  Dias_Aguinaldo       Int       @default(15)     // Mínimo 15 por LFT
-  Salario_Diario       Decimal   @db.Decimal(10, 2)
-  Monto_Bruto          Decimal   @db.Decimal(12, 2)  // Días x Salario
-  Deduccion_ISR        Decimal   @default(0) @db.Decimal(12, 2)
-  Monto_Neto           Decimal   @db.Decimal(12, 2)
-  Pagado               Boolean   @default(false)
-  Fecha_Pago           DateTime?
-  Calculado_Por        Int?
-  Fecha_Calculo        DateTime  @default(now())
-  Observaciones        String?   @db.VarChar(500)
-  
+  ID_Aguinaldo    Int       @id @default(autoincrement())
+  ID_Empleado     Int
+  Anio            Int
+  Fecha_Ingreso   DateTime  @db.Date
+  Fecha_Corte     DateTime  @db.Date
+  Dias_Laborados  Int
+  Dias_Aguinaldo  Int       @default(15)
+  Salario_Diario  Decimal   @db.Decimal(10, 2)
+  Monto_Bruto     Decimal   @db.Decimal(12, 2)
+  Deduccion_ISR   Decimal   @default(0) @db.Decimal(12, 2)
+  Monto_Neto      Decimal   @db.Decimal(12, 2)
+  Pagado          Boolean   @default(false)
+  Fecha_Pago      DateTime?
+  Calculado_Por   Int?
+  Fecha_Calculo   DateTime  @default(now())
+  Observaciones   String?   @db.VarChar(500)
+
   // Relaciones
-  empleado             Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
-  calculado_usuario    App_Usuarios? @relation("AguinaldoCalculado", fields: [Calculado_Por], references: [ID_Usuario])
-  
+  empleado          Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
+  calculado_usuario App_Usuarios? @relation("AguinaldoCalculado", fields: [Calculado_Por], references: [ID_Usuario])
+
   @@unique([ID_Empleado, Anio])
   @@index([ID_Empleado])
   @@index([Anio])
   @@map("Aguinaldo")
 }
 
-// ============================================================
-// FINIQUITO / LIQUIDACIÓN
-// ============================================================
-
 model Finiquito_Liquidacion {
-  ID_Finiquito         Int       @id @default(autoincrement())
-  ID_Empleado          Int
-  Tipo                 String    @db.VarChar(20)   // FINIQUITO, LIQUIDACION
-  Fecha_Baja           DateTime  @db.Date
-  Motivo_Baja          String    @db.VarChar(100)  // RENUNCIA, DESPIDO, TERMINO_CONTRATO, etc.
-  
+  ID_Finiquito               Int       @id @default(autoincrement())
+  ID_Empleado                Int
+  Tipo                       String    @db.VarChar(20)
+  Fecha_Baja                 DateTime  @db.Date
+  Motivo_Baja                String    @db.VarChar(100)
+
   // Datos de cálculo
-  Fecha_Ingreso        DateTime  @db.Date
-  Antiguedad_Anos      Int
-  Antiguedad_Meses     Int
-  Antiguedad_Dias      Int
-  Salario_Diario       Decimal   @db.Decimal(10, 2)
-  Salario_Diario_Integrado Decimal @db.Decimal(10, 2)
-  
+  Fecha_Ingreso              DateTime  @db.Date
+  Antiguedad_Anos            Int
+  Antiguedad_Meses           Int
+  Antiguedad_Dias            Int
+  Salario_Diario             Decimal   @db.Decimal(10, 2)
+  Salario_Diario_Integrado   Decimal   @db.Decimal(10, 2)
+
   // Percepciones finiquito
-  Dias_Trabajados_Pendientes Int    @default(0)
-  Pago_Dias_Trabajados   Decimal  @db.Decimal(12, 2)
-  Vacaciones_Pendientes  Int       @default(0)
-  Prima_Vacacional       Decimal  @db.Decimal(12, 2)
-  Aguinaldo_Proporcional Decimal  @db.Decimal(12, 2)
-  
-  // Liquidación (solo si aplica despido injustificado)
-  Indemnizacion_90_Dias  Decimal  @default(0) @db.Decimal(12, 2)  // 3 meses
-  Prima_Antiguedad       Decimal  @default(0) @db.Decimal(12, 2)  // 12 días por año
-  Salarios_Vencidos      Decimal  @default(0) @db.Decimal(12, 2)  // Si hay juicio
-  
+  Dias_Trabajados_Pendientes Int       @default(0)
+  Pago_Dias_Trabajados       Decimal   @db.Decimal(12, 2)
+  Vacaciones_Pendientes      Int       @default(0)
+  Prima_Vacacional           Decimal   @db.Decimal(12, 2)
+  Aguinaldo_Proporcional     Decimal   @db.Decimal(12, 2)
+
+  // Liquidación (despido injustificado)
+  Indemnizacion_90_Dias      Decimal   @default(0) @db.Decimal(12, 2)
+  Prima_Antiguedad           Decimal   @default(0) @db.Decimal(12, 2)
+  Salarios_Vencidos          Decimal   @default(0) @db.Decimal(12, 2)
+
   // Totales
-  Total_Bruto            Decimal  @db.Decimal(12, 2)
-  Deduccion_ISR          Decimal  @default(0) @db.Decimal(12, 2)
-  Otras_Deducciones      Decimal  @default(0) @db.Decimal(12, 2)
-  Total_Neto             Decimal  @db.Decimal(12, 2)
-  
+  Total_Bruto                Decimal   @db.Decimal(12, 2)
+  Deduccion_ISR              Decimal   @default(0) @db.Decimal(12, 2)
+  Otras_Deducciones          Decimal   @default(0) @db.Decimal(12, 2)
+  Total_Neto                 Decimal   @db.Decimal(12, 2)
+
   // Estado
-  Estado                 String   @default("CALCULADO") @db.VarChar(20)  // CALCULADO, APROBADO, PAGADO
-  Aprobado_Por           Int?
-  Fecha_Aprobacion       DateTime?
-  Pagado                 Boolean  @default(false)
-  Fecha_Pago             DateTime?
-  
+  Estado                     String    @default("CALCULADO") @db.VarChar(20)
+  Aprobado_Por               Int?
+  Fecha_Aprobacion           DateTime?
+  Pagado                     Boolean   @default(false)
+  Fecha_Pago                 DateTime?
+
   // Auditoría
-  CreatedAt              DateTime @default(now())
-  UpdatedAt              DateTime @updatedAt
-  CreatedBy              String?  @db.VarChar(100)
-  
+  CreatedAt                  DateTime  @default(now())
+  UpdatedAt                  DateTime  @updatedAt
+  CreatedBy                  String?   @db.VarChar(100)
+
   // Relaciones
-  empleado               Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
-  aprobado_usuario       App_Usuarios? @relation("FiniquitoAprobado", fields: [Aprobado_Por], references: [ID_Usuario])
-  
+  empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
+  aprobado_usuario App_Usuarios? @relation("FiniquitoAprobado", fields: [Aprobado_Por], references: [ID_Usuario])
+
   @@index([ID_Empleado])
   @@index([Tipo])
   @@map("Finiquito_Liquidacion")
 }
 
 // ============================================================
-// CONFIGURACIÓN DEL SISTEMA DE NÓMINA
+// CONFIGURACIÓN Y TABLAS FISCALES
 // ============================================================
 
 model Configuracion_Nomina {
-  ID_Config            Int       @id @default(autoincrement())
-  Clave                String    @unique @db.VarChar(50)
-  Valor                String    @db.VarChar(255)
-  Descripcion          String?   @db.VarChar(255)
-  Tipo_Dato            String    @db.VarChar(20)  // INT, DECIMAL, STRING, BOOLEAN
-  Activo               Boolean   @default(true)
-  UpdatedAt            DateTime  @updatedAt
-  UpdatedBy            String?   @db.VarChar(100)
-  
+  ID_Config   Int      @id @default(autoincrement())
+  Clave       String   @unique @db.VarChar(50)
+  Valor       String   @db.VarChar(255)
+  Descripcion String?  @db.VarChar(255)
+  Tipo_Dato   String   @db.VarChar(20)
+  Activo      Boolean  @default(true)
+  UpdatedAt   DateTime @updatedAt
+  UpdatedBy   String?  @db.VarChar(100)
+
   @@map("Configuracion_Nomina")
-}
-
-// ============================================================
-// DÍAS FESTIVOS OFICIALES
-// ============================================================
-
-model Dias_Festivos {
-  ID_Festivo           Int       @id @default(autoincrement())
-  Fecha                DateTime  @db.Date
-  Nombre               String    @db.VarChar(100)
-  Obligatorio          Boolean   @default(true)   // LFT Art. 74
-  Anio                 Int
-  CreatedAt            DateTime  @default(now())
-  
-  @@unique([Fecha])
-  @@index([Anio])
-  @@map("Dias_Festivos")
-}
-
-// ============================================================
-// INCIDENCIAS DE EMPLEADOS
-// Faltas, Permisos, Incapacidades, Suspensiones
-// ============================================================
-
-model Cat_Tipo_Incidencia {
-  ID_Tipo_Incidencia   Int       @id @default(autoincrement())
-  Codigo               String    @unique @db.VarChar(20)  // FALTA, PERMISO_CG, PERMISO_SG, INCAP_EG, INCAP_RT, etc.
-  Nombre               String    @db.VarChar(50)
-  Descripcion          String?   @db.VarChar(255)
-  Con_Goce_Sueldo      Boolean   @default(false)
-  Requiere_Documento   Boolean   @default(false)
-  Afecta_Puntualidad   Boolean   @default(true)
-  Afecta_Asistencia    Boolean   @default(true)
-  Dias_Maximos         Int?                              // Límite de días permitidos (null = sin límite)
-  Activo               Boolean   @default(true)
-  CreatedAt            DateTime  @default(now())
-  
-  // Relaciones
-  incidencias          Empleados_Incidencias[]
-  
-  @@map("Cat_Tipo_Incidencia")
-}
-
-model Empleados_Incidencias {
-  ID_Incidencia        Int       @id @default(autoincrement())
-  ID_Empleado          Int
-  ID_Tipo_Incidencia   Int
-  Fecha_Inicio         DateTime  @db.Date
-  Fecha_Fin            DateTime  @db.Date
-  Dias_Totales         Int
-  Con_Goce_Sueldo      Boolean   @default(false)
-  
-  // Documentación de soporte
-  Folio_Documento      String?   @db.VarChar(50)         // Folio de incapacidad IMSS, etc.
-  Tiene_Documento      Boolean   @default(false)
-  Observaciones        String?   @db.VarChar(500)
-  
-  // Aprobación
-  Estado               String    @default("PENDIENTE") @db.VarChar(20)  // PENDIENTE, APROBADA, RECHAZADA
-  Aprobado_Por         Int?
-  Fecha_Aprobacion     DateTime?
-  Motivo_Rechazo       String?   @db.VarChar(255)
-  
-  // Auditoría
-  CreatedAt            DateTime  @default(now())
-  UpdatedAt            DateTime  @updatedAt
-  CreatedBy            String?   @db.VarChar(100)
-  
-  // Relaciones
-  empleado             Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  tipo_incidencia      Cat_Tipo_Incidencia  @relation(fields: [ID_Tipo_Incidencia], references: [ID_Tipo_Incidencia])
-  aprobado_usuario     App_Usuarios?        @relation("IncidenciaAprobada", fields: [Aprobado_Por], references: [ID_Usuario])
-  
-  @@index([ID_Empleado])
-  @@index([ID_Tipo_Incidencia])
-  @@index([Fecha_Inicio])
-  @@index([Estado])
-  @@map("Empleados_Incidencias")
-}
-
-// ============================================================
-// TABLAS DE ISR - Para cálculo correcto de impuestos
-// Según LISR Art. 96 y tablas mensuales/quincenales del SAT
-// ============================================================
-
-model Tablas_ISR {
-  ID_Tabla             Int       @id @default(autoincrement())
-  Anio_Fiscal          Int                               // Año fiscal (2025, 2026, etc.)
-  Tipo_Tabla           String    @db.VarChar(20)         // MENSUAL, QUINCENAL, SEMANAL, DIARIA
-  Limite_Inferior      Decimal   @db.Decimal(12, 2)
-  Limite_Superior      Decimal   @db.Decimal(12, 2)
-  Cuota_Fija           Decimal   @db.Decimal(12, 2)
-  Porcentaje_Excedente Decimal   @db.Decimal(6, 4)       // Ej: 0.0640 = 6.40%
-  Activo               Boolean   @default(true)
-  CreatedAt            DateTime  @default(now())
-  UpdatedAt            DateTime  @updatedAt
-  
-  @@unique([Anio_Fiscal, Tipo_Tabla, Limite_Inferior])
-  @@index([Anio_Fiscal])
-  @@index([Tipo_Tabla])
-  @@map("Tablas_ISR")
-}
-
-// ============================================================
-// SUBSIDIO AL EMPLEO - Tabla para cálculo según LISR
-// ============================================================
-
-model Tablas_Subsidio_Empleo {
-  ID_Subsidio          Int       @id @default(autoincrement())
-  Anio_Fiscal          Int
-  Tipo_Tabla           String    @db.VarChar(20)         // MENSUAL, QUINCENAL, SEMANAL, DIARIA
-  Limite_Inferior      Decimal   @db.Decimal(12, 2)
-  Limite_Superior      Decimal   @db.Decimal(12, 2)
-  Subsidio             Decimal   @db.Decimal(12, 2)      // Cantidad de subsidio
-  Activo               Boolean   @default(true)
-  CreatedAt            DateTime  @default(now())
-  UpdatedAt            DateTime  @updatedAt
-  
-  @@unique([Anio_Fiscal, Tipo_Tabla, Limite_Inferior])
-  @@index([Anio_Fiscal])
-  @@map("Tablas_Subsidio_Empleo")
 }
 
 // ============================================================
@@ -779,147 +626,29 @@ model Tablas_Subsidio_Empleo {
 model Empleados_Prestamos {
   ID_Prestamo          Int       @id @default(autoincrement())
   ID_Empleado          Int
-  Tipo_Prestamo        String    @db.VarChar(30)         // EMPRESA, CAJA_AHORRO, ADELANTO_NOMINA
+  Tipo_Prestamo        String    @db.VarChar(30)
   Monto_Original       Decimal   @db.Decimal(12, 2)
   Monto_Pendiente      Decimal   @db.Decimal(12, 2)
-  Numero_Pagos         Int                               // Total de pagos (quincenas/semanas)
+  Numero_Pagos         Int
   Pagos_Realizados     Int       @default(0)
   Monto_Por_Pago       Decimal   @db.Decimal(12, 2)
-  Tasa_Interes         Decimal   @default(0) @db.Decimal(6, 4)  // 0 = sin interés
   Fecha_Inicio         DateTime  @db.Date
   Fecha_Fin_Estimada   DateTime  @db.Date
-  Estado               String    @default("ACTIVO") @db.VarChar(20)  // ACTIVO, LIQUIDADO, CANCELADO
+  Estado               String    @default("ACTIVO") @db.VarChar(20)
   Motivo               String?   @db.VarChar(255)
-  
-  // Aprobación
   Aprobado_Por         Int?
   Fecha_Aprobacion     DateTime?
-  
-  // Auditoría
   CreatedAt            DateTime  @default(now())
   UpdatedAt            DateTime  @updatedAt
   CreatedBy            String?   @db.VarChar(100)
-  
+
   // Relaciones
-  empleado             Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
-  aprobado_usuario     App_Usuarios? @relation("PrestamoAprobado", fields: [Aprobado_Por], references: [ID_Usuario])
-  pagos                Prestamos_Pagos[]
-  
+  empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  aprobado_usuario App_Usuarios? @relation("PrestamoAprobado", fields: [Aprobado_Por], references: [ID_Usuario])
+
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Empleados_Prestamos")
 }
 
-model Prestamos_Pagos {
-  ID_Pago              Int       @id @default(autoincrement())
-  ID_Prestamo          Int
-  Numero_Pago          Int
-  Monto_Pago           Decimal   @db.Decimal(12, 2)
-  Monto_Capital        Decimal   @db.Decimal(12, 2)
-  Monto_Interes        Decimal   @default(0) @db.Decimal(12, 2)
-  Saldo_Restante       Decimal   @db.Decimal(12, 2)
-  ID_Nomina            Int?                              // Referencia a nómina donde se descontó
-  Fecha_Pago           DateTime?
-  Pagado               Boolean   @default(false)
-  CreatedAt            DateTime  @default(now())
-  
-  // Relaciones
-  prestamo             Empleados_Prestamos @relation(fields: [ID_Prestamo], references: [ID_Prestamo], onDelete: Cascade)
-  
-  @@index([ID_Prestamo])
-  @@map("Prestamos_Pagos")
-}
 
-// ============================================================
-// EVALUACIONES DE DESEMPEÑO
-// ============================================================
-
-model Cat_Competencias {
-  ID_Competencia       Int       @id @default(autoincrement())
-  Nombre               String    @db.VarChar(50)
-  Descripcion          String?   @db.VarChar(255)
-  Tipo                 String    @db.VarChar(20)         // CORE, TECNICA, LIDERAZGO
-  Peso_Defecto         Decimal   @default(1) @db.Decimal(5, 2)
-  Activo               Boolean   @default(true)
-  CreatedAt            DateTime  @default(now())
-  
-  // Relaciones
-  evaluaciones         Evaluacion_Competencias[]
-  
-  @@map("Cat_Competencias")
-}
-
-model Evaluaciones_Desempeno {
-  ID_Evaluacion        Int       @id @default(autoincrement())
-  ID_Empleado          Int
-  ID_Evaluador         Int
-  Periodo              String    @db.VarChar(20)         // "2026-Q1", "2026-S1", "2026"
-  Tipo_Evaluacion      String    @db.VarChar(30)         // MENSUAL, TRIMESTRAL, SEMESTRAL, ANUAL
-  Fecha_Evaluacion     DateTime  @db.Date
-  
-  // Puntuaciones
-  Puntaje_Competencias Decimal?  @db.Decimal(5, 2)       // Promedio de competencias
-  Puntaje_KPIs         Decimal?  @db.Decimal(5, 2)       // Cumplimiento de objetivos
-  Puntaje_Final        Decimal?  @db.Decimal(5, 2)       // Puntaje ponderado final
-  
-  // Clasificación
-  Clasificacion        String?   @db.VarChar(30)         // EXCEPCIONAL, SOBRESALIENTE, ESPERADO, EN_DESARROLLO, DEFICIENTE
-  
-  // Feedback
-  Fortalezas           String?   @db.Text
-  Areas_Mejora         String?   @db.Text
-  Comentarios          String?   @db.Text
-  Plan_Desarrollo      String?   @db.Text
-  
-  // Estado
-  Estado               String    @default("BORRADOR") @db.VarChar(20)  // BORRADOR, ENVIADA, FIRMADA
-  Fecha_Firma          DateTime?
-  
-  // Auditoría
-  CreatedAt            DateTime  @default(now())
-  UpdatedAt            DateTime  @updatedAt
-  
-  // Relaciones
-  empleado             Empleados     @relation("EvaluacionEmpleado", fields: [ID_Empleado], references: [ID_Empleado])
-  evaluador            App_Usuarios  @relation("EvaluacionEvaluador", fields: [ID_Evaluador], references: [ID_Usuario])
-  competencias         Evaluacion_Competencias[]
-  objetivos            Evaluacion_Objetivos[]
-  
-  @@unique([ID_Empleado, Periodo, Tipo_Evaluacion])
-  @@index([ID_Empleado])
-  @@index([ID_Evaluador])
-  @@index([Periodo])
-  @@map("Evaluaciones_Desempeno")
-}
-
-model Evaluacion_Competencias {
-  ID                   Int       @id @default(autoincrement())
-  ID_Evaluacion        Int
-  ID_Competencia       Int
-  Puntaje              Decimal   @db.Decimal(3, 1)       // 1.0 - 5.0
-  Peso                 Decimal   @db.Decimal(5, 2)       // Peso en evaluación
-  Comentario           String?   @db.VarChar(500)
-  
-  // Relaciones
-  evaluacion           Evaluaciones_Desempeno @relation(fields: [ID_Evaluacion], references: [ID_Evaluacion], onDelete: Cascade)
-  competencia          Cat_Competencias       @relation(fields: [ID_Competencia], references: [ID_Competencia])
-  
-  @@unique([ID_Evaluacion, ID_Competencia])
-  @@map("Evaluacion_Competencias")
-}
-
-model Evaluacion_Objetivos {
-  ID                   Int       @id @default(autoincrement())
-  ID_Evaluacion        Int
-  Descripcion_KPI      String    @db.VarChar(255)
-  Meta                 String    @db.VarChar(100)
-  Resultado            String?   @db.VarChar(100)
-  Porcentaje_Logro     Decimal?  @db.Decimal(5, 2)       // 0 - 100+
-  Peso                 Decimal   @db.Decimal(5, 2)
-  Comentario           String?   @db.VarChar(500)
-  
-  // Relaciones
-  evaluacion           Evaluaciones_Desempeno @relation(fields: [ID_Evaluacion], references: [ID_Evaluacion], onDelete: Cascade)
-  
-  @@map("Evaluacion_Objetivos")
-}

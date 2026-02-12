@@ -2,9 +2,8 @@
  * Controlador de Nacionalidades
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database.js';
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 
 // Listar todas las nacionalidades
 export const index = async (req, res) => {
@@ -46,12 +45,28 @@ export const store = async (req, res) => {
       return res.redirect('/nacionalidades/crear');
     }
     
-    await prisma.cat_Nacionalidades.create({
+    const nacionalidad = await prisma.cat_Nacionalidades.create({
       data: {
         Nombre_Nacionalidad,
         Codigo_ISO2: Codigo_ISO2 || null,
         Codigo_ISO3: Codigo_ISO3 || null
       }
+    });
+    
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'CREATE',
+      tabla: 'Cat_Nacionalidades',
+      idRegistro: nacionalidad.ID_Nacionalidad.toString(),
+      descripcion: `Creación de nacionalidad: ${nacionalidad.Nombre_Nacionalidad}`,
+      datosNuevos: {
+        ID_Nacionalidad: nacionalidad.ID_Nacionalidad,
+        Nombre_Nacionalidad: nacionalidad.Nombre_Nacionalidad,
+        Codigo_ISO2: nacionalidad.Codigo_ISO2,
+        Codigo_ISO3: nacionalidad.Codigo_ISO3
+      },
+      ip: obtenerIP(req)
     });
     
     req.flash('success', 'Nacionalidad creada exitosamente');
@@ -93,14 +108,40 @@ export const update = async (req, res) => {
   try {
     const { id } = req.params;
     const { Nombre_Nacionalidad, Codigo_ISO2, Codigo_ISO3 } = req.body;
+    const idNum = parseInt(id);
     
-    await prisma.cat_Nacionalidades.update({
-      where: { ID_Nacionalidad: parseInt(id) },
+    // Obtener datos previos
+    const nacionalidadPrevio = await prisma.cat_Nacionalidades.findUnique({
+      where: { ID_Nacionalidad: idNum }
+    });
+    
+    const nacionalidad = await prisma.cat_Nacionalidades.update({
+      where: { ID_Nacionalidad: idNum },
       data: {
         Nombre_Nacionalidad,
         Codigo_ISO2: Codigo_ISO2 || null,
         Codigo_ISO3: Codigo_ISO3 || null
       }
+    });
+    
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Cat_Nacionalidades',
+      idRegistro: idNum.toString(),
+      descripcion: `Actualización de nacionalidad: ${nacionalidad.Nombre_Nacionalidad}`,
+      datosPrevios: {
+        Nombre_Nacionalidad: nacionalidadPrevio.Nombre_Nacionalidad,
+        Codigo_ISO2: nacionalidadPrevio.Codigo_ISO2,
+        Codigo_ISO3: nacionalidadPrevio.Codigo_ISO3
+      },
+      datosNuevos: {
+        Nombre_Nacionalidad: nacionalidad.Nombre_Nacionalidad,
+        Codigo_ISO2: nacionalidad.Codigo_ISO2,
+        Codigo_ISO3: nacionalidad.Codigo_ISO3
+      },
+      ip: obtenerIP(req)
     });
     
     req.flash('success', 'Nacionalidad actualizada exitosamente');
@@ -116,10 +157,11 @@ export const update = async (req, res) => {
 export const eliminar = async (req, res) => {
   try {
     const { id } = req.params;
+    const idNum = parseInt(id);
     
     // Verificar si tiene empleados asociados
     const empleadosCount = await prisma.empleados.count({
-      where: { ID_Nacionalidad: parseInt(id) }
+      where: { ID_Nacionalidad: idNum }
     });
     
     if (empleadosCount > 0) {
@@ -127,8 +169,29 @@ export const eliminar = async (req, res) => {
       return res.redirect('/nacionalidades');
     }
     
+    // Obtener datos antes de eliminar
+    const nacionalidad = await prisma.cat_Nacionalidades.findUnique({
+      where: { ID_Nacionalidad: idNum }
+    });
+    
     await prisma.cat_Nacionalidades.delete({
-      where: { ID_Nacionalidad: parseInt(id) }
+      where: { ID_Nacionalidad: idNum }
+    });
+    
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Cat_Nacionalidades',
+      idRegistro: idNum.toString(),
+      descripcion: `Eliminación de nacionalidad: ${nacionalidad.Nombre_Nacionalidad}`,
+      datosPrevios: {
+        ID_Nacionalidad: nacionalidad.ID_Nacionalidad,
+        Nombre_Nacionalidad: nacionalidad.Nombre_Nacionalidad,
+        Codigo_ISO2: nacionalidad.Codigo_ISO2,
+        Codigo_ISO3: nacionalidad.Codigo_ISO3
+      },
+      ip: obtenerIP(req)
     });
     
     req.flash('success', 'Nacionalidad eliminada exitosamente');

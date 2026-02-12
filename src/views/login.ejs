@@ -3,200 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iniciar Sesión | <%= appName %></title>
+  <title>Iniciar Sesión | <%= appName || 'ERP RH' %></title>
   
-  <!-- Bootstrap 5 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- CSS Design System -->
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
   
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Bootstrap Icons (iconografía profesional) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap JS (solo para validación si es necesario) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
   
   <style>
     * {
-      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    
-    body {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .login-container {
+    html, body {
+      height: 100%;
       width: 100%;
-      max-width: 420px;
-      padding: 20px;
-    }
-    
-    .login-card {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
-    }
-    
-    .login-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 40px 30px;
-      text-align: center;
-      color: white;
-    }
-    
-    .login-header .logo {
-      width: 80px;
-      height: 80px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-    }
-    
-    .login-header .logo i {
-      font-size: 40px;
-    }
-    
-    .login-header h1 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    
-    .login-header p {
-      opacity: 0.9;
-      margin-bottom: 0;
-    }
-    
-    .login-body {
-      padding: 40px 30px;
-    }
-    
-    .form-floating {
-      margin-bottom: 20px;
-    }
-    
-    .form-floating .form-control {
-      border-radius: 10px;
-      border: 2px solid #e9ecef;
-      padding-left: 45px;
-    }
-    
-    .form-floating .form-control:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-    
-    .form-floating label {
-      padding-left: 45px;
-    }
-    
-    .input-icon {
-      position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #6c757d;
-      z-index: 5;
-    }
-    
-    .btn-login {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      border-radius: 10px;
-      padding: 12px;
-      font-weight: 600;
-      width: 100%;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    
-    .btn-login:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-    }
-    
-    .alert {
-      border-radius: 10px;
-      border: none;
     }
   </style>
 </head>
-<body>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="login-header">
-        <div class="logo">
-          <i class="bi bi-building"></i>
+<body class="login-page">
+  <div class="login-wrapper">
+    <div class="login-panel">
+      <!-- BRANDING: Identidad del sistema -->
+      <div class="login-branding">
+        <div class="login-icon-box">
+          <img src="/img/logo_ram.png" alt="Logo Empresa" class="login-logo-img">
         </div>
-        <h1>ERP - Recursos Humanos</h1>
-        <p>Sistema de Gestión de Personal</p>
+        <h1 class="login-app-name">ERP</h1>
+        <p class="login-app-desc">Recursos Humanos</p>
       </div>
-      
-      <div class="login-body">
-        <% if (typeof error !== 'undefined' && error) { %>
-        <div class="alert alert-danger d-flex align-items-center" role="alert">
-          <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          <div><%= error %></div>
+
+      <!-- FORM SECTION: Entrada principal -->
+      <div class="login-form-section">
+        <div class="login-form-header">
+          <h2>Accede a tu cuenta</h2>
+          <p>Ingresa tus credenciales corporativas</p>
+        </div>
+
+        <!-- Error Alert (solo si error existe y NO está vacío) -->
+        <% if (error && error.trim && error.trim().length > 0) { %>
+        <div class="alert-error">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          <span><%= error %></span>
         </div>
         <% } %>
-        
-        <form action="/auth/login" method="POST">
-          <div class="form-floating position-relative">
-            <i class="bi bi-envelope input-icon"></i>
-            <input 
-              type="email" 
-              class="form-control" 
-              id="email" 
-              name="email" 
-              placeholder="correo@ejemplo.com"
-              value="<%= typeof email !== 'undefined' ? email : '' %>"
-              required
-              autofocus
-            >
-            <label for="email">Correo Electrónico</label>
-          </div>
+
+        <!-- Formulario de autenticación -->
+        <form action="/auth/login" method="POST" class="login-form" novalidate>
           
-          <div class="form-floating position-relative">
-            <i class="bi bi-lock input-icon"></i>
-            <input 
-              type="password" 
-              class="form-control" 
-              id="password" 
-              name="password" 
-              placeholder="Contraseña"
-              required
-            >
-            <label for="password">Contraseña</label>
-          </div>
-          
-          <div class="d-flex justify-content-between align-items-center mb-4">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="remember" name="remember">
-              <label class="form-check-label" for="remember">
-                Recordarme
-              </label>
+          <!-- Email Field -->
+          <div class="form-group">
+            <label for="email" class="form-label">Correo Electrónico</label>
+            <div class="input-wrapper">
+              <i class="bi bi-envelope input-prefix"></i>
+              <input 
+                type="email" 
+                class="form-input" 
+                id="email" 
+                name="email" 
+                placeholder="correo@empresa.com"
+                value="<%= typeof email !== 'undefined' ? email : '' %>"
+                required
+                autofocus
+              >
             </div>
           </div>
-          
-          <button type="submit" class="btn btn-primary btn-login">
-            <i class="bi bi-box-arrow-in-right me-2"></i>
-            Iniciar Sesión
+
+          <!-- Password Field -->
+          <div class="form-group">
+            <label for="password" class="form-label">Contraseña</label>
+            <div class="input-wrapper">
+              <i class="bi bi-lock-fill input-prefix"></i>
+              <input 
+                type="password" 
+                class="form-input" 
+                id="password" 
+                name="password" 
+                placeholder="••••••••" 
+                required
+              >
+            </div>
+          </div>
+
+          <!-- Acciones secundarias -->
+          <div class="form-actions">
+            <label class="form-checkbox">
+              <input type="checkbox" name="remember">
+              <span>Recuérdame</span>
+            </label>
+            <a href="/auth/forgot" class="form-link">¿Olvidaste la contraseña?</a>
+          </div>
+
+          <!-- Submit Button (CTA principal) -->
+          <button type="submit" class="btn-submit">
+            <span>Iniciar Sesión</span>
+            <i class="bi bi-arrow-right"></i>
           </button>
         </form>
       </div>
+
+      <!-- FOOTER: Información legal/corporativa -->
+      <div class="login-footer">
+        <p>© <%= new Date().getFullYear() %> <%= appName || 'ERP RH' %>. Todos los derechos reservados.</p>
+      </div>
     </div>
-    
-    <p class="text-center text-white mt-4 opacity-75">
-      © <%= new Date().getFullYear() %> ERP - Recursos Humanos
-    </p>
   </div>
-  
-  <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

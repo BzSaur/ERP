@@ -4,7 +4,7 @@
     <h2 class="mb-1"><i class="bi bi-people-fill me-2"></i>Empleados</h2>
     <p class="text-muted mb-0">Gestión del personal de la empresa</p>
   </div>
-  <a href="/empleados/nuevo" class="btn btn-primary">
+  <a href="/empleados/crear" class="btn btn-primary">
     <i class="bi bi-plus-lg me-1"></i> Nuevo Empleado
   </a>
 </div>
@@ -91,7 +91,7 @@
           <% if (typeof empleados !== 'undefined' && empleados && empleados.length > 0) { %>
             <% empleados.forEach(function(emp) { %>
               <tr>
-                <td><strong><%= emp.Numero_Empleado %></strong></td>
+                <td><strong><%= emp.ID_Empleado %></strong></td>
                 <td>
                   <div class="d-flex align-items-center">
                     <div class="avatar-circle me-2">
@@ -118,9 +118,11 @@
                   <a href="/empleados/<%= emp.ID_Empleado %>" class="btn btn-sm btn-outline-info" title="Ver">
                     <i class="bi bi-eye"></i>
                   </a>
+                  <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador', 'SUPER_ADMIN')) { %>
                   <a href="/empleados/<%= emp.ID_Empleado %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
                     <i class="bi bi-pencil"></i>
                   </a>
+                  <% } %>
                 </td>
               </tr>
             <% }); %>

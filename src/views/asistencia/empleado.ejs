@@ -1,9 +1,4 @@
-<%- include('../partials/navbar') %>
-<%- include('../partials/sidebar', { active: 'asistencia' }) %>
-
-<main class="main-content">
-    <div class="container-fluid py-4">
-        <!-- Header -->
+<!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <nav aria-label="breadcrumb">
@@ -31,20 +26,14 @@
                     </div>
                     <div class="col-md-3">
                         <h5 class="mb-0"><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %> <%= empleado.Apellido_Materno || '' %></h5>
-                        <small class="text-muted">#<%= empleado.Numero_Empleado %></small>
+                        <small class="text-muted">#<%= empleado.ID_Empleado %></small>
                     </div>
-                    <div class="col-md-2">
-                        <small class="text-muted d-block">Puesto</small>
-                        <strong><%= empleado.Puesto?.Nombre || 'Sin asignar' %></strong>
-                    </div>
-                    <div class="col-md-2">
-                        <small class="text-muted d-block">Área</small>
-                        <strong><%= empleado.Area?.Nombre || 'Sin asignar' %></strong>
-                    </div>
+                        <strong><%= empleado.puesto?.Nombre_Puesto || 'Sin asignar' %></strong>
+                        <strong><%= empleado.area?.Nombre_Area || 'Sin asignar' %></strong>
                     <div class="col-md-2">
                         <small class="text-muted d-block">Estatus</small>
-                        <span class="badge bg-<%= empleado.Estatus?.Nombre === 'Activo' ? 'success' : 'secondary' %>">
-                            <%= empleado.Estatus?.Nombre || 'N/A' %>
+                        <span class="badge bg-<%= empleado.estatus?.Nombre_Estatus === 'ACTIVO' ? 'success' : 'secondary' %>">
+                            <%= empleado.estatus?.Nombre_Estatus || 'N/A' %>
                         </span>
                     </div>
                     <div class="col-md-2 text-end">
@@ -278,7 +267,3 @@
                 </div>
             </div>
         </div>
-    </div>
-</main>
-
-<%- include('../partials/footer') %>

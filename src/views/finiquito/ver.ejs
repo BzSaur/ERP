@@ -74,11 +74,11 @@
           </div>
           <div class="col-md-3">
             <small class="text-muted d-block">Fecha de Ingreso</small>
-            <strong><%= finiquito.Fecha_Ingreso.toLocaleDateString('es-MX') %></strong>
+            <strong><%= finiquito.Fecha_Ingreso ? finiquito.Fecha_Ingreso.toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
           <div class="col-md-3">
             <small class="text-muted d-block">Fecha de Baja</small>
-            <strong><%= finiquito.Fecha_Baja.toLocaleDateString('es-MX') %></strong>
+            <strong><%= finiquito.Fecha_Baja ? finiquito.Fecha_Baja.toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
           <div class="col-md-3">
             <small class="text-muted d-block">Antigüedad</small>
@@ -265,7 +265,7 @@
         <ul class="list-group list-group-flush">
           <li class="list-group-item d-flex justify-content-between align-items-center px-0">
             <span><i class="bi bi-calculator me-2"></i>Calculado</span>
-            <span class="text-muted small"><%= finiquito.Fecha_Calculo.toLocaleDateString('es-MX') %></span>
+            <span class="text-muted small"><%= finiquito.CreatedAt ? finiquito.CreatedAt.toLocaleDateString('es-MX') : 'N/A' %></span>
           </li>
           <% if (finiquito.Estado === 'APROBADO' || finiquito.Estado === 'PAGADO') { %>
           <li class="list-group-item d-flex justify-content-between align-items-center px-0">
@@ -280,7 +280,7 @@
           <% if (finiquito.Estado === 'PAGADO' && finiquito.Fecha_Pago) { %>
           <li class="list-group-item d-flex justify-content-between align-items-center px-0">
             <span><i class="bi bi-cash-coin me-2 text-success"></i>Pagado</span>
-            <span class="text-muted small"><%= finiquito.Fecha_Pago.toLocaleDateString('es-MX') %></span>
+            <span class="text-muted small"><%= finiquito.Fecha_Pago ? finiquito.Fecha_Pago.toLocaleDateString('es-MX') : 'N/A' %></span>
           </li>
           <% } %>
         </ul>

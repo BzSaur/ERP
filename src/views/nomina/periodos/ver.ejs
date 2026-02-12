@@ -123,6 +123,7 @@
             <th class="text-end">Percepciones</th>
             <th class="text-end">Deducciones</th>
             <th class="text-end">Neto</th>
+            <th class="text-end">Redondeado</th>
             <th>Estado</th>
             <th class="text-end">Acciones</th>
           </tr>
@@ -130,7 +131,7 @@
         <tbody>
           <% if (periodo.nominas.length === 0) { %>
             <tr>
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="9" class="text-center py-4 text-muted">
                 <i class="bi bi-calculator fs-1 d-block mb-2"></i>
                 No hay nóminas calculadas. Haz clic en "Calcular Nómina" para generar.
               </td>
@@ -167,6 +168,9 @@
                 <td class="text-end">
                   <strong>$<%= Number(n.Sueldo_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
                 </td>
+                <td class="text-end">
+                  <strong class="text-primary">$<%= (Number(n.Sueldo_Neto) + Number(n.Otros_Bonos || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                </td>
                 <td>
                   <% if (n.Estado === 'CALCULADO') { %>
                     <span class="badge bg-secondary">Calculado</span>
@@ -193,6 +197,7 @@
               <th class="text-end text-success">$<%= totales.percepciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
               <th class="text-end text-danger">$<%= totales.deducciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></th>
               <th class="text-end"><strong>$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></th>
+              <th class="text-end"><strong class="text-primary">$<%= (totales.netoRedondeado || totales.neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></th>
               <th colspan="2"></th>
             </tr>
           </tfoot>

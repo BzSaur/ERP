@@ -4,8 +4,8 @@
  */
 
 import prisma from '../config/database.js';
-import asistenciaService from '../services/asistenciaService.js';
-import nominaService from '../services/nominaService.js';
+import * as asistenciaService from '../services/asistenciaService.js';
+import * as nominaService from '../services/nominaService.js';
 
 // ============================================================
 // VISTAS (EJS)
@@ -20,25 +20,29 @@ export const index = async (req, res, next) => {
     const resumenHoy = await asistenciaService.obtenerResumenDiario();
     
     // Obtener últimas checadas
-    const ultimasChecadas = await prisma.historial_Checadas.findMany({
-      take: 20,
-      orderBy: { Fecha_Hora: 'desc' },
-      include: {
-        asistencia: {
-          include: {
-            empleado: {
-              select: {
-                ID_Empleado: true,
-                Nombre: true,
-                Apellido_Paterno: true,
-                Apellido_Materno: true,
-                Numero_Empleado: true
+    let ultimasChecadas = [];
+    try {
+      ultimasChecadas = await prisma.historial_Checadas.findMany({
+        take: 20,
+        orderBy: { Fecha_Hora: 'desc' },
+        include: {
+          asistencia: {
+            include: {
+              empleado: {
+                select: {
+                  ID_Empleado: true,
+                  Nombre: true,
+                  Apellido_Paterno: true,
+                  Apellido_Materno: true
+                }
               }
             }
           }
         }
-      }
-    });
+      });
+    } catch (e) {
+      // Tabla puede no existir aún si no se ha corrido la migración
+    }
 
     res.render('asistencia/index', {
       title: 'Control de Asistencia',
@@ -67,9 +71,9 @@ export const reporteEmpleado = async (req, res, next) => {
     const empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: parseInt(id) },
       include: {
-        Puesto: true,
-        Area: true,
-        Estatus: true
+        puesto: true,
+        area: true,
+        estatus: true
       }
     });
 
@@ -134,15 +138,14 @@ export const formChecadaManual = async (req, res, next) => {
   try {
     const empleados = await prisma.empleados.findMany({
       where: {
-        Estatus: { Nombre: 'Activo' }
+        estatus: { is: { Nombre_Estatus: 'ACTIVO' } }
       },
       orderBy: { Nombre: 'asc' },
       select: {
         ID_Empleado: true,
         Nombre: true,
         Apellido_Paterno: true,
-        Apellido_Materno: true,
-        Numero_Empleado: true
+        Apellido_Materno: true
       }
     });
 

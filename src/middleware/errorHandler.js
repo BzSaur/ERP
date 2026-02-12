@@ -2,6 +2,8 @@
 // MIDDLEWARE DE MANEJO DE ERRORES
 // ============================================================
 
+import logger from '../config/logger.js';
+
 // Middleware para manejar errores 404
 export const notFound = (req, res, next) => {
   res.status(404).render('errors/404', {
@@ -12,7 +14,8 @@ export const notFound = (req, res, next) => {
 
 // Middleware para manejar errores generales
 export const errorHandler = (err, req, res, next) => {
-  console.error('❌ Error:', err);
+  // Loggear el error de forma concisa
+  logger.error(`Error en ${req.method} ${req.path}: ${err.message}`);
 
   // Error de validación de Prisma
   if (err.code === 'P2002') {

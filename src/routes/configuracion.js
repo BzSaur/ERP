@@ -25,4 +25,9 @@ router.get('/estatus', configuracionController.estatus);
 router.post('/estatus', configuracionController.crearEstatus);
 router.put('/estatus/:id', configuracionController.actualizarEstatus);
 
+// Configuración de Nómina
+router.get('/nomina', configuracionController.nominaConfig);
+router.put('/nomina/:clave', configuracionController.actualizarNominaConfig);
+router.post('/nomina/categoria', configuracionController.actualizarCategoriaNominaConfig);
+
 export default router;

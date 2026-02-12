@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import * as reportesController from '../controllers/reportesController.js';
-import { isAuthenticated } from '../middleware/auth.js';
+import { isAuthenticated, isAdminOrRH } from '../middleware/auth.js';
 
 const router = Router();
 
 // ============================================================
-// RUTAS DE REPORTES
+// RUTAS DE REPORTES (Solo ADMIN/RH)
 // ============================================================
 
-// Aplicar autenticación a todas las rutas
+// Aplicar autenticación + ADMIN/RH a todas las rutas
 router.use(isAuthenticated);
+router.use(isAdminOrRH);
 
 // GET /reportes - Dashboard de reportes
 router.get('/', reportesController.index);

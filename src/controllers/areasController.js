@@ -1,4 +1,6 @@
 import prisma from '../config/database.js';
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
+import { logAccess } from '../config/logger.js';
 
 // ============================================================
 // CONTROLADOR DE ÁREAS
@@ -37,13 +39,37 @@ export const store = async (req, res, next) => {
   try {
     const { Nombre_Area, Descripcion, Tipo_Area } = req.body;
 
-    await prisma.cat_Areas.create({
+    const area = await prisma.cat_Areas.create({
       data: {
         Nombre_Area: Nombre_Area.toUpperCase(),
         Descripcion: Descripcion || null,
         Tipo_Area: Tipo_Area || null
       }
     });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'CREATE',
+      tabla: 'Cat_Areas',
+      idRegistro: area.ID_Area.toString(),
+      descripcion: `Creación de área: ${area.Nombre_Area}`,
+      datosNuevos: {
+        ID_Area: area.ID_Area,
+        Nombre_Area: area.Nombre_Area,
+        Descripcion: area.Descripcion,
+        Tipo_Area: area.Tipo_Area
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción
+    logAccess.action(
+      req.user.ID_Usuario,
+      'CREATE_AREA',
+      'Cat_Areas',
+      { areaId: area.ID_Area, nombre: area.Nombre_Area }
+    );
 
     res.redirect('/areas');
   } catch (error) {
@@ -81,14 +107,40 @@ export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { Nombre_Area, Descripcion, Tipo_Area } = req.body;
+    const idNum = parseInt(id);
 
-    await prisma.cat_Areas.update({
-      where: { ID_Area: parseInt(id) },
+    // Obtener datos previos
+    const areaPrevio = await prisma.cat_Areas.findUnique({
+      where: { ID_Area: idNum }
+    });
+
+    const area = await prisma.cat_Areas.update({
+      where: { ID_Area: idNum },
       data: {
         Nombre_Area: Nombre_Area.toUpperCase(),
         Descripcion: Descripcion || null,
         Tipo_Area: Tipo_Area || null
       }
+    });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Cat_Areas',
+      idRegistro: idNum.toString(),
+      descripcion: `Actualización de área: ${area.Nombre_Area}`,
+      datosPrevios: {
+        Nombre_Area: areaPrevio.Nombre_Area,
+        Descripcion: areaPrevio.Descripcion,
+        Tipo_Area: areaPrevio.Tipo_Area
+      },
+      datosNuevos: {
+        Nombre_Area: area.Nombre_Area,
+        Descripcion: area.Descripcion,
+        Tipo_Area: area.Tipo_Area
+      },
+      ip: obtenerIP(req)
     });
 
     res.redirect('/areas');
@@ -101,10 +153,11 @@ export const update = async (req, res, next) => {
 export const destroy = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const idNum = parseInt(id);
 
     // Verificar si tiene empleados asociados
     const empleadosCount = await prisma.empleados.count({
-      where: { ID_Area: parseInt(id) }
+      where: { ID_Area: idNum }
     });
 
     if (empleadosCount > 0) {
@@ -114,8 +167,29 @@ export const destroy = async (req, res, next) => {
       });
     }
 
+    // Obtener datos antes de eliminar
+    const area = await prisma.cat_Areas.findUnique({
+      where: { ID_Area: idNum }
+    });
+
     await prisma.cat_Areas.delete({
-      where: { ID_Area: parseInt(id) }
+      where: { ID_Area: idNum }
+    });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Cat_Areas',
+      idRegistro: idNum.toString(),
+      descripcion: `Eliminación de área: ${area.Nombre_Area}`,
+      datosPrevios: {
+        ID_Area: area.ID_Area,
+        Nombre_Area: area.Nombre_Area,
+        Descripcion: area.Descripcion,
+        Tipo_Area: area.Tipo_Area
+      },
+      ip: obtenerIP(req)
     });
 
     res.redirect('/areas');

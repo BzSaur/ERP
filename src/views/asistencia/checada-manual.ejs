@@ -1,9 +1,4 @@
-<%- include('../partials/navbar') %>
-<%- include('../partials/sidebar', { active: 'asistencia' }) %>
-
-<main class="main-content">
-    <div class="container-fluid py-4">
-        <!-- Header -->
+<!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <nav aria-label="breadcrumb">
@@ -54,7 +49,7 @@
                                     <option value="">Seleccionar empleado...</option>
                                     <% empleados.forEach(emp => { %>
                                         <option value="<%= emp.ID_Empleado %>">
-                                            #<%= emp.Numero_Empleado %> - <%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>
+                                            #<%= emp.ID_Empleado %> - <%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>
                                         </option>
                                     <% }); %>
                                 </select>
@@ -170,7 +165,3 @@
                 </div>
             </div>
         </div>
-    </div>
-</main>
-
-<%- include('../partials/footer') %>

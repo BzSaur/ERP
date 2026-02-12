@@ -2,6 +2,15 @@ import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database.js';
+import { logAccess } from '../config/logger.js';
+
+// ============================================================
+// NORMALIZAR NOMBRE DE ROL PARA COMPARACIÓN
+// ============================================================
+const normalizeRole = (roleName) => {
+  if (!roleName) return '';
+  return roleName.toUpperCase().replace(/\s+/g, '_');
+};
 
 // ============================================================
 // CONFIGURACIÓN DE PASSPORT LOCAL
@@ -81,6 +90,10 @@ export const isAuthenticated = (req, res, next) => {
   if (req.isAuthenticated()) {
     return next();
   }
+  
+  // Log de intento de acceso no autenticado
+  logAccess.unauthorized(req.ip, req.originalUrl, 'Not authenticated');
+  
   req.session.returnTo = req.originalUrl;
   res.redirect('/auth/login');
 };
@@ -92,11 +105,24 @@ export const hasRole = (...roles) => {
       return res.redirect('/auth/login');
     }
 
-    const userRole = req.user?.rol?.Nombre_Rol;
+    const userRole = normalizeRole(req.user?.rol?.Nombre_Rol);
+    const normalizedRoles = roles.map(r => normalizeRole(r));
     
-    if (roles.includes(userRole) || userRole === 'SUPER_ADMIN') {
+    // SUPER_ADMIN siempre tiene acceso a todo
+    if (userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMINISTRADOR') {
       return next();
     }
+    
+    if (normalizedRoles.includes(userRole)) {
+      return next();
+    }
+
+    // Log de acceso denegado por falta de permisos
+    logAccess.unauthorized(
+      req.ip,
+      req.originalUrl,
+      `Insufficient permissions: required [${roles.join(', ')}], has ${userRole}`
+    );
 
     res.status(403).render('errors/403', {
       title: 'Acceso Denegado',
@@ -107,30 +133,45 @@ export const hasRole = (...roles) => {
 
 // Verificar si es admin
 export const isAdmin = (req, res, next) => {
-  return hasRole('SuperAdministrador', 'Administrador', 'SUPER_ADMIN', 'ADMIN')(req, res, next);
+  return hasRole('SUPER_ADMIN', 'SuperAdministrador', 'ADMIN', 'Administrador')(req, res, next);
 };
 
-// Verificar si es SuperAdmin
+// Verificar si es SuperAdmin (solo SUPER_ADMIN)
 export const isSuperAdmin = (req, res, next) => {
   if (!req.isAuthenticated()) {
     return res.redirect('/auth/login');
   }
-
-  const userRole = req.user?.rol?.Nombre_Rol;
-  
-  if (userRole === 'SuperAdministrador' || userRole === 'SUPER_ADMIN') {
+  const userRole = normalizeRole(req.user?.rol?.Nombre_Rol);
+  if (userRole === 'SUPER_ADMIN' || userRole === 'SUPERADMINISTRADOR') {
     return next();
   }
-
+  
+  // Log de acceso denegado a zona SuperAdmin
+  logAccess.unauthorized(
+    req.ip,
+    req.originalUrl,
+    `SuperAdmin access required, user has ${userRole}`
+  );
+  
   res.status(403).render('errors/403', {
     title: 'Acceso Denegado',
     message: 'Solo SuperAdministradores pueden acceder a esta sección'
   });
 };
 
-// Verificar si es RH o superior
+// Verificar si es RH o ADMIN (todos los permisos excepto Administración)
 export const isRH = (req, res, next) => {
-  return hasRole('SuperAdministrador', 'Administrador', 'RH', 'SUPER_ADMIN', 'ADMIN')(req, res, next);
+  return hasRole('SUPER_ADMIN', 'SuperAdministrador', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS')(req, res, next);
+};
+
+// Verificar si es ADMIN o RH (para acceso completo sin Administración)
+export const isAdminOrRH = (req, res, next) => {
+  return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS')(req, res, next);
+};
+
+// Verificar si puede gestionar empleados (ADMIN, RH, CONSULTA)
+export const canManageEmployees = (req, res, next) => {
+  return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'CONSULTA')(req, res, next);
 };
 
 export default passport;

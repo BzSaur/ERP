@@ -3,9 +3,7 @@
  * Cálculo de días de vacaciones según LFT México
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database.js';
 
 // Tabla de días de vacaciones según LFT México 2024
 // Art. 76: 12 días primer año, incremento 2 días por año hasta el 5to

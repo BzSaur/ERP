@@ -1,0 +1,227 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-shield-check me-2"></i>Historial de Cambios</h2>
+    <p class="text-muted mb-0">Auditoría de modificaciones realizadas por ADMIN y RH</p>
+  </div>
+  <div>
+    <a href="/auditoria/exportar?<%= new URLSearchParams(filtros).toString() %>" 
+       class="btn btn-success">
+      <i class="bi bi-file-earmark-spreadsheet me-1"></i> Exportar CSV
+    </a>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" action="/auditoria" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Usuario</label>
+        <select class="form-select" name="usuario">
+          <option value="">Todos</option>
+          <% usuarios.forEach(u => { %>
+            <option value="<%= u.Email_Usuario %>" <%= filtros.usuario === u.Email_Usuario ? 'selected' : '' %>>
+              <%= u.Email_Usuario %> (<%= u.Rol_Usuario %>)
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      
+      <div class="col-md-2">
+        <label class="form-label">Acción</label>
+        <select class="form-select" name="accion">
+          <option value="">Todas</option>
+          <option value="CREATE" <%= filtros.accion === 'CREATE' ? 'selected' : '' %>>Crear</option>
+          <option value="UPDATE" <%= filtros.accion === 'UPDATE' ? 'selected' : '' %>>Actualizar</option>
+          <option value="DELETE" <%= filtros.accion === 'DELETE' ? 'selected' : '' %>>Eliminar</option>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Tabla</label>
+        <select class="form-select" name="tabla">
+          <option value="">Todas</option>
+          <% tablas.forEach(t => { %>
+            <option value="<%= t.Tabla %>" <%= filtros.tabla === t.Tabla ? 'selected' : '' %>>
+              <%= t.Tabla %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Fecha Desde</label>
+        <input type="date" class="form-control" name="fechaDesde" value="<%= filtros.fechaDesde %>">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Fecha Hasta</label>
+        <input type="date" class="form-control" name="fechaHasta" value="<%= filtros.fechaHasta %>">
+      </div>
+
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Estadísticas rápidas -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="text-muted">Total Cambios</h5>
+        <h2 class="mb-0"><%= pagination.total %></h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center bg-success bg-opacity-10">
+      <div class="card-body">
+        <h5 class="text-success">Creaciones</h5>
+        <h2 class="mb-0 text-success">
+          <%= cambios.filter(c => c.Accion === 'CREATE').length %>
+        </h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center bg-warning bg-opacity-10">
+      <div class="card-body">
+        <h5 class="text-warning">Actualizaciones</h5>
+        <h2 class="mb-0 text-warning">
+          <%= cambios.filter(c => c.Accion === 'UPDATE').length %>
+        </h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center bg-danger bg-opacity-10">
+      <div class="card-body">
+        <h5 class="text-danger">Eliminaciones</h5>
+        <h2 class="mb-0 text-danger">
+          <%= cambios.filter(c => c.Accion === 'DELETE').length %>
+        </h2>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de cambios -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Fecha/Hora</th>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Acción</th>
+            <th>Tabla</th>
+            <th>ID Registro</th>
+            <th>Descripción</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (cambios.length === 0) { %>
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                No hay cambios registrados con los filtros seleccionados
+              </td>
+            </tr>
+          <% } else { %>
+            <% cambios.forEach(cambio => { %>
+              <tr>
+                <td>
+                  <div><%= new Date(cambio.FechaHora).toLocaleDateString('es-MX') %></div>
+                  <small class="text-muted"><%= new Date(cambio.FechaHora).toLocaleTimeString('es-MX') %></small>
+                </td>
+                <td>
+                  <div><%= cambio.Email_Usuario %></div>
+                  <small class="text-muted"><%= cambio.usuario.Nombre_Completo %></small>
+                </td>
+                <td>
+                  <span class="badge bg-secondary"><%= cambio.Rol_Usuario %></span>
+                </td>
+                <td>
+                  <% if (cambio.Accion === 'CREATE') { %>
+                    <span class="badge bg-success">
+                      <i class="bi bi-plus-circle me-1"></i>Crear
+                    </span>
+                  <% } else if (cambio.Accion === 'UPDATE') { %>
+                    <span class="badge bg-warning">
+                      <i class="bi bi-pencil me-1"></i>Actualizar
+                    </span>
+                  <% } else if (cambio.Accion === 'DELETE') { %>
+                    <span class="badge bg-danger">
+                      <i class="bi bi-trash me-1"></i>Eliminar
+                    </span>
+                  <% } %>
+                </td>
+                <td><code><%= cambio.Tabla %></code></td>
+                <td><strong><%= cambio.ID_Registro %></strong></td>
+                <td>
+                  <%= cambio.Descripcion.length > 50 ? cambio.Descripcion.substring(0, 50) + '...' : cambio.Descripcion %>
+                </td>
+                <td class="text-end">
+                  <a href="/auditoria/<%= cambio.ID_Cambio %>" 
+                     class="btn btn-sm btn-outline-info" 
+                     title="Ver detalle">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Paginación -->
+  <% if (pagination.totalPages > 1) { %>
+  <div class="card-footer">
+    <nav>
+      <ul class="pagination justify-content-center mb-0">
+        <li class="page-item <%= !pagination.hasPrev ? 'disabled' : '' %>">
+          <a class="page-link" href="?page=<%= pagination.page - 1 %>&<%= new URLSearchParams(filtros).toString() %>">
+            Anterior
+          </a>
+        </li>
+        
+        <% for (let i = 1; i <= pagination.totalPages; i++) { %>
+          <% if (i === 1 || i === pagination.totalPages || (i >= pagination.page - 2 && i <= pagination.page + 2)) { %>
+            <li class="page-item <%= i === pagination.page ? 'active' : '' %>">
+              <a class="page-link" href="?page=<%= i %>&<%= new URLSearchParams(filtros).toString() %>">
+                <%= i %>
+              </a>
+            </li>
+          <% } else if (i === pagination.page - 3 || i === pagination.page + 3) { %>
+            <li class="page-item disabled">
+              <span class="page-link">...</span>
+            </li>
+          <% } %>
+        <% } %>
+
+        <li class="page-item <%= !pagination.hasNext ? 'disabled' : '' %>">
+          <a class="page-link" href="?page=<%= pagination.page + 1 %>&<%= new URLSearchParams(filtros).toString() %>">
+            Siguiente
+          </a>
+        </li>
+      </ul>
+    </nav>
+    <div class="text-center mt-2">
+      <small class="text-muted">
+        Mostrando página <%= pagination.page %> de <%= pagination.totalPages %> 
+        (<%= pagination.total %> registros totales)
+      </small>
+    </div>
+  </div>
+  <% } %>
+</div>

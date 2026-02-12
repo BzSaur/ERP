@@ -2,12 +2,9 @@
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <a href="/" class="sidebar-brand">
-      <i class="bi bi-building"></i>
+      <img src="/img/logo_ram.png" alt="Logo" class="sidebar-brand-logo">
       <span>ERP RH</span>
     </a>
-    <button class="sidebar-toggle" id="sidebarToggle" title="Colapsar menú">
-      <i class="bi bi-list"></i>
-    </button>
   </div>
   
   <div class="sidebar-body">
@@ -59,15 +56,18 @@
         </ul>
       </li>
       
-      <!-- Horas Adicionales -->
+      <!-- Horas Adicionales (Solo ADMIN/RH) -->
+      <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item">
         <a href="/horas-adicionales" class="nav-link <%= currentPath.startsWith('/horas-adicionales') ? 'active' : '' %>">
           <i class="bi bi-clock-history"></i>
           <span>Horas Adicionales</span>
         </a>
       </li>
+      <% } %>
 
-      <!-- Asistencia -->
+      <!-- Asistencia (Solo ADMIN/RH/SUPER_ADMIN) -->
+      <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/asistencia') ? 'active' : '' %>">
           <i class="bi bi-person-check"></i>
@@ -97,8 +97,10 @@
           </li>
         </ul>
       </li>
+      <% } %>
       
-      <!-- Nómina -->
+      <!-- Nómina (Solo ADMIN/RH) -->
+      <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/nomina') || currentPath.startsWith('/vacaciones') || currentPath.startsWith('/aguinaldo') || currentPath.startsWith('/finiquito') ? 'active' : '' %>">
           <i class="bi bi-cash-stack"></i>
@@ -133,8 +135,10 @@
           </li>
         </ul>
       </li>
+      <% } %>
       
-      <!-- Reportes -->
+      <!-- Reportes (Solo ADMIN/RH) -->
+      <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/reportes') ? 'active' : '' %>">
           <i class="bi bi-file-earmark-bar-graph"></i>
@@ -164,22 +168,23 @@
           </li>
         </ul>
       </li>
+      <% } %>
       
-      <% if (user && user.rol && (user.rol.Nombre_Rol === 'SuperAdministrador' || user.rol.Nombre_Rol === 'Administrador')) { %>
-      <!-- Administración -->
+      <!-- Administración (Solo SUPER_ADMIN) -->
+      <% if (hasRole('SuperAdministrador', 'SUPER_ADMIN')) { %>
       <li class="nav-item has-submenu">
-        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') ? 'active' : '' %>">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') ? 'active' : '' %>">
           <i class="bi bi-gear"></i>
           <span>Administración</span>
           <i class="bi bi-chevron-down submenu-arrow"></i>
         </a>
-        <ul class="sidebar-submenu <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') ? 'show' : '' %>">
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') ? 'show' : '' %>">
           <li>
             <a href="/usuarios" class="<%= currentPath.startsWith('/usuarios') ? 'active' : '' %>">
               <i class="bi bi-person-gear"></i> Usuarios
             </a>
           </li>
-          <% if (user.rol.Nombre_Rol === 'SuperAdministrador') { %>
+          <% if (hasRole('SuperAdministrador')) { %>
           <li>
             <a href="/configuracion" class="<%= currentPath.startsWith('/configuracion') ? 'active' : '' %>">
               <i class="bi bi-sliders"></i> Configuración
@@ -188,6 +193,11 @@
           <li>
             <a href="/bitacora" class="<%= currentPath.startsWith('/bitacora') ? 'active' : '' %>">
               <i class="bi bi-journal-text"></i> Bitácora
+            </a>
+          </li>
+          <li>
+            <a href="/auditoria" class="<%= currentPath.startsWith('/auditoria') ? 'active' : '' %>">
+              <i class="bi bi-shield-check"></i> Historial de Cambios
             </a>
           </li>
           <% } %>

@@ -4,6 +4,7 @@
  */
 
 import prisma from '../config/database.js';
+import { getConfig, getConfigMultiple, calcularNominaSemanal } from '../services/nominaService.js';
 
 // ============================================================
 // PERIODOS DE NÓMINA
@@ -88,7 +89,11 @@ export const storePeriodo = async (req, res) => {
     res.redirect('/nomina/periodos');
   } catch (error) {
     console.error('Error al crear periodo:', error);
-    req.flash('error', 'Error al crear el periodo de nómina');
+    if (error.code === 'P2002') {
+      req.flash('error', 'Ya existe un periodo con esas fechas de inicio y fin. Usa fechas diferentes.');
+    } else {
+      req.flash('error', 'Error al crear el periodo de nómina');
+    }
     res.redirect('/nomina/periodos/crear');
   }
 };
@@ -133,6 +138,7 @@ export const verPeriodo = async (req, res) => {
       percepciones: periodo.nominas.reduce((sum, n) => sum + Number(n.Total_Percepciones), 0),
       deducciones: periodo.nominas.reduce((sum, n) => sum + Number(n.Total_Deducciones), 0),
       neto: periodo.nominas.reduce((sum, n) => sum + Number(n.Sueldo_Neto), 0),
+      netoRedondeado: periodo.nominas.reduce((sum, n) => sum + Number(n.Sueldo_Neto) + Number(n.Otros_Bonos || 0), 0),
       empleados: periodo.nominas.length
     };
     
@@ -167,7 +173,17 @@ export const calcularNomina = async (req, res) => {
       return res.redirect(`/nomina/periodos/${id}`);
     }
     
-    // Obtener empleados activos
+    // Obtener configuración de deducciones desde SuperAdmin
+    const config = await getConfigMultiple([
+      'CALCULAR_IMSS',
+      'CALCULAR_ISR',
+      'TASA_IMSS_EMPLEADO',
+      'TASA_ISR',
+      'PRESTAMOS_ACTIVO',
+      'PRESTAMOS_TASA_INTERES'
+    ]);
+    
+    // Obtener empleados activos con sus datos de la semana
     const empleados = await prisma.empleados.findMany({
       where: { ID_Estatus: 1 },
       include: {
@@ -187,6 +203,15 @@ export const calcularNomina = async (req, res) => {
               lte: periodo.Fecha_Fin
             }
           }
+        },
+        prestamos: {
+          where: { Estado: 'ACTIVO' }
+        },
+        puesto: {
+          select: {
+            Salario_Base_Referencia: true,
+            Salario_Hora_Referencia: true
+          }
         }
       }
     });
@@ -198,13 +223,18 @@ export const calcularNomina = async (req, res) => {
     });
     
     let nominasCreadas = 0;
+    const diasLaborables = 6; // L-S
     
     for (const empleado of empleados) {
-      // Calcular días trabajados
-      const diasTrabajados = empleado.asistencia.filter(a => a.Presente).length || periodo.Dias_Periodo;
-      const diasFaltas = empleado.asistencia.filter(a => !a.Presente && !a.Justificado).length;
+      // Calcular días trabajados (sin contar domingos)
+      const asistenciasSinDomingo = empleado.asistencia.filter(a => {
+        const fecha = new Date(a.Fecha);
+        return fecha.getDay() !== 0; // Excluir domingos
+      });
+      const diasTrabajados = asistenciasSinDomingo.filter(a => a.Presente).length || periodo.Dias_Periodo;
+      const diasFaltas = asistenciasSinDomingo.filter(a => !a.Presente && !a.Justificado).length;
       
-      // Calcular horas adicionales
+      // Calcular horas adicionales (todos los tipos que generan pago extra)
       const horasExtra = empleado.horas_adicionales
         .filter(h => h.Tipo_Hora === 'EXTRA')
         .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
@@ -215,24 +245,90 @@ export const calcularNomina = async (req, res) => {
         .filter(h => h.Tipo_Hora === 'TRIPLE')
         .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
       
-      // Salarios
-      const salarioDiario = Number(empleado.Salario_Diario) || 0;
-      const salarioHora = Number(empleado.Salario_Hora) || salarioDiario / 8;
+      // Horas presenciales y en línea también cuentan como extra dobles
+      const horasPresencialRemoto = empleado.horas_adicionales
+        .filter(h => h.Tipo_Hora === 'PRESENCIAL' || h.Tipo_Hora === 'EN_LINEA')
+        .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
       
-      // Calcular percepciones
-      const salarioBase = salarioDiario * (diasTrabajados - diasFaltas);
-      const pagoHorasExtra = horasExtra * salarioHora * 1.5;   // 50% adicional
-      const pagoHorasDobles = horasDobles * salarioHora * 2;   // 100% adicional
-      const pagoHorasTriples = horasTriples * salarioHora * 3; // 200% adicional
+      // Total horas dobles = DOBLE + PRESENCIAL + EN_LINEA + EXTRA (todas pagan doble)
+      const totalHorasDobles = horasDobles + horasPresencialRemoto + horasExtra;
+      const totalHorasTriples = horasTriples;
       
-      const totalPercepciones = salarioBase + pagoHorasExtra + pagoHorasDobles + pagoHorasTriples;
+      // Salarios base (LFT) — fuente de verdad: Salario_Mensual > puesto.Salario_Base_Referencia
+      const salarioMensual = Number(empleado.Salario_Mensual) 
+        || Number(empleado.puesto?.Salario_Base_Referencia) 
+        || (Number(empleado.Salario_Diario) * 30) 
+        || 0;
+      const salarioDiario = redondear(salarioMensual / 30);
+      const salarioHora = redondear(salarioDiario / 8);
       
-      // Calcular deducciones (simplificado)
-      const deduccionIMSS = totalPercepciones * 0.02475; // Aprox IMSS empleado
-      const deduccionISR = calcularISR(totalPercepciones); // ISR según tablas
+      // ============================================================
+      // PERCEPCIONES — Salario semanal = diario × 7 (LFT Art. 69/72)
+      // ============================================================
+      let salarioBase;
+      let pagoDomingoLFT = 0;
+      const diasEfectivos = Math.max(0, diasTrabajados - diasFaltas);
       
-      const totalDeducciones = deduccionIMSS + deduccionISR;
-      const sueldoNeto = totalPercepciones - totalDeducciones;
+      if (diasFaltas === 0 && diasEfectivos >= diasLaborables) {
+        // Semana completa: 7 días (6 laborales + domingo descanso)
+        salarioBase = redondear(salarioDiario * 7);
+        pagoDomingoLFT = salarioDiario;
+      } else {
+        // Con faltas: pago proporcional + domingo proporcional (LFT Art. 72)
+        salarioBase = redondear(salarioDiario * diasEfectivos);
+        pagoDomingoLFT = redondear(salarioDiario * (diasEfectivos / diasLaborables));
+        salarioBase = redondear(salarioBase + pagoDomingoLFT);
+      }
+      
+      // Horas extra
+      const pagoHorasDobles = redondear(totalHorasDobles * salarioHora * 2);
+      const pagoHorasTriples = redondear(totalHorasTriples * salarioHora * 3);
+      
+      const totalPercepciones = redondear(salarioBase + pagoHorasDobles + pagoHorasTriples);
+      
+      // ============================================================
+      // DEDUCCIONES — Controladas por SuperAdmin
+      // ============================================================
+      const tasaIMSS = config.TASA_IMSS_EMPLEADO || 2.475;
+      const tasaISR = config.TASA_ISR || 0;
+      const tasaInteres = config.PRESTAMOS_TASA_INTERES || 0;
+      
+      // IMSS: solo si SuperAdmin lo activó
+      const deduccionIMSS = (config.CALCULAR_IMSS === true)
+        ? redondear(totalPercepciones * (tasaIMSS / 100))
+        : 0;
+      
+      // ISR: solo si SuperAdmin lo activó
+      const deduccionISR = (config.CALCULAR_ISR === true)
+        ? redondear(totalPercepciones * (tasaISR / 100))
+        : 0;
+      
+      // Préstamos: descuento semanal + interés
+      let deduccionPrestamo = 0;
+      if (config.PRESTAMOS_ACTIVO === true && empleado.prestamos.length > 0) {
+        const prestamoActivo = empleado.prestamos[0];
+        deduccionPrestamo = Number(prestamoActivo.Monto_Por_Pago);
+        
+        // Interés semanal sobre saldo pendiente
+        if (tasaInteres > 0) {
+          const interesSemanal = redondear(
+            Number(prestamoActivo.Monto_Pendiente) * (tasaInteres / 100) / 52
+          );
+          deduccionPrestamo = redondear(deduccionPrestamo + interesSemanal);
+        }
+      }
+      
+      const totalDeducciones = redondear(deduccionIMSS + deduccionISR + deduccionPrestamo);
+      const sueldoNeto = redondear(totalPercepciones - totalDeducciones);
+      
+      // ============================================================
+      // REDONDEO — Nómina redondeada al siguiente múltiplo de $10
+      // ============================================================
+      const sueldoRedondeado = Math.ceil(sueldoNeto / 10) * 10;
+      const ajusteRedondeo = redondear(sueldoRedondeado - sueldoNeto);
+      
+      // Total horas extra para registro (EXTRA + PRESENCIAL + EN_LINEA)
+      const totalHorasExtraRegistro = horasExtra + horasPresencialRemoto;
       
       // Crear o actualizar nómina
       await prisma.nomina.upsert({
@@ -247,41 +343,60 @@ export const calcularNomina = async (req, res) => {
           ID_Empleado: empleado.ID_Empleado,
           Dias_Trabajados: diasTrabajados,
           Dias_Faltas: diasFaltas,
-          Horas_Normales: (diasTrabajados - diasFaltas) * 8,
-          Horas_Extra: horasExtra,
-          Horas_Dobles: horasDobles,
-          Horas_Triples: horasTriples,
+          Horas_Normales: diasEfectivos * 8,
+          Horas_Extra: totalHorasExtraRegistro,
+          Horas_Dobles: totalHorasDobles,
+          Horas_Triples: totalHorasTriples,
           Salario_Base: salarioBase,
-          Pago_Horas_Extra: pagoHorasExtra,
+          Pago_Horas_Extra: 0,
           Pago_Horas_Dobles: pagoHorasDobles,
           Pago_Horas_Triples: pagoHorasTriples,
           Total_Percepciones: totalPercepciones,
           Deduccion_IMSS: deduccionIMSS,
           Deduccion_ISR: deduccionISR,
+          Otras_Deducciones: deduccionPrestamo,
           Total_Deducciones: totalDeducciones,
           Sueldo_Neto: sueldoNeto,
+          Otros_Bonos: ajusteRedondeo,
           Estado: 'CALCULADO',
           CreatedBy: req.session.user?.Email_Office365 || null
         },
         update: {
           Dias_Trabajados: diasTrabajados,
           Dias_Faltas: diasFaltas,
-          Horas_Normales: (diasTrabajados - diasFaltas) * 8,
-          Horas_Extra: horasExtra,
-          Horas_Dobles: horasDobles,
-          Horas_Triples: horasTriples,
+          Horas_Normales: diasEfectivos * 8,
+          Horas_Extra: totalHorasExtraRegistro,
+          Horas_Dobles: totalHorasDobles,
+          Horas_Triples: totalHorasTriples,
           Salario_Base: salarioBase,
-          Pago_Horas_Extra: pagoHorasExtra,
+          Pago_Horas_Extra: 0,
           Pago_Horas_Dobles: pagoHorasDobles,
           Pago_Horas_Triples: pagoHorasTriples,
           Total_Percepciones: totalPercepciones,
           Deduccion_IMSS: deduccionIMSS,
           Deduccion_ISR: deduccionISR,
+          Otras_Deducciones: deduccionPrestamo,
           Total_Deducciones: totalDeducciones,
           Sueldo_Neto: sueldoNeto,
+          Otros_Bonos: ajusteRedondeo,
           Estado: 'CALCULADO'
         }
       });
+      
+      // Si tiene préstamo, actualizar pagos realizados
+      if (deduccionPrestamo > 0 && empleado.prestamos.length > 0) {
+        const prestamo = empleado.prestamos[0];
+        const nuevoSaldo = redondear(Number(prestamo.Monto_Pendiente) - Number(prestamo.Monto_Por_Pago));
+        
+        await prisma.empleados_Prestamos.update({
+          where: { ID_Prestamo: prestamo.ID_Prestamo },
+          data: {
+            Pagos_Realizados: { increment: 1 },
+            Monto_Pendiente: Math.max(0, nuevoSaldo),
+            Estado: nuevoSaldo <= 0 ? 'PAGADO' : 'ACTIVO'
+          }
+        });
+      }
       
       nominasCreadas++;
     }
@@ -294,6 +409,13 @@ export const calcularNomina = async (req, res) => {
     res.redirect('/nomina/periodos');
   }
 };
+
+/**
+ * Redondea a 2 decimales
+ */
+function redondear(valor) {
+  return Math.round(valor * 100) / 100;
+}
 
 // Cerrar periodo
 export const cerrarPeriodo = async (req, res) => {
@@ -370,36 +492,6 @@ export const verNominaEmpleado = async (req, res) => {
 // ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
-
-// Calcular ISR según tablas (simplificado para quincenal 2024)
-function calcularISR(ingresoQuincenal) {
-  // Tabla simplificada ISR quincenal 2024
-  const tablaISR = [
-    { limite: 385.04, cuota: 0, porcentaje: 0.0192 },
-    { limite: 3265.04, cuota: 7.40, porcentaje: 0.0640 },
-    { limite: 5737.30, cuota: 191.72, porcentaje: 0.1088 },
-    { limite: 6667.82, cuota: 460.86, porcentaje: 0.16 },
-    { limite: 7978.86, cuota: 609.64, porcentaje: 0.1792 },
-    { limite: 16091.20, cuota: 844.60, porcentaje: 0.2136 },
-    { limite: 25363.00, cuota: 2577.56, porcentaje: 0.2352 },
-    { limite: 48403.10, cuota: 4758.48, porcentaje: 0.30 },
-    { limite: 64537.32, cuota: 11670.70, porcentaje: 0.32 },
-    { limite: 193611.80, cuota: 16833.66, porcentaje: 0.34 },
-    { limite: Infinity, cuota: 60728.94, porcentaje: 0.35 }
-  ];
-  
-  let limiteAnterior = 0;
-  
-  for (const rango of tablaISR) {
-    if (ingresoQuincenal <= rango.limite) {
-      const excedente = ingresoQuincenal - limiteAnterior;
-      return rango.cuota + (excedente * rango.porcentaje);
-    }
-    limiteAnterior = rango.limite;
-  }
-  
-  return 0;
-}
 
 // Dashboard de nómina
 export const dashboard = async (req, res) => {

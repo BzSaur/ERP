@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database.js';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
+import { logAccess } from '../config/logger.js';
 
 // ============================================================
 // CONTROLADOR DE USUARIOS DEL SISTEMA
@@ -106,7 +106,7 @@ export const store = async (req, res) => {
     const hashedPassword = await bcrypt.hash(Password, 12);
 
     // Crear usuario
-    await prisma.app_Usuarios.create({
+    const usuario = await prisma.app_Usuarios.create({
       data: {
         Email_Office365,
         Nombre_Completo,
@@ -114,8 +114,40 @@ export const store = async (req, res) => {
         ID_Rol: parseInt(ID_Rol),
         ID_Empleado: ID_Empleado ? parseInt(ID_Empleado) : null,
         Activo: Activo === 'on' || Activo === true
-      }
+      },
+      include: { rol: true }
     });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'CREATE',
+      tabla: 'App_Usuarios',
+      idRegistro: usuario.ID_Usuario.toString(),
+      descripcion: `Creación de usuario: ${usuario.Email_Office365} con rol ${usuario.rol.Nombre_Rol}`,
+      datosNuevos: {
+        ID_Usuario: usuario.ID_Usuario,
+        Email_Office365: usuario.Email_Office365,
+        Nombre_Completo: usuario.Nombre_Completo,
+        ID_Rol: usuario.ID_Rol,
+        Rol: usuario.rol.Nombre_Rol,
+        ID_Empleado: usuario.ID_Empleado,
+        Activo: usuario.Activo
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción - creación de usuario
+    logAccess.action(
+      req.user.ID_Usuario,
+      'CREATE_USER',
+      'App_Usuarios',
+      {
+        usuarioId: usuario.ID_Usuario,
+        email: usuario.Email_Office365,
+        rol: usuario.rol.Nombre_Rol
+      }
+    );
 
     res.redirect('/usuarios?success=Usuario creado exitosamente');
   } catch (error) {
@@ -142,16 +174,22 @@ export const editar = async (req, res) => {
       orderBy: { Nombre_Rol: 'asc' }
     });
 
-    // Empleados disponibles (sin usuario o el actual)
+    // Empleados disponibles (sin usuario asignado o el actual)
     const empleados = await prisma.empleados.findMany({
       where: {
+        ID_Estatus: 1,
         OR: [
           { app_usuario: null },
-          { ID_Empleado: usuario.ID_Empleado }
-        ],
-        ID_Estatus: 1
+          { app_usuario: { ID_Usuario: usuario.ID_Usuario } }
+        ]
       },
-      orderBy: { Nombre: 'asc' }
+      orderBy: { Nombre: 'asc' },
+      select: {
+        ID_Empleado: true,
+        Nombre: true,
+        Apellido_Paterno: true,
+        Apellido_Materno: true
+      }
     });
 
     res.render('usuarios/editar', {
@@ -205,10 +243,67 @@ export const update = async (req, res) => {
       updateData.Password = await bcrypt.hash(Password, 12);
     }
 
-    await prisma.app_Usuarios.update({
+    // Obtener datos previos
+    const usuarioPrevio = await prisma.app_Usuarios.findUnique({
       where: { ID_Usuario: parseInt(id) },
-      data: updateData
+      include: { rol: true }
     });
+
+    const usuario = await prisma.app_Usuarios.update({
+      where: { ID_Usuario: parseInt(id) },
+      data: updateData,
+      include: { rol: true }
+    });
+
+    // Descripción con cambios de rol resaltados
+    let descripcion = `Actualización de usuario: ${usuario.Email_Office365}`;
+    if (usuarioPrevio.ID_Rol !== usuario.ID_Rol) {
+      descripcion += ` - Rol cambiado: ${usuarioPrevio.rol.Nombre_Rol} → ${usuario.rol.Nombre_Rol}`;
+    }
+    if (Password && Password.trim() !== '') {
+      descripcion += ' - Contraseña actualizada';
+    }
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'App_Usuarios',
+      idRegistro: id,
+      descripcion,
+      datosPrevios: {
+        Email_Office365: usuarioPrevio.Email_Office365,
+        Nombre_Completo: usuarioPrevio.Nombre_Completo,
+        ID_Rol: usuarioPrevio.ID_Rol,
+        Rol: usuarioPrevio.rol.Nombre_Rol,
+        ID_Empleado: usuarioPrevio.ID_Empleado,
+        Activo: usuarioPrevio.Activo
+      },
+      datosNuevos: {
+        Email_Office365: usuario.Email_Office365,
+        Nombre_Completo: usuario.Nombre_Completo,
+        ID_Rol: usuario.ID_Rol,
+        Rol: usuario.rol.Nombre_Rol,
+        ID_Empleado: usuario.ID_Empleado,
+        Activo: usuario.Activo,
+        PasswordCambiado: !!(Password && Password.trim() !== '')
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción - actualización de usuario (importante para cambios de rol)
+    logAccess.action(
+      req.user.ID_Usuario,
+      'UPDATE_USER',
+      'App_Usuarios',
+      {
+        usuarioId: id,
+        email: usuario.Email_Office365,
+        rolAnterior: usuarioPrevio.rol.Nombre_Rol,
+        rolNuevo: usuario.rol.Nombre_Rol,
+        cambioDeRol: usuarioPrevio.ID_Rol !== usuario.ID_Rol
+      }
+    );
 
     res.redirect('/usuarios?success=Usuario actualizado exitosamente');
   } catch (error) {
@@ -221,15 +316,17 @@ export const update = async (req, res) => {
 export const eliminar = async (req, res) => {
   try {
     const { id } = req.params;
+    const idNum = parseInt(id);
 
     // No permitir eliminar al usuario actual
-    if (req.user.ID_Usuario === parseInt(id)) {
+    if (req.user.ID_Usuario === idNum) {
       return res.redirect('/usuarios?error=No puedes eliminar tu propia cuenta');
     }
 
     // Verificar que el usuario existe
     const usuario = await prisma.app_Usuarios.findUnique({
-      where: { ID_Usuario: parseInt(id) }
+      where: { ID_Usuario: idNum },
+      include: { rol: true }
     });
 
     if (!usuario) {
@@ -237,8 +334,39 @@ export const eliminar = async (req, res) => {
     }
 
     await prisma.app_Usuarios.delete({
-      where: { ID_Usuario: parseInt(id) }
+      where: { ID_Usuario: idNum }
     });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'App_Usuarios',
+      idRegistro: idNum.toString(),
+      descripcion: `Eliminación de usuario: ${usuario.Email_Office365} (${usuario.rol.Nombre_Rol})`,
+      datosPrevios: {
+        ID_Usuario: usuario.ID_Usuario,
+        Email_Office365: usuario.Email_Office365,
+        Nombre_Completo: usuario.Nombre_Completo,
+        ID_Rol: usuario.ID_Rol,
+        Rol: usuario.rol.Nombre_Rol,
+        ID_Empleado: usuario.ID_Empleado,
+        Activo: usuario.Activo
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción - eliminación de usuario
+    logAccess.action(
+      req.user.ID_Usuario,
+      'DELETE_USER',
+      'App_Usuarios',
+      {
+        usuarioId: idNum,
+        email: usuario.Email_Office365,
+        rol: usuario.rol.Nombre_Rol
+      }
+    );
 
     res.redirect('/usuarios?success=Usuario eliminado exitosamente');
   } catch (error) {
@@ -251,26 +379,42 @@ export const eliminar = async (req, res) => {
 export const toggleActivo = async (req, res) => {
   try {
     const { id } = req.params;
+    const idNum = parseInt(id);
 
     // No permitir desactivar al usuario actual
-    if (req.user.ID_Usuario === parseInt(id)) {
+    if (req.user.ID_Usuario === idNum) {
       return res.redirect('/usuarios?error=No puedes desactivar tu propia cuenta');
     }
 
     const usuario = await prisma.app_Usuarios.findUnique({
-      where: { ID_Usuario: parseInt(id) }
+      where: { ID_Usuario: idNum },
+      include: { rol: true }
     });
 
     if (!usuario) {
       return res.redirect('/usuarios?error=Usuario no encontrado');
     }
 
+    const nuevoEstado = !usuario.Activo;
+
     await prisma.app_Usuarios.update({
-      where: { ID_Usuario: parseInt(id) },
-      data: { Activo: !usuario.Activo }
+      where: { ID_Usuario: idNum },
+      data: { Activo: nuevoEstado }
     });
 
+    // Registrar en auditoría
     const estado = usuario.Activo ? 'desactivado' : 'activado';
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'App_Usuarios',
+      idRegistro: idNum.toString(),
+      descripcion: `Usuario ${estado}: ${usuario.Email_Office365}`,
+      datosPrevios: { Activo: usuario.Activo },
+      datosNuevos: { Activo: nuevoEstado },
+      ip: obtenerIP(req)
+    });
+
     res.redirect(`/usuarios?success=Usuario ${estado} exitosamente`);
   } catch (error) {
     console.error('Error al cambiar estado:', error);

@@ -6,16 +6,14 @@
 document.addEventListener('DOMContentLoaded', function() {
   
   // ============================================================
-  // SIDEBAR TOGGLE
+  // SIDEBAR TOGGLE (Drawer model)
   // ============================================================
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
-  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-  const sidebarToggle = document.getElementById('sidebarToggle');
+  const navbarSidebarToggle = document.getElementById('navbarSidebarToggle');
   
-  // Cargar estado guardado del sidebar
-  const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-  if (sidebarCollapsed && window.innerWidth >= 992) {
+  // Inicializar con sidebar-collapsed activo (drawer cerrado por defecto)
+  if (!document.body.classList.contains('sidebar-collapsed')) {
     document.body.classList.add('sidebar-collapsed');
   }
   
@@ -35,44 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.style.overflow = '';
   }
   
-  function toggleSidebarCollapse() {
-    document.body.classList.toggle('sidebar-collapsed');
-    localStorage.setItem('sidebarCollapsed', document.body.classList.contains('sidebar-collapsed'));
-    
-    // Actualizar icono del toggle
-    const toggleIcon = sidebarToggle?.querySelector('i');
-    if (toggleIcon) {
-      if (document.body.classList.contains('sidebar-collapsed')) {
-        toggleIcon.classList.remove('bi-list');
-        toggleIcon.classList.add('bi-chevron-right');
-      } else {
-        toggleIcon.classList.remove('bi-chevron-right');
-        toggleIcon.classList.add('bi-list');
-      }
-    }
-  }
-  
-  if (mobileMenuToggle) {
-    mobileMenuToggle.addEventListener('click', openSidebar);
-  }
-  
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', function() {
-      if (isMobile()) {
-        closeSidebar();
-      } else {
-        toggleSidebarCollapse();
-      }
-    });
-    
-    // Actualizar icono inicial si está colapsado
-    if (sidebarCollapsed && !isMobile()) {
-      const toggleIcon = sidebarToggle.querySelector('i');
-      if (toggleIcon) {
-        toggleIcon.classList.remove('bi-list');
-        toggleIcon.classList.add('bi-chevron-right');
-      }
-    }
+  // Toggle siempre abre/cierra el drawer
+  if (navbarSidebarToggle) {
+    navbarSidebarToggle.addEventListener('click', openSidebar);
   }
   
   if (sidebarOverlay) {
@@ -97,12 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const submenu = parent.querySelector('.sidebar-submenu');
       const arrow = this.querySelector('.submenu-arrow');
       
-      // Si el sidebar está colapsado en desktop, no hacer nada
-      if (!isMobile() && document.body.classList.contains('sidebar-collapsed')) {
-        return;
-      }
-      
-      // Toggle submenu
+      // Toggle submenu (en cualquier estado)
       if (submenu) {
         submenu.classList.toggle('show');
         if (arrow) {
@@ -118,6 +76,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (arrow) {
       arrow.style.transform = 'rotate(180deg)';
     }
+  });
+
+  // Cerrar drawer al hacer click en un link del sidebar
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a:not(.submenu-toggle)');
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', closeSidebar);
   });
   
   // ============================================================

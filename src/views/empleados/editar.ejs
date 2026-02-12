@@ -92,6 +92,150 @@
       </div>
     </div>
     
+    <!-- Información de Contacto -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-envelope me-2"></i>
+            Información de Contacto
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Email Personal</label>
+              <input type="email" class="form-control" name="Email_Personal" value="<%= empleado.Email_Personal || '' %>" placeholder="ejemplo@correo.com">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email Corporativo</label>
+              <input type="email" class="form-control" name="Email_Corporativo" value="<%= empleado.Email_Corporativo || '' %>" placeholder="ejemplo@empresa.com">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Teléfono Celular</label>
+              <input type="tel" class="form-control" name="Telefono_Celular" value="<%= empleado.Telefono_Celular || '' %>" placeholder="10 dígitos">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contacto de Emergencia -->
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-hospital me-2"></i>
+            Contacto de Emergencia
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nombre Completo</label>
+              <input type="text" class="form-control" name="Nombre_Emergencia" value="<%= empleado.Nombre_Emergencia || '' %>" placeholder="Nombre del contacto de emergencia">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Parentesco</label>
+              <select class="form-select" name="Parentesco_Emergencia">
+                <option value="">Seleccionar...</option>
+                <option value="Cónyuge" <%= empleado.Parentesco_Emergencia === 'Cónyuge' ? 'selected' : '' %>>Cónyuge</option>
+                <option value="Padre/Madre" <%= empleado.Parentesco_Emergencia === 'Padre/Madre' ? 'selected' : '' %>>Padre/Madre</option>
+                <option value="Hijo/Hija" <%= empleado.Parentesco_Emergencia === 'Hijo/Hija' ? 'selected' : '' %>>Hijo/Hija</option>
+                <option value="Hermano/Hermana" <%= empleado.Parentesco_Emergencia === 'Hermano/Hermana' ? 'selected' : '' %>>Hermano/Hermana</option>
+                <option value="Tío/Tía" <%= empleado.Parentesco_Emergencia === 'Tío/Tía' ? 'selected' : '' %>>Tío/Tía</option>
+                <option value="Abuelo/Abuela" <%= empleado.Parentesco_Emergencia === 'Abuelo/Abuela' ? 'selected' : '' %>>Abuelo/Abuela</option>
+                <option value="Amigo/Amiga" <%= empleado.Parentesco_Emergencia === 'Amigo/Amiga' ? 'selected' : '' %>>Amigo/Amiga</option>
+                <option value="Otro" <%= empleado.Parentesco_Emergencia === 'Otro' ? 'selected' : '' %>>Otro</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Teléfono de Emergencia</label>
+              <input type="tel" class="form-control" name="Telefono_Emergencia" value="<%= empleado.Telefono_Emergencia || '' %>" placeholder="10 dígitos">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dirección -->
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-geo-alt me-2"></i>
+            Dirección
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Calle</label>
+              <input type="text" class="form-control" name="Calle" value="<%= empleado.Calle || '' %>" placeholder="Nombre de la calle">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Número Exterior</label>
+              <input type="text" class="form-control" name="Numero_Exterior" value="<%= empleado.Numero_Exterior || '' %>" placeholder="Ej: 123">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Número Interior</label>
+              <input type="text" class="form-control" name="Numero_Interior" value="<%= empleado.Numero_Interior || '' %>" placeholder="Opcional">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Colonia</label>
+              <input type="text" class="form-control" name="Colonia" value="<%= empleado.Colonia || '' %>" placeholder="Colonia o fraccionamiento">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Ciudad</label>
+              <input type="text" class="form-control" name="Ciudad" value="<%= empleado.Ciudad || '' %>" placeholder="Ciudad o municipio">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Estado</label>
+              <select class="form-select" name="Entidad_Federativa">
+                <option value="">Seleccionar...</option>
+                <option value="Aguascalientes" <%= empleado.Entidad_Federativa === 'Aguascalientes' ? 'selected' : '' %>>Aguascalientes</option>
+                <option value="Baja California" <%= empleado.Entidad_Federativa === 'Baja California' ? 'selected' : '' %>>Baja California</option>
+                <option value="Baja California Sur" <%= empleado.Entidad_Federativa === 'Baja California Sur' ? 'selected' : '' %>>Baja California Sur</option>
+                <option value="Campeche" <%= empleado.Entidad_Federativa === 'Campeche' ? 'selected' : '' %>>Campeche</option>
+                <option value="Chiapas" <%= empleado.Entidad_Federativa === 'Chiapas' ? 'selected' : '' %>>Chiapas</option>
+                <option value="Chihuahua" <%= empleado.Entidad_Federativa === 'Chihuahua' ? 'selected' : '' %>>Chihuahua</option>
+                <option value="Ciudad de México" <%= empleado.Entidad_Federativa === 'Ciudad de México' ? 'selected' : '' %>>Ciudad de México</option>
+                <option value="Coahuila" <%= empleado.Entidad_Federativa === 'Coahuila' ? 'selected' : '' %>>Coahuila</option>
+                <option value="Colima" <%= empleado.Entidad_Federativa === 'Colima' ? 'selected' : '' %>>Colima</option>
+                <option value="Durango" <%= empleado.Entidad_Federativa === 'Durango' ? 'selected' : '' %>>Durango</option>
+                <option value="Guanajuato" <%= empleado.Entidad_Federativa === 'Guanajuato' ? 'selected' : '' %>>Guanajuato</option>
+                <option value="Guerrero" <%= empleado.Entidad_Federativa === 'Guerrero' ? 'selected' : '' %>>Guerrero</option>
+                <option value="Hidalgo" <%= empleado.Entidad_Federativa === 'Hidalgo' ? 'selected' : '' %>>Hidalgo</option>
+                <option value="Jalisco" <%= empleado.Entidad_Federativa === 'Jalisco' ? 'selected' : '' %>>Jalisco</option>
+                <option value="México" <%= empleado.Entidad_Federativa === 'México' ? 'selected' : '' %>>México</option>
+                <option value="Michoacán" <%= empleado.Entidad_Federativa === 'Michoacán' ? 'selected' : '' %>>Michoacán</option>
+                <option value="Morelos" <%= empleado.Entidad_Federativa === 'Morelos' ? 'selected' : '' %>>Morelos</option>
+                <option value="Nayarit" <%= empleado.Entidad_Federativa === 'Nayarit' ? 'selected' : '' %>>Nayarit</option>
+                <option value="Nuevo León" <%= empleado.Entidad_Federativa === 'Nuevo León' ? 'selected' : '' %>>Nuevo León</option>
+                <option value="Oaxaca" <%= empleado.Entidad_Federativa === 'Oaxaca' ? 'selected' : '' %>>Oaxaca</option>
+                <option value="Puebla" <%= empleado.Entidad_Federativa === 'Puebla' ? 'selected' : '' %>>Puebla</option>
+                <option value="Querétaro" <%= empleado.Entidad_Federativa === 'Querétaro' ? 'selected' : '' %>>Querétaro</option>
+                <option value="Quintana Roo" <%= empleado.Entidad_Federativa === 'Quintana Roo' ? 'selected' : '' %>>Quintana Roo</option>
+                <option value="San Luis Potosí" <%= empleado.Entidad_Federativa === 'San Luis Potosí' ? 'selected' : '' %>>San Luis Potosí</option>
+                <option value="Sinaloa" <%= empleado.Entidad_Federativa === 'Sinaloa' ? 'selected' : '' %>>Sinaloa</option>
+                <option value="Sonora" <%= empleado.Entidad_Federativa === 'Sonora' ? 'selected' : '' %>>Sonora</option>
+                <option value="Tabasco" <%= empleado.Entidad_Federativa === 'Tabasco' ? 'selected' : '' %>>Tabasco</option>
+                <option value="Tamaulipas" <%= empleado.Entidad_Federativa === 'Tamaulipas' ? 'selected' : '' %>>Tamaulipas</option>
+                <option value="Tlaxcala" <%= empleado.Entidad_Federativa === 'Tlaxcala' ? 'selected' : '' %>>Tlaxcala</option>
+                <option value="Veracruz" <%= empleado.Entidad_Federativa === 'Veracruz' ? 'selected' : '' %>>Veracruz</option>
+                <option value="Yucatán" <%= empleado.Entidad_Federativa === 'Yucatán' ? 'selected' : '' %>>Yucatán</option>
+                <option value="Zacatecas" <%= empleado.Entidad_Federativa === 'Zacatecas' ? 'selected' : '' %>>Zacatecas</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Código Postal</label>
+              <input type="text" class="form-control" name="Codigo_Postal" value="<%= empleado.Codigo_Postal || '' %>" placeholder="5 dígitos" maxlength="5">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <!-- Información Laboral -->
     <div class="col-lg-6">
       <div class="card">
@@ -160,18 +304,31 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6">
+              <label class="form-label">Salario Mensual</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" id="salarioMensualEdit" name="Salario_Mensual" 
+                       value="<%= empleado.Salario_Mensual || '' %>">
+              </div>
+              <small class="text-muted">Base para calcular diario y hora</small>
+            </div>
+            <div class="col-md-6">
               <label class="form-label">Salario Diario</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                <input type="number" step="0.01" class="form-control" name="Salario_Diario" value="<%= empleado.Salario_Diario || '' %>">
+                <input type="number" step="0.01" class="form-control" id="salarioDiarioEdit" name="Salario_Diario" 
+                       value="<%= empleado.Salario_Diario || '' %>" readonly>
               </div>
+              <small class="text-muted">= Mensual / 30</small>
             </div>
             <div class="col-md-6">
               <label class="form-label">Salario por Hora</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                <input type="number" step="0.01" class="form-control" name="Salario_Hora" value="<%= empleado.Salario_Hora || '' %>">
+                <input type="number" step="0.01" class="form-control" id="salarioHoraEdit" name="Salario_Hora" 
+                       value="<%= empleado.Salario_Hora || '' %>" readonly>
               </div>
+              <small class="text-muted">= Diario / 8</small>
             </div>
             <div class="col-md-6">
               <label class="form-label">Horas Semanales</label>
@@ -179,6 +336,15 @@
             </div>
           </div>
         </div>
+        <script>
+          document.getElementById('salarioMensualEdit')?.addEventListener('input', function() {
+            const mensual = parseFloat(this.value) || 0;
+            const diario = Math.round((mensual / 30) * 100) / 100;
+            const hora = Math.round((diario / 8) * 100) / 100;
+            document.getElementById('salarioDiarioEdit').value = diario.toFixed(2);
+            document.getElementById('salarioHoraEdit').value = hora.toFixed(2);
+          });
+        </script>
       </div>
     </div>
   </div>

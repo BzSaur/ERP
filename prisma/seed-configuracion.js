@@ -72,7 +72,7 @@ const configuracionNomina = [
   {
     Clave: 'TRABAJA_SABADO',
     Valor: 'true',
-    Descripcion: 'Si se trabaja los sábados',
+    Descripcion: 'Si se trabaja los sábados (sí se trabaja)',
     Tipo_Dato: 'BOOLEAN'
   },
   {
@@ -81,19 +81,37 @@ const configuracionNomina = [
     Descripcion: 'Horas de trabajo los sábados (medio día)',
     Tipo_Dato: 'INT'
   },
+  {
+    Clave: 'TRABAJA_DOMINGO',
+    Valor: 'false',
+    Descripcion: 'Si se trabaja los domingos (NO se trabaja)',
+    Tipo_Dato: 'BOOLEAN'
+  },
   
-  // Impuestos y deducciones
+  // Impuestos y deducciones (DESHABILITADAS por defecto — SuperAdmin las activa)
   {
     Clave: 'CALCULAR_ISR',
     Valor: 'false',
-    Descripcion: 'Si se calcula y retiene ISR (la empresa no retiene)',
+    Descripcion: 'Si se calcula y retiene ISR (NO se calcula)',
     Tipo_Dato: 'BOOLEAN'
   },
   {
+    Clave: 'TASA_ISR',
+    Valor: '0',
+    Descripcion: 'Porcentaje de ISR a retener (0 = sin retención). SuperAdmin lo configura.',
+    Tipo_Dato: 'DECIMAL'
+  },
+  {
     Clave: 'CALCULAR_IMSS',
-    Valor: 'true',
-    Descripcion: 'Si se calculan cuotas IMSS obrero',
+    Valor: 'false',
+    Descripcion: 'Si se calculan cuotas IMSS obrero (NO se calcula)',
     Tipo_Dato: 'BOOLEAN'
+  },
+  {
+    Clave: 'TASA_IMSS_EMPLEADO',
+    Valor: '2.475',
+    Descripcion: 'Porcentaje IMSS cuota obrera (2.475% default). SuperAdmin lo configura.',
+    Tipo_Dato: 'DECIMAL'
   },
   
   // Bono de puntualidad
@@ -111,14 +129,14 @@ const configuracionNomina = [
   },
   {
     Clave: 'BONO_PUNTUALIDAD_CHECADAS',
-    Valor: '8',
-    Descripcion: 'Número de checadas requeridas para bono',
+    Valor: '12',
+    Descripcion: 'Número de checadas requeridas para bono (6 días * 2 checadas = 12, L-S sin domingos)',
     Tipo_Dato: 'INT'
   },
   {
     Clave: 'BONO_PUNTUALIDAD_DIAS',
     Valor: '6',
-    Descripcion: 'Días requeridos para bono de puntualidad',
+    Descripcion: 'Días requeridos para bono de puntualidad (L-S, domingos NO se trabajan)',
     Tipo_Dato: 'INT'
   },
   

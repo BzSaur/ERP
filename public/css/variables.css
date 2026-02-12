@@ -1,0 +1,49 @@
+/* ============================================================
+   CSS VARIABLES Y RESET
+   ============================================================ */
+
+:root {
+  --color-primary: #1e3a8a;
+  --color-primary-dark: #1e40af;
+  --color-primary-light: #3b82f6;
+  --color-secondary: #dc2626;
+  --color-success: #10b981;
+  --color-warning: #f97316;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+  --color-dark: #1f2937;
+  --color-gray-600: #4b5563;
+  --color-gray-400: #9ca3af;
+  --color-gray-300: #d1d5db;
+  --color-light: #f3f4f6;
+  --color-white: #ffffff;
+  --color-border: #e5e7eb;
+  --sidebar-width: 260px;
+  --sidebar-collapsed: 70px;
+  --sidebar-bg: #0f172a;
+  --navbar-height: 64px;
+  --transition: 0.3s ease;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+
+*, *::before, *::after { 
+  margin: 0; 
+  padding: 0; 
+  box-sizing: border-box; 
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--color-light);
+  color: var(--color-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+a { 
+  text-decoration: none; 
+  color: inherit; 
+}

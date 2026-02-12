@@ -1,4 +1,6 @@
 import prisma from '../config/database.js';
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
+import { logAccess } from '../config/logger.js';
 
 // ============================================================
 // CONTROLADOR DE EMPLEADOS
@@ -112,6 +114,22 @@ export const store = async (req, res, next) => {
       Tipo_Documento,
       RFC,
       NSS,
+      // Contacto
+      Email_Personal,
+      Email_Corporativo,
+      Telefono_Celular,
+      Telefono_Emergencia,
+      Nombre_Emergencia,
+      Parentesco_Emergencia,
+      // Dirección
+      Calle,
+      Numero_Exterior,
+      Numero_Interior,
+      Colonia,
+      Ciudad,
+      Entidad_Federativa,
+      Codigo_Postal,
+      // Laboral
       ID_Puesto,
       ID_Area,
       ID_Tipo_Horario,
@@ -161,6 +179,22 @@ export const store = async (req, res, next) => {
         Tipo_Documento,
         RFC: RFC || null,
         NSS: NSS || null,
+        // Contacto
+        Email_Personal: Email_Personal || null,
+        Email_Corporativo: Email_Corporativo || null,
+        Telefono_Celular: Telefono_Celular || null,
+        Telefono_Emergencia: Telefono_Emergencia || null,
+        Nombre_Emergencia: Nombre_Emergencia || null,
+        Parentesco_Emergencia: Parentesco_Emergencia || null,
+        // Dirección
+        Calle: Calle || null,
+        Numero_Exterior: Numero_Exterior || null,
+        Numero_Interior: Numero_Interior || null,
+        Colonia: Colonia || null,
+        Ciudad: Ciudad || null,
+        Entidad_Federativa: Entidad_Federativa || null,
+        Codigo_Postal: Codigo_Postal || null,
+        // Laboral
         ID_Puesto: parseInt(ID_Puesto),
         ID_Area: parseInt(ID_Area),
         ID_Tipo_Horario: parseInt(ID_Tipo_Horario),
@@ -174,6 +208,39 @@ export const store = async (req, res, next) => {
       }
     });
 
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'CREATE',
+      tabla: 'Empleados',
+      idRegistro: empleado.ID_Empleado,
+      descripcion: `Creación de empleado: ${Nombre} ${Apellido_Paterno} ${Apellido_Materno || ''}`,
+      datosNuevos: {
+        ID_Empleado: empleado.ID_Empleado,
+        Nombre_Completo: `${Nombre} ${Apellido_Paterno} ${Apellido_Materno || ''}`,
+        RFC,
+        NSS,
+        Puesto: ID_Puesto,
+        Area: ID_Area,
+        Salario_Mensual: salarioMensual,
+        Fecha_Ingreso
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción
+    logAccess.action(
+      req.user.ID_Usuario,
+      'CREATE_EMPLOYEE',
+      'Empleados',
+      {
+        empleadoId: empleado.ID_Empleado,
+        nombre: `${Nombre} ${Apellido_Paterno}`,
+        puesto: ID_Puesto,
+        area: ID_Area
+      }
+    );
+
     req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente`);
     res.redirect(`/empleados/${empleado.ID_Empleado}`);
   } catch (error) {
@@ -185,17 +252,24 @@ export const store = async (req, res, next) => {
 export const show = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // Validar ID numérico
+    const idNum = parseInt(id);
+    if (isNaN(idNum)) {
+      return res.status(404).render('errors/404', {
+        title: 'Empleado no encontrado',
+        message: 'ID de empleado inválido'
+      });
+    }
 
     const empleado = await prisma.empleados.findUnique({
-      where: { ID_Empleado: parseInt(id) },
+      where: { ID_Empleado: idNum },
       include: {
         area: true,
         puesto: true,
         estatus: true,
         tipo_horario: true,
-        nacionalidad: true,
-        contacto: true,
-        documentos: true
+        nacionalidad: true
       }
     });
 
@@ -219,11 +293,19 @@ export const show = async (req, res, next) => {
 export const editar = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // Validar ID numérico
+    const idNum = parseInt(id);
+    if (isNaN(idNum)) {
+      return res.status(404).render('errors/404', {
+        title: 'Empleado no encontrado',
+        message: 'ID de empleado inválido'
+      });
+    }
 
     const [empleado, areas, puestos, tiposHorario, nacionalidades, estatuses] = await Promise.all([
       prisma.empleados.findUnique({
-        where: { ID_Empleado: parseInt(id) },
-        include: { contacto: true }
+        where: { ID_Empleado: idNum }
       }),
       prisma.cat_Areas.findMany({ orderBy: { Nombre_Area: 'asc' } }),
       prisma.cat_Puestos.findMany({ include: { area: true }, orderBy: { Nombre_Puesto: 'asc' } }),
@@ -257,6 +339,16 @@ export const editar = async (req, res, next) => {
 export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // Validar ID numérico
+    const idNum = parseInt(id);
+    if (isNaN(idNum)) {
+      return res.status(404).render('errors/404', {
+        title: 'Empleado no encontrado',
+        message: 'ID de empleado inválido'
+      });
+    }
+    
     const {
       Nombre,
       Apellido_Paterno,
@@ -267,9 +359,26 @@ export const update = async (req, res, next) => {
       Tipo_Documento,
       RFC,
       NSS,
+      // Contacto
+      Email_Personal,
+      Email_Corporativo,
+      Telefono_Celular,
+      Telefono_Emergencia,
+      Nombre_Emergencia,
+      Parentesco_Emergencia,
+      // Dirección
+      Calle,
+      Numero_Exterior,
+      Numero_Interior,
+      Colonia,
+      Ciudad,
+      Entidad_Federativa,
+      Codigo_Postal,
+      // Laboral
       ID_Puesto,
       ID_Area,
       ID_Tipo_Horario,
+      Salario_Mensual,
       Salario_Diario,
       Salario_Hora,
       Horas_Semanales_Contratadas,
@@ -278,8 +387,24 @@ export const update = async (req, res, next) => {
       Fecha_Baja
     } = req.body;
 
+    // Obtener datos previos para auditoría
+    const empleadoPrevio = await prisma.empleados.findUnique({
+      where: { ID_Empleado: idNum },
+      select: {
+        Nombre: true,
+        Apellido_Paterno: true,
+        Apellido_Materno: true,
+        RFC: true,
+        NSS: true,
+        ID_Puesto: true,
+        ID_Area: true,
+        Salario_Diario: true,
+        ID_Estatus: true
+      }
+    });
+
     await prisma.empleados.update({
-      where: { ID_Empleado: parseInt(id) },
+      where: { ID_Empleado: idNum },
       data: {
         Nombre,
         Apellido_Paterno,
@@ -290,11 +415,33 @@ export const update = async (req, res, next) => {
         Tipo_Documento,
         RFC: RFC || null,
         NSS: NSS || null,
+        // Contacto
+        Email_Personal: Email_Personal || null,
+        Email_Corporativo: Email_Corporativo || null,
+        Telefono_Celular: Telefono_Celular || null,
+        Telefono_Emergencia: Telefono_Emergencia || null,
+        Nombre_Emergencia: Nombre_Emergencia || null,
+        Parentesco_Emergencia: Parentesco_Emergencia || null,
+        // Dirección
+        Calle: Calle || null,
+        Numero_Exterior: Numero_Exterior || null,
+        Numero_Interior: Numero_Interior || null,
+        Colonia: Colonia || null,
+        Ciudad: Ciudad || null,
+        Entidad_Federativa: Entidad_Federativa || null,
+        Codigo_Postal: Codigo_Postal || null,
+        // Laboral
         ID_Puesto: parseInt(ID_Puesto),
         ID_Area: parseInt(ID_Area),
         ID_Tipo_Horario: parseInt(ID_Tipo_Horario),
-        Salario_Diario: Salario_Diario ? parseFloat(Salario_Diario) : null,
-        Salario_Hora: Salario_Hora ? parseFloat(Salario_Hora) : null,
+        // Salarios: siempre recalcular diario y hora desde el mensual
+        Salario_Mensual: Salario_Mensual ? parseFloat(Salario_Mensual) : (Salario_Diario ? parseFloat(Salario_Diario) * 30 : null),
+        Salario_Diario: Salario_Mensual 
+          ? Math.round((parseFloat(Salario_Mensual) / 30) * 100) / 100 
+          : (Salario_Diario ? parseFloat(Salario_Diario) : null),
+        Salario_Hora: Salario_Mensual 
+          ? Math.round((parseFloat(Salario_Mensual) / 30 / 8) * 100) / 100 
+          : (Salario_Hora ? parseFloat(Salario_Hora) : null),
         Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : null,
         ID_Estatus: parseInt(ID_Estatus),
         Fecha_Ingreso: new Date(Fecha_Ingreso),
@@ -302,6 +449,40 @@ export const update = async (req, res, next) => {
         UpdatedBy: req.user?.Email_Office365 || 'Sistema'
       }
     });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Empleados',
+      idRegistro: idNum,
+      descripcion: `Actualización de empleado: ${Nombre} ${Apellido_Paterno}`,
+      datosPrevios: empleadoPrevio,
+      datosNuevos: {
+        Nombre,
+        Apellido_Paterno,
+        Apellido_Materno,
+        RFC,
+        NSS,
+        ID_Puesto: parseInt(ID_Puesto),
+        ID_Area: parseInt(ID_Area),
+        Salario_Diario: Salario_Diario ? parseFloat(Salario_Diario) : null,
+        ID_Estatus: parseInt(ID_Estatus)
+      },
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción
+    logAccess.action(
+      req.user.ID_Usuario,
+      'UPDATE_EMPLOYEE',
+      'Empleados',
+      {
+        empleadoId: idNum,
+        nombre: `${Nombre} ${Apellido_Paterno}`,
+        cambios: Object.keys(req.body).length
+      }
+    );
 
     res.redirect(`/empleados/${id}`);
   } catch (error) {
@@ -313,11 +494,62 @@ export const update = async (req, res, next) => {
 export const destroy = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // Validar ID numérico
+    const idNum = parseInt(id);
+    if (isNaN(idNum)) {
+      return res.status(404).render('errors/404', {
+        title: 'Empleado no encontrado',
+        message: 'ID de empleado inválido'
+      });
+    }
 
-    await prisma.empleados.delete({
-      where: { ID_Empleado: parseInt(id) }
+    // Obtener datos del empleado antes de eliminar
+    const empleado = await prisma.empleados.findUnique({
+      where: { ID_Empleado: idNum },
+      select: {
+        Nombre: true,
+        Apellido_Paterno: true,
+        Apellido_Materno: true,
+        RFC: true,
+        NSS: true,
+        ID_Puesto: true,
+        ID_Area: true
+      }
     });
 
+    if (!empleado) {
+      req.flash('error', 'Empleado no encontrado');
+      return res.redirect('/empleados');
+    }
+
+    await prisma.empleados.delete({
+      where: { ID_Empleado: idNum }
+    });
+
+    // Registrar en auditoría
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Empleados',
+      idRegistro: idNum,
+      descripcion: `Eliminación de empleado: ${empleado.Nombre} ${empleado.Apellido_Paterno}`,
+      datosPrevios: empleado,
+      ip: obtenerIP(req)
+    });
+
+    // Log de acción
+    logAccess.action(
+      req.user.ID_Usuario,
+      'DELETE_EMPLOYEE',
+      'Empleados',
+      {
+        empleadoId: idNum,
+        nombre: `${empleado.Nombre} ${empleado.Apellido_Paterno}`
+      }
+    );
+
+    req.flash('success', 'Empleado eliminado correctamente');
     res.redirect('/empleados');
   } catch (error) {
     next(error);

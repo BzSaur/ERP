@@ -18,8 +18,8 @@
     <!-- Encabezado -->
     <div class="row mb-4">
       <div class="col-md-6">
-        <h4 class="text-primary mb-2">SIMOD</h4>
-        <p class="mb-0 text-muted">Sistema Integral de Módulos</p>
+        <h4 class="text-primary mb-2">RAM ELECTRONICS</h4>
+        <p class="mb-0 text-muted">Sistema RHlas horas </p>
         <p class="mb-0 text-muted small">Recibo de Nómina</p>
       </div>
       <div class="col-md-6 text-md-end">
@@ -57,6 +57,12 @@
             <p class="mb-1">Horas normales: <strong><%= Number(nomina.Horas_Normales).toFixed(1) %></strong></p>
             <% if (Number(nomina.Horas_Extra) > 0) { %>
               <p class="mb-1">Horas extra: <strong><%= Number(nomina.Horas_Extra).toFixed(1) %></strong></p>
+            <% } %>
+            <% if (Number(nomina.Horas_Dobles) > 0) { %>
+              <p class="mb-1">Horas dobles: <strong><%= Number(nomina.Horas_Dobles).toFixed(1) %></strong></p>
+            <% } %>
+            <% if (Number(nomina.Horas_Triples) > 0) { %>
+              <p class="mb-1">Horas triples: <strong><%= Number(nomina.Horas_Triples).toFixed(1) %></strong></p>
             <% } %>
           </div>
         </div>
@@ -177,10 +183,24 @@
     <!-- Total Neto -->
     <div class="row">
       <div class="col-md-6 offset-md-6">
+        <table class="table table-sm mb-3">
+          <tbody>
+            <tr>
+              <td>Nómina (Neto exacto)</td>
+              <td class="text-end fw-bold">$<%= Number(nomina.Sueldo_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+            </tr>
+            <% if (Number(nomina.Otros_Bonos) > 0) { %>
+              <tr>
+                <td>Ajuste de redondeo</td>
+                <td class="text-end text-success">+$<%= Number(nomina.Otros_Bonos).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
         <div class="card bg-primary text-white">
           <div class="card-body text-center py-4">
-            <h6 class="mb-2">NETO A PAGAR</h6>
-            <h2 class="mb-0">$<%= Number(nomina.Sueldo_Neto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h2>
+            <h6 class="mb-2">NETO A PAGAR (REDONDEADO)</h6>
+            <h2 class="mb-0">$<%= (Number(nomina.Sueldo_Neto) + Number(nomina.Otros_Bonos || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h2>
           </div>
         </div>
       </div>

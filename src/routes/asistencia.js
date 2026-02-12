@@ -5,47 +5,9 @@
 
 import express from 'express';
 import * as asistenciaController from '../controllers/asistenciaController.js';
-import { isAuthenticated, hasRole } from '../middleware/auth.js';
+import { isAuthenticated, isAdminOrRH } from '../middleware/auth.js';
 
 const router = express.Router();
-
-// ============================================================
-// RUTAS DE VISTAS (Requieren autenticación)
-// ============================================================
-
-// Dashboard de asistencia
-router.get('/', 
-  isAuthenticated, 
-  asistenciaController.index
-);
-
-// Reporte de empleado específico
-router.get('/empleado/:id', 
-  isAuthenticated, 
-  hasRole('Recursos Humanos', 'Administrador', 'Supervisor'),
-  asistenciaController.reporteEmpleado
-);
-
-// Reporte por ubicación (RAM1/RAM2)
-router.get('/por-ubicacion', 
-  isAuthenticated, 
-  hasRole('Recursos Humanos', 'Administrador', 'Supervisor'),
-  asistenciaController.reporteUbicacion
-);
-
-// Formulario para checada manual
-router.get('/checada-manual', 
-  isAuthenticated, 
-  hasRole('Recursos Humanos', 'Administrador'),
-  asistenciaController.formChecadaManual
-);
-
-// Registrar checada manual (POST)
-router.post('/checada-manual', 
-  isAuthenticated, 
-  hasRole('Recursos Humanos', 'Administrador'),
-  asistenciaController.registrarChecadaManual
-);
 
 // ============================================================
 // API PARA SISTEMA BIOMÉTRICO (Autenticación por API Key)
@@ -81,38 +43,55 @@ router.post('/api/sincronizar',
 );
 
 // ============================================================
-// API PARA USO INTERNO (Requieren autenticación)
+// Aplicar autenticación a todas las rutas siguientes
+// ============================================================
+router.use(isAuthenticated);
+
+// ============================================================
+// API PARA USO INTERNO (Solo lectura - requiere autenticación)
 // ============================================================
 
 // Obtener resumen diario
-router.get('/api/resumen-diario', 
-  isAuthenticated,
-  asistenciaController.apiResumenDiario
-);
+router.get('/api/resumen-diario', asistenciaController.apiResumenDiario);
 
 // Obtener asistencia de un empleado
-router.get('/api/empleado/:id', 
-  isAuthenticated,
-  asistenciaController.apiAsistenciaEmpleado
-);
+router.get('/api/empleado/:id', asistenciaController.apiAsistenciaEmpleado);
 
 // Verificar bono de puntualidad
-router.get('/api/bono-puntualidad/:id', 
-  isAuthenticated,
-  asistenciaController.apiBonoPuntualidad
-);
+router.get('/api/bono-puntualidad/:id', asistenciaController.apiBonoPuntualidad);
 
 // Obtener reporte por ubicación
-router.get('/api/por-ubicacion', 
-  isAuthenticated,
-  asistenciaController.apiReportePorUbicacion
-);
+router.get('/api/por-ubicacion', asistenciaController.apiReportePorUbicacion);
+
+// ============================================================
+// Aplicar rol ADMIN/RH a todas las rutas siguientes
+// ============================================================
+router.use(isAdminOrRH);
+
+// ============================================================
+// RUTAS DE VISTAS (Requieren autenticación + ADMIN/RH)
+// ============================================================
+
+// Dashboard de asistencia
+router.get('/', asistenciaController.index);
+
+// Reporte de empleado específico
+router.get('/empleado/:id', asistenciaController.reporteEmpleado);
+
+// Reporte por ubicación (RAM1/RAM2)
+router.get('/por-ubicacion', asistenciaController.reporteUbicacion);
+
+// Formulario para checada manual
+router.get('/checada-manual', asistenciaController.formChecadaManual);
+
+// Registrar checada manual (POST)
+router.post('/checada-manual', asistenciaController.registrarChecadaManual);
+
+// ============================================================
+// API PARA USO INTERNO (Modificación - requiere ADMIN/RH)
+// ============================================================
 
 // Marcar faltas (solo RH/Admin)
-router.post('/api/marcar-faltas', 
-  isAuthenticated,
-  hasRole('Recursos Humanos', 'Administrador'),
-  asistenciaController.apiMarcarFaltas
-);
+router.post('/api/marcar-faltas', asistenciaController.apiMarcarFaltas);
 
 export default router;

@@ -3,9 +3,7 @@
  * Cálculo según LFT México
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database.js';
 
 // Listar finiquitos
 export const index = async (req, res) => {

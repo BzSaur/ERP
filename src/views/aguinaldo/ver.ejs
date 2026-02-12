@@ -1,0 +1,198 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1">
+      <i class="bi bi-gift me-2"></i>Aguinaldo <%= aguinaldo.Anio %>
+    </h2>
+    <p class="text-muted mb-0">
+      <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %> <%= aguinaldo.empleado?.Apellido_Materno || '' %>
+    </p>
+  </div>
+  <div>
+    <% if (!aguinaldo.Pagado) { %>
+      <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar" method="POST" class="d-inline">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-circle me-1"></i> Aprobar y Pagar
+        </button>
+      </form>
+    <% } else { %>
+      <span class="badge bg-success">
+        <i class="bi bi-check-circle me-1"></i>Pagado
+      </span>
+    <% } %>
+    <a href="/aguinaldo" class="btn btn-outline-secondary ms-2">
+      <i class="bi bi-arrow-left me-1"></i> Regresar
+    </a>
+  </div>
+</div>
+
+<% if (typeof messages !== 'undefined') { %>
+  <% if (messages.success) { %>
+    <div class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.error) { %>
+    <div class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+<% } %>
+
+<div class="row g-4">
+  <!-- Datos del Empleado -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-person me-2"></i>Datos del Empleado</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <small class="text-muted d-block">Nombre Completo</small>
+            <strong><%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %></strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Puesto</small>
+            <strong><%= aguinaldo.empleado?.puesto?.Nombre_Puesto || 'N/A' %></strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Área</small>
+            <strong><%= aguinaldo.empleado?.area?.Nombre_Area || 'N/A' %></strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Fecha de Ingreso</small>
+            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Salario Diario</small>
+            <strong>$<%= parseFloat(aguinaldo.Salario_Diario).toFixed(2) %></strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Año Fiscal</small>
+            <strong><%= aguinaldo.Anio %></strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desglose del Cálculo -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-calculator me-2"></i>Desglose del Cálculo</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <small class="text-muted d-block">Días Laborados en el Año</small>
+            <strong><%= aguinaldo.Dias_Laborados %> días</strong>
+          </div>
+          <div class="col-md-6">
+            <small class="text-muted d-block">Días de Aguinaldo (LFT)</small>
+            <strong><%= aguinaldo.Dias_Aguinaldo %> días</strong>
+          </div>
+          <div class="col-12 border-top pt-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span>Monto Bruto:</span>
+              <strong>$<%= parseFloat(aguinaldo.Monto_Bruto).toFixed(2) %></strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-danger">ISR Retenido:</span>
+              <strong class="text-danger">-$<%= parseFloat(aguinaldo.Deduccion_ISR || 0).toFixed(2) %></strong>
+            </div>
+            <div class="d-flex justify-content-between pt-2 border-top">
+              <span class="fs-6">MONTO NETO:</span>
+              <strong class="fs-6 text-success">$<%= parseFloat(aguinaldo.Monto_Neto).toFixed(2) %></strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado y Fechas -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Estado</h6>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <small class="text-muted d-block mb-1">Estado Actual</small>
+          <% if (aguinaldo.Pagado) { %>
+            <span class="badge bg-success fs-6">
+              <i class="bi bi-check-circle me-1"></i>PAGADO
+            </span>
+          <% } else { %>
+            <span class="badge bg-warning text-dark fs-6">
+              <i class="bi bi-hourglass-split me-1"></i>PENDIENTE
+            </span>
+          <% } %>
+        </div>
+
+        <% if (aguinaldo.Fecha_Pago) { %>
+          <div class="mb-3">
+            <small class="text-muted d-block mb-1">Fecha de Pago</small>
+            <strong><%= aguinaldo.Fecha_Pago ? new Date(aguinaldo.Fecha_Pago).toLocaleDateString('es-MX') : 'N/A' %></strong>
+          </div>
+        <% } %>
+
+        <div class="mb-3">
+          <small class="text-muted d-block mb-1">Calculado el</small>
+          <strong><%= aguinaldo.Fecha_Calculo ? new Date(aguinaldo.Fecha_Calculo).toLocaleDateString('es-MX') : 'N/A' %></strong>
+        </div>
+
+        <% if (aguinaldo.Observaciones) { %>
+          <div class="mb-0">
+            <small class="text-muted d-block mb-1">Observaciones</small>
+            <p class="mb-0"><%= aguinaldo.Observaciones %></p>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Periodo de Cálculo -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-calendar me-2"></i>Período de Cálculo</h6>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info mb-3">
+          <strong>Según LFT Artículo 87:</strong>
+          <br>
+          Mínimo 15 días de salario, pagado antes del 20 de diciembre.
+        </div>
+
+        <div class="row g-2">
+          <div class="col-6">
+            <small class="text-muted d-block">Desde</small>
+            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Hasta</small>
+            <strong><%= aguinaldo.Fecha_Corte ? new Date(aguinaldo.Fecha_Corte).toLocaleDateString('es-MX') : 'N/A' %></strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Botones de Acción al pie -->
+<div class="d-flex justify-content-end gap-2 mt-4">
+  <a href="/aguinaldo" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Regresar a Lista
+  </a>
+  <% if (!aguinaldo.Pagado) { %>
+    <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar" method="POST" class="d-inline">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-circle me-1"></i> Aprobar y Pagar
+      </button>
+    </form>
+  <% } %>
+</div>

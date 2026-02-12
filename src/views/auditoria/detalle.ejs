@@ -1,0 +1,189 @@
+<div class="mb-4">
+  <a href="/auditoria" class="btn btn-outline-secondary mb-3">
+    <i class="bi bi-arrow-left me-1"></i> Volver al Historial
+  </a>
+  
+  <h2 class="mb-1"><i class="bi bi-file-text me-2"></i>Detalle de Cambio #<%= cambio.ID_Cambio %></h2>
+  <p class="text-muted mb-0">Información completa del cambio realizado</p>
+</div>
+
+<div class="row">
+  <!-- Información General -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-primary bg-opacity-10">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Información General</h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <th width="40%">ID Cambio:</th>
+            <td><strong>#<%= cambio.ID_Cambio %></strong></td>
+          </tr>
+          <tr>
+            <th>Fecha y Hora:</th>
+            <td>
+              <%= new Date(cambio.FechaHora).toLocaleDateString('es-MX', { 
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+              }) %>
+              a las <%= new Date(cambio.FechaHora).toLocaleTimeString('es-MX') %>
+            </td>
+          </tr>
+          <tr>
+            <th>Acción:</th>
+            <td>
+              <% if (cambio.Accion === 'CREATE') { %>
+                <span class="badge bg-success fs-6">
+                  <i class="bi bi-plus-circle me-1"></i>CREAR
+                </span>
+              <% } else if (cambio.Accion === 'UPDATE') { %>
+                <span class="badge bg-warning fs-6">
+                  <i class="bi bi-pencil me-1"></i>ACTUALIZAR
+                </span>
+              <% } else if (cambio.Accion === 'DELETE') { %>
+                <span class="badge bg-danger fs-6">
+                  <i class="bi bi-trash me-1"></i>ELIMINAR
+                </span>
+              <% } %>
+            </td>
+          </tr>
+          <tr>
+            <th>Tabla Afectada:</th>
+            <td><code class="fs-6"><%= cambio.Tabla %></code></td>
+          </tr>
+          <tr>
+            <th>ID Registro:</th>
+            <td><strong><%= cambio.ID_Registro %></strong></td>
+          </tr>
+          <tr>
+            <th>Dirección IP:</th>
+            <td><code><%= cambio.IP_Usuario || 'No disponible' %></code></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Información del Usuario -->
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header bg-info bg-opacity-10">
+        <h5 class="mb-0"><i class="bi bi-person me-2"></i>Usuario que Realizó el Cambio</h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tr>
+            <th width="40%">ID Usuario:</th>
+            <td><strong>#<%= cambio.ID_Usuario %></strong></td>
+          </tr>
+          <tr>
+            <th>Nombre:</th>
+            <td><strong><%= cambio.usuario.Nombre_Completo %></strong></td>
+          </tr>
+          <tr>
+            <th>Email:</th>
+            <td><%= cambio.Email_Usuario %></td>
+          </tr>
+          <tr>
+            <th>Rol:</th>
+            <td>
+              <span class="badge bg-secondary fs-6"><%= cambio.Rol_Usuario %></span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Descripción del Cambio -->
+<div class="card mb-4">
+  <div class="card-header bg-warning bg-opacity-10">
+    <h5 class="mb-0"><i class="bi bi-card-text me-2"></i>Descripción del Cambio</h5>
+  </div>
+  <div class="card-body">
+    <p class="mb-0 fs-5"><%= cambio.Descripcion %></p>
+  </div>
+</div>
+
+<!-- Datos Previos (si existen) -->
+<% if (cambio.Datos_Previos) { %>
+<div class="card mb-4">
+  <div class="card-header bg-danger bg-opacity-10">
+    <h5 class="mb-0"><i class="bi bi-file-minus me-2"></i>Datos Anteriores</h5>
+  </div>
+  <div class="card-body">
+    <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"><%= JSON.stringify(cambio.Datos_Previos, null, 2) %></pre>
+  </div>
+</div>
+<% } %>
+
+<!-- Datos Nuevos (si existen) -->
+<% if (cambio.Datos_Nuevos) { %>
+<div class="card mb-4">
+  <div class="card-header bg-success bg-opacity-10">
+    <h5 class="mb-0"><i class="bi bi-file-plus me-2"></i>Datos Nuevos</h5>
+  </div>
+  <div class="card-body">
+    <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"><%= JSON.stringify(cambio.Datos_Nuevos, null, 2) %></pre>
+  </div>
+</div>
+<% } %>
+
+<!-- Comparación de Cambios (solo para UPDATE) -->
+<% if (cambio.Accion === 'UPDATE' && cambio.Datos_Previos && cambio.Datos_Nuevos) { %>
+<div class="card mb-4">
+  <div class="card-header bg-primary bg-opacity-10">
+    <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Comparación de Cambios</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Campo</th>
+            <th>Valor Anterior</th>
+            <th>Valor Nuevo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% 
+            const previos = cambio.Datos_Previos;
+            const nuevos = cambio.Datos_Nuevos;
+            const campos = new Set([...Object.keys(previos || {}), ...Object.keys(nuevos || {})]);
+            
+            campos.forEach(campo => {
+              const valorPrevio = previos[campo];
+              const valorNuevo = nuevos[campo];
+              const cambioDetectado = JSON.stringify(valorPrevio) !== JSON.stringify(valorNuevo);
+          %>
+              <% if (cambioDetectado) { %>
+                <tr class="table-warning">
+                  <td><strong><%= campo %></strong></td>
+                  <td>
+                    <code class="text-danger"><%= valorPrevio !== null && valorPrevio !== undefined ? String(valorPrevio) : 'null' %></code>
+                  </td>
+                  <td>
+                    <code class="text-success"><%= valorNuevo !== null && valorNuevo !== undefined ? String(valorNuevo) : 'null' %></code>
+                  </td>
+                </tr>
+              <% } else { %>
+                <tr>
+                  <td><%= campo %></td>
+                  <td><code><%= valorPrevio !== null && valorPrevio !== undefined ? String(valorPrevio) : 'null' %></code></td>
+                  <td><code><%= valorNuevo !== null && valorNuevo !== undefined ? String(valorNuevo) : 'null' %></code></td>
+                </tr>
+              <% } %>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<div class="text-center">
+  <a href="/auditoria" class="btn btn-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver al Historial
+  </a>
+</div>

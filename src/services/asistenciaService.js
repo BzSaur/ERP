@@ -48,7 +48,7 @@ export async function registrarChecada({
   const empleado = await prisma.empleados.findUnique({
     where: { ID_Empleado: empleadoId },
     include: {
-      Estatus: true
+      estatus: true
     }
   });
 
@@ -56,7 +56,7 @@ export async function registrarChecada({
     throw new Error('Empleado no encontrado');
   }
 
-  if (empleado.Estatus?.Nombre !== 'Activo') {
+  if (empleado.estatus?.Nombre_Estatus !== 'ACTIVO') {
     throw new Error('El empleado no está activo');
   }
 
@@ -311,16 +311,16 @@ export async function obtenerReportePorUbicacion({
   const asistencias = await prisma.empleados_Asistencia.findMany({
     where: whereClause,
     include: {
-      Empleado: {
+      empleado: {
         include: {
-          Puesto: true,
-          Area: true
+          puesto: true,
+          area: true
         }
       }
     },
     orderBy: [
       { Fecha: 'asc' },
-      { Empleado: { Nombre: 'asc' } }
+      { empleado: { Nombre: 'asc' } }
     ]
   });
 
@@ -350,10 +350,10 @@ export async function obtenerReportePorUbicacion({
       porUbicacion[ubi].detalle.push({
         fecha: asistencia.Fecha,
         empleado: {
-          id: asistencia.Empleado.ID_Empleado,
-          nombre: `${asistencia.Empleado.Nombre} ${asistencia.Empleado.Apellido_Paterno}`,
-          puesto: asistencia.Empleado.Puesto?.Nombre,
-          area: asistencia.Empleado.Area?.Nombre
+          id: asistencia.empleado.ID_Empleado,
+          nombre: `${asistencia.empleado.Nombre} ${asistencia.empleado.Apellido_Paterno}`,
+          puesto: asistencia.empleado.puesto?.Nombre_Puesto,
+          area: asistencia.empleado.area?.Nombre_Area
         },
         entrada: asistencia.Hora_Entrada,
         salida: asistencia.Hora_Salida,
@@ -397,10 +397,10 @@ export async function obtenerResumenDiario(fecha = new Date()) {
       }
     },
     include: {
-      Empleado: {
+      empleado: {
         include: {
-          Puesto: true,
-          Area: true
+          puesto: true,
+          area: true
         }
       }
     },
@@ -412,8 +412,8 @@ export async function obtenerResumenDiario(fecha = new Date()) {
   // Obtener total de empleados activos
   const totalEmpleadosActivos = await prisma.empleados.count({
     where: {
-      Estatus: {
-        Nombre: 'Activo'
+      estatus: {
+        is: { Nombre_Estatus: 'ACTIVO' }
       }
     }
   });
@@ -440,9 +440,9 @@ export async function obtenerResumenDiario(fecha = new Date()) {
     },
     detalle: asistencias.map(a => ({
       empleadoId: a.ID_Empleado,
-      nombreCompleto: `${a.Empleado.Nombre} ${a.Empleado.Apellido_Paterno} ${a.Empleado.Apellido_Materno || ''}`.trim(),
-      puesto: a.Empleado.Puesto?.Nombre,
-      area: a.Empleado.Area?.Nombre,
+      nombreCompleto: `${a.empleado.Nombre} ${a.empleado.Apellido_Paterno} ${a.empleado.Apellido_Materno || ''}`.trim(),
+      puesto: a.empleado.puesto?.Nombre_Puesto,
+      area: a.empleado.area?.Nombre_Area,
       presente: a.Presente,
       horaEntrada: a.Hora_Entrada,
       horaSalida: a.Hora_Salida,
@@ -476,8 +476,8 @@ export async function marcarFaltasAutomaticas(fecha = null) {
   // Obtener todos los empleados activos
   const empleadosActivos = await prisma.empleados.findMany({
     where: {
-      Estatus: {
-        Nombre: 'Activo'
+      estatus: {
+        is: { Nombre_Estatus: 'ACTIVO' }
       },
       Fecha_Ingreso: {
         lte: fechaProcesar
@@ -531,7 +531,7 @@ export async function marcarFaltasAutomaticas(fecha = null) {
         ID_Empleado: empleado.ID_Empleado,
         Fecha_Inicio: { lte: fechaProcesar },
         Fecha_Fin: { gte: fechaProcesar },
-        Estatus: 'APROBADA'
+        Estado: 'APROBADA'
       }
     });
 
