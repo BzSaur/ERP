@@ -1,12 +1,15 @@
-<!-- Sidebar -->
+<!-- Sidebar Drawer -->
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <a href="/" class="sidebar-brand">
       <img src="/img/logo_ram.png" alt="Logo" class="sidebar-brand-logo">
-      <span>ERP RH</span>
+      <span>VITA</span>
     </a>
+    <button class="btn-icon text-white" id="sidebarClose" title="Cerrar menú">
+      <i class="bi bi-x-lg"></i>
+    </button>
   </div>
-  
+
   <div class="sidebar-body">
     <ul class="sidebar-nav">
       <!-- Dashboard -->
@@ -16,7 +19,7 @@
           <span>Dashboard</span>
         </a>
       </li>
-      
+
       <!-- Empleados -->
       <li class="nav-item">
         <a href="/empleados" class="nav-link <%= currentPath.startsWith('/empleados') ? 'active' : '' %>">
@@ -24,7 +27,7 @@
           <span>Empleados</span>
         </a>
       </li>
-      
+
       <!-- Catálogos -->
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/areas') || currentPath.startsWith('/puestos') || currentPath.startsWith('/nacionalidades') || currentPath.startsWith('/horarios') ? 'active' : '' %>">
@@ -55,8 +58,8 @@
           </li>
         </ul>
       </li>
-      
-      <!-- Horas Adicionales (Solo ADMIN/RH) -->
+
+      <!-- Horas Adicionales -->
       <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item">
         <a href="/horas-adicionales" class="nav-link <%= currentPath.startsWith('/horas-adicionales') ? 'active' : '' %>">
@@ -66,7 +69,7 @@
       </li>
       <% } %>
 
-      <!-- Asistencia (Solo ADMIN/RH/SUPER_ADMIN) -->
+      <!-- Asistencia -->
       <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/asistencia') ? 'active' : '' %>">
@@ -98,8 +101,8 @@
         </ul>
       </li>
       <% } %>
-      
-      <!-- Nómina (Solo ADMIN/RH) -->
+
+      <!-- Nómina -->
       <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/nomina') || currentPath.startsWith('/vacaciones') || currentPath.startsWith('/aguinaldo') || currentPath.startsWith('/finiquito') ? 'active' : '' %>">
@@ -136,8 +139,8 @@
         </ul>
       </li>
       <% } %>
-      
-      <!-- Reportes (Solo ADMIN/RH) -->
+
+      <!-- Reportes -->
       <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/reportes') ? 'active' : '' %>">
@@ -169,8 +172,8 @@
         </ul>
       </li>
       <% } %>
-      
-      <!-- Administración (Solo SUPER_ADMIN) -->
+
+      <!-- Administración -->
       <% if (hasRole('SuperAdministrador', 'SUPER_ADMIN')) { %>
       <li class="nav-item has-submenu">
         <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') ? 'active' : '' %>">

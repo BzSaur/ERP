@@ -1,23 +1,57 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
-    <h2 class="mb-1">Bitácora de Accesos</h2>
-    <p class="text-muted mb-0">Registro de inicios de sesión y actividad del sistema</p>
+    <h2 class="mb-1"><i class="bi bi-journal-text me-2"></i>Bitácora de Accesos</h2>
+    <p class="text-body-secondary mb-0">Registro de inicios de sesión y actividad del sistema</p>
   </div>
   <a href="/configuracion" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i> Volver
   </a>
 </div>
 
-<% if (typeof messages !== 'undefined') { %>
-  <% if (messages.error) { %>
-    <div class="alert alert-danger alert-dismissible fade show">
-      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
-<% } %>
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" action="/bitacora" class="row g-3 align-items-end">
+      <div class="col-6 col-md-3">
+        <label class="form-label">Desde</label>
+        <input type="date" name="desde" class="form-control" value="<%= typeof filtros !== 'undefined' ? filtros.desde : '' %>">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Hasta</label>
+        <input type="date" name="hasta" class="form-control" value="<%= typeof filtros !== 'undefined' ? filtros.hasta : '' %>">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label">Acción</label>
+        <select name="accion" class="form-select">
+          <% const accionSel = typeof filtros !== 'undefined' ? filtros.accion : 'Todos'; %>
+          <option value="Todos" <%= accionSel === 'Todos' ? 'selected' : '' %>>Todos</option>
+          <option value="Login" <%= accionSel === 'Login' ? 'selected' : '' %>>Login</option>
+          <option value="Logout" <%= accionSel === 'Logout' ? 'selected' : '' %>>Logout</option>
+          <option value="Login Fallido" <%= accionSel === 'Login Fallido' ? 'selected' : '' %>>Login Fallido</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-fill">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/bitacora" class="btn btn-outline-secondary">
+          <i class="bi bi-x-lg"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
 
+<!-- Tabla -->
 <div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-table me-2"></i>Registros
+    </h5>
+    <% if (typeof paginacion !== 'undefined') { %>
+      <span class="text-body-secondary small"><%= paginacion.totalRegistros %> registros</span>
+    <% } %>
+  </div>
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover mb-0">
@@ -26,15 +60,15 @@
             <th>Fecha/Hora</th>
             <th>Usuario</th>
             <th>Acción</th>
-            <th>IP</th>
-            <th>Detalles</th>
+            <th class="d-none d-md-table-cell">IP</th>
+            <th class="d-none d-lg-table-cell">Navegador</th>
           </tr>
         </thead>
         <tbody>
           <% if (registros.length === 0) { %>
             <tr>
-              <td colspan="5" class="text-center py-4 text-muted">
-                <i class="bi bi-journal-text fs-1 d-block mb-2"></i>
+              <td colspan="5" class="text-center py-4 text-body-secondary">
+                <i class="bi bi-journal-text fs-3 d-block mb-2"></i>
                 No hay registros en la bitácora
               </td>
             </tr>
@@ -42,14 +76,14 @@
             <% registros.forEach(reg => { %>
               <tr>
                 <td>
-                  <small><%= reg.Fecha_Hora.toLocaleString('es-MX') %></small>
+                  <small><%= reg.FechaHora ? reg.FechaHora.toLocaleString('es-MX') : '-' %></small>
                 </td>
                 <td>
                   <% if (reg.usuario) { %>
                     <strong><%= reg.usuario.Nombre_Completo %></strong>
-                    <br><small class="text-muted"><%= reg.usuario.Email_Office365 %></small>
+                    <br><small class="text-body-secondary"><%= reg.Email_Usuario %></small>
                   <% } else { %>
-                    <span class="text-muted">Usuario desconocido</span>
+                    <span class="text-body-secondary"><%= reg.Email_Usuario || 'Desconocido' %></span>
                   <% } %>
                 </td>
                 <td>
@@ -59,12 +93,23 @@
                     <span class="badge bg-secondary"><i class="bi bi-box-arrow-right me-1"></i>Logout</span>
                   <% } else if (reg.Accion === 'Login Fallido') { %>
                     <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Fallido</span>
+                    <% if (reg.Motivo_Error) { %>
+                      <br><small class="text-body-secondary"><%= reg.Motivo_Error %></small>
+                    <% } %>
                   <% } else { %>
                     <span class="badge bg-info"><%= reg.Accion %></span>
                   <% } %>
                 </td>
-                <td><code><%= reg.IP_Address || '-' %></code></td>
-                <td><small><%= reg.Detalles || '-' %></small></td>
+                <td class="d-none d-md-table-cell"><code><%= reg.IP_Usuario || '-' %></code></td>
+                <td class="d-none d-lg-table-cell">
+                  <small class="text-body-secondary">
+                    <% if (reg.User_Agent) { %>
+                      <%= reg.User_Agent.length > 60 ? reg.User_Agent.substring(0, 60) + '...' : reg.User_Agent %>
+                    <% } else { %>
+                      -
+                    <% } %>
+                  </small>
+                </td>
               </tr>
             <% }) %>
           <% } %>
@@ -72,4 +117,35 @@
       </table>
     </div>
   </div>
+
+  <% if (typeof paginacion !== 'undefined' && paginacion.total > 1) { %>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <small class="text-body-secondary">
+      Página <%= paginacion.actual %> de <%= paginacion.total %>
+    </small>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <% if (paginacion.actual > 1) { %>
+          <li class="page-item">
+            <a class="page-link" href="/bitacora?pagina=<%= paginacion.actual - 1 %>&desde=<%= filtros.desde %>&hasta=<%= filtros.hasta %>&accion=<%= filtros.accion %>">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+        <% } %>
+        <% for (let p = Math.max(1, paginacion.actual - 2); p <= Math.min(paginacion.total, paginacion.actual + 2); p++) { %>
+          <li class="page-item <%= p === paginacion.actual ? 'active' : '' %>">
+            <a class="page-link" href="/bitacora?pagina=<%= p %>&desde=<%= filtros.desde %>&hasta=<%= filtros.hasta %>&accion=<%= filtros.accion %>"><%= p %></a>
+          </li>
+        <% } %>
+        <% if (paginacion.actual < paginacion.total) { %>
+          <li class="page-item">
+            <a class="page-link" href="/bitacora?pagina=<%= paginacion.actual + 1 %>&desde=<%= filtros.desde %>&hasta=<%= filtros.hasta %>&accion=<%= filtros.accion %>">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+        <% } %>
+      </ul>
+    </nav>
+  </div>
+  <% } %>
 </div>

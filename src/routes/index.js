@@ -80,12 +80,45 @@ router.use('/auditoria', auditoriaRoutes);
 // Bitácora
 router.get('/bitacora', isAuthenticated, async (req, res) => {
   try {
-    const registros = await prisma.bitacora_Accesos.findMany({
-      include: { usuario: { select: { Nombre_Completo: true, Email_Office365: true } } },
-      orderBy: { FechaHora: 'desc' },
-      take: 100
+    const { desde, hasta, accion, pagina = 1 } = req.query;
+    const porPagina = 50;
+    const skip = (Math.max(1, parseInt(pagina) || 1) - 1) * porPagina;
+
+    // Construir filtros dinámicos
+    const where = {};
+    if (desde) {
+      where.FechaHora = { ...(where.FechaHora || {}), gte: new Date(desde + 'T00:00:00') };
+    }
+    if (hasta) {
+      where.FechaHora = { ...(where.FechaHora || {}), lte: new Date(hasta + 'T23:59:59') };
+    }
+    if (accion && accion !== 'Todos') {
+      where.Accion = accion;
+    }
+
+    const [registros, total] = await Promise.all([
+      prisma.bitacora_Accesos.findMany({
+        where,
+        include: { usuario: { select: { Nombre_Completo: true, Email_Office365: true } } },
+        orderBy: { FechaHora: 'desc' },
+        skip,
+        take: porPagina
+      }),
+      prisma.bitacora_Accesos.count({ where })
+    ]);
+
+    const totalPaginas = Math.ceil(total / porPagina);
+
+    res.render('bitacora', {
+      title: 'Bitácora de Accesos',
+      registros,
+      filtros: { desde: desde || '', hasta: hasta || '', accion: accion || 'Todos' },
+      paginacion: {
+        actual: parseInt(pagina) || 1,
+        total: totalPaginas,
+        totalRegistros: total
+      }
     });
-    res.render('bitacora', { title: 'Bitácora de Accesos', registros });
   } catch (error) {
     console.error('Error:', error);
     req.flash('error', 'Error al cargar la bitácora');

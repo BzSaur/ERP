@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i><%= periodo.Nombre_Periodo %></h2>
-    <p class="text-muted mb-0">
+    <p class="text-body-secondary mb-0">
       <%= periodo.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
       <%= periodo.Fecha_Fin.toLocaleDateString('es-MX') %>
       | Pago: <%= periodo.Fecha_Pago.toLocaleDateString('es-MX') %>
@@ -44,31 +44,31 @@
 
 <!-- Info del periodo -->
 <div class="row g-3 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card h-100">
       <div class="card-body text-center">
         <h3 class="text-primary mb-0"><%= totales.empleados %></h3>
-        <small class="text-muted">Empleados</small>
+        <small class="text-body-secondary">Empleados</small>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card h-100">
       <div class="card-body text-center">
         <h5 class="text-success mb-0">$<%= totales.percepciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h5>
-        <small class="text-muted">Total Percepciones</small>
+        <small class="text-body-secondary">Total Percepciones</small>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card h-100">
       <div class="card-body text-center">
         <h5 class="text-danger mb-0">$<%= totales.deducciones.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h5>
-        <small class="text-muted">Total Deducciones</small>
+        <small class="text-body-secondary">Total Deducciones</small>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card h-100 bg-primary text-white">
       <div class="card-body text-center">
         <h4 class="mb-0">$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></h4>
@@ -131,7 +131,7 @@
         <tbody>
           <% if (periodo.nominas.length === 0) { %>
             <tr>
-              <td colspan="9" class="text-center py-4 text-muted">
+              <td colspan="9" class="text-center py-4 text-body-secondary">
                 <i class="bi bi-calculator fs-1 d-block mb-2"></i>
                 No hay nóminas calculadas. Haz clic en "Calcular Nómina" para generar.
               </td>
@@ -156,7 +156,7 @@
                       <% if (Number(n.Horas_Triples) > 0) { %><span class="badge bg-danger"><%= n.Horas_Triples %>h 3x</span><% } %>
                     </small>
                   <% } else { %>
-                    <span class="text-muted">-</span>
+                    <span class="text-body-secondary">-</span>
                   <% } %>
                 </td>
                 <td class="text-end text-success">

@@ -1,5 +1,5 @@
 <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
             <div>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb mb-1">
@@ -24,14 +24,14 @@
                             <i class="bi bi-person fs-3 text-primary"></i>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <h5 class="mb-0"><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %> <%= empleado.Apellido_Materno || '' %></h5>
-                        <small class="text-muted">#<%= empleado.ID_Empleado %></small>
+                        <small class="text-body-secondary">#<%= empleado.ID_Empleado %></small>
                     </div>
                         <strong><%= empleado.puesto?.Nombre_Puesto || 'Sin asignar' %></strong>
                         <strong><%= empleado.area?.Nombre_Area || 'Sin asignar' %></strong>
                     <div class="col-md-2">
-                        <small class="text-muted d-block">Estatus</small>
+                        <small class="text-body-secondary d-block">Estatus</small>
                         <span class="badge bg-<%= empleado.estatus?.Nombre_Estatus === 'ACTIVO' ? 'success' : 'secondary' %>">
                             <%= empleado.estatus?.Nombre_Estatus || 'N/A' %>
                         </span>
@@ -74,7 +74,7 @@
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
                         <h3 class="mb-0 text-success"><%= resumen.diasPresentes %></h3>
-                        <small class="text-muted">Días Presentes</small>
+                        <small class="text-body-secondary">Días Presentes</small>
                     </div>
                 </div>
             </div>
@@ -82,7 +82,7 @@
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
                         <h3 class="mb-0 text-danger"><%= resumen.diasAusentes %></h3>
-                        <small class="text-muted">Faltas</small>
+                        <small class="text-body-secondary">Faltas</small>
                     </div>
                 </div>
             </div>
@@ -90,7 +90,7 @@
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
                         <h3 class="mb-0 text-warning"><%= resumen.retardos %></h3>
-                        <small class="text-muted">Retardos</small>
+                        <small class="text-body-secondary">Retardos</small>
                     </div>
                 </div>
             </div>
@@ -98,7 +98,7 @@
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
                         <h3 class="mb-0 text-primary"><%= resumen.checadasCompletas %></h3>
-                        <small class="text-muted">Checadas Completas</small>
+                        <small class="text-body-secondary">Checadas Completas</small>
                     </div>
                 </div>
             </div>
@@ -106,7 +106,7 @@
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
                         <h3 class="mb-0 text-info"><%= resumen.horasTrabajadas.toFixed(1) %></h3>
-                        <small class="text-muted">Horas Trabajadas</small>
+                        <small class="text-body-secondary">Horas Trabajadas</small>
                     </div>
                 </div>
             </div>
@@ -117,7 +117,7 @@
                         <h3 class="mb-0 <%= cumpleBono ? 'text-success' : 'text-danger' %>">
                             <i class="bi bi-<%= cumpleBono ? 'check-circle' : 'x-circle' %>"></i>
                         </h3>
-                        <small class="text-muted">Bono Puntualidad</small>
+                        <small class="text-body-secondary">Bono Puntualidad</small>
                     </div>
                 </div>
             </div>
@@ -136,14 +136,14 @@
                                 <div class="border rounded p-3">
                                     <span class="badge bg-info mb-2">RAM1</span>
                                     <h4 class="mb-0"><%= resumen.porUbicacion.RAM1?.entradas || 0 %></h4>
-                                    <small class="text-muted">Entradas</small>
+                                    <small class="text-body-secondary">Entradas</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="border rounded p-3">
                                     <span class="badge bg-secondary mb-2">RAM2</span>
                                     <h4 class="mb-0"><%= resumen.porUbicacion.RAM2?.entradas || 0 %></h4>
-                                    <small class="text-muted">Entradas</small>
+                                    <small class="text-body-secondary">Entradas</small>
                                 </div>
                             </div>
                         </div>
@@ -160,7 +160,7 @@
                             <h1 class="display-4 mb-0 <%= resumen.minutosRetardoTotal > 0 ? 'text-warning' : 'text-success' %>">
                                 <%= resumen.minutosRetardoTotal %>
                             </h1>
-                            <p class="text-muted mb-0">minutos acumulados en el período</p>
+                            <p class="text-body-secondary mb-0">minutos acumulados en el período</p>
                         </div>
                     </div>
                 </div>
@@ -210,14 +210,14 @@
                                             <% if (dia.entrada) { %>
                                                 <%= new Date(dia.entrada).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
                                             <% } else { %>
-                                                <span class="text-muted">-</span>
+                                                <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
                                         <td>
                                             <% if (dia.salida) { %>
                                                 <%= new Date(dia.salida).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
                                             <% } else { %>
-                                                <span class="text-muted">-</span>
+                                                <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
                                         <td>
@@ -226,7 +226,7 @@
                                                     <%= dia.ubicacionEntrada %>
                                                 </span>
                                             <% } else { %>
-                                                <span class="text-muted">-</span>
+                                                <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
                                         <td>
@@ -235,7 +235,7 @@
                                                     <%= dia.ubicacionSalida %>
                                                 </span>
                                             <% } else { %>
-                                                <span class="text-muted">-</span>
+                                                <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
                                         <td>
@@ -249,14 +249,14 @@
                                                     <i class="bi bi-check-circle"></i>
                                                 </span>
                                             <% } else { %>
-                                                <span class="text-muted">-</span>
+                                                <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
                                     </tr>
                                 <% }); %>
                             <% } else { %>
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-muted">
+                                    <td colspan="8" class="text-center py-4 text-body-secondary">
                                         <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                         No hay registros de asistencia en este período
                                     </td>

@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-sun me-2"></i>Vacaciones</h2>
-    <p class="text-muted mb-0">Gestión de vacaciones de empleados</p>
+    <p class="text-body-secondary mb-0">Gestión de vacaciones de empleados</p>
   </div>
   <div class="d-flex gap-2">
     <form action="/vacaciones/generar" method="POST" class="d-inline">
@@ -80,7 +80,7 @@
 <div class="card mb-4">
   <div class="card-body">
     <form action="/vacaciones" method="GET" class="row g-3 align-items-end">
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <label for="empleado" class="form-label">Empleado</label>
         <select class="form-select" id="empleado" name="empleado">
           <option value="">Todos</option>
@@ -139,7 +139,7 @@
         <tbody>
           <% if (vacaciones.length === 0) { %>
             <tr>
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="8" class="text-center py-4 text-body-secondary">
                 <i class="bi bi-sun fs-1 d-block mb-2"></i>
                 No hay registros de vacaciones
               </td>
@@ -154,7 +154,7 @@
                 <td class="text-center"><%= v.Dias_Correspondientes %></td>
                 <td class="text-center"><%= v.Dias_Tomados %></td>
                 <td class="text-center">
-                  <strong class="<%= v.Dias_Pendientes > 0 ? 'text-success' : 'text-muted' %>">
+                  <strong class="<%= v.Dias_Pendientes > 0 ? 'text-success' : 'text-body-secondary' %>">
                     <%= v.Dias_Pendientes %>
                   </strong>
                 </td>
@@ -165,7 +165,7 @@
                       <%= v.Fecha_Fin.toLocaleDateString('es-MX') %>
                     </small>
                   <% } else { %>
-                    <span class="text-muted">-</span>
+                    <span class="text-body-secondary">-</span>
                   <% } %>
                 </td>
                 <td>
@@ -233,7 +233,7 @@
         </table>
       </div>
     </div>
-    <p class="mb-0 small text-muted">
+    <p class="mb-0 small text-body-secondary">
       <i class="bi bi-asterisk"></i> Prima vacacional: 25% mínimo sobre salario de vacaciones (Art. 80 LFT)
     </p>
   </div>

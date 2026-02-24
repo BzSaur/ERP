@@ -1,28 +1,33 @@
 <div class="container-fluid py-4">
   <!-- Header -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
     <div>
       <h2 class="mb-1">
         <i class="bi bi-clock-history text-primary me-2"></i>Resultado del Checador
       </h2>
-      <p class="text-muted mb-0">
+      <p class="text-body-secondary mb-0">
         Periodo: <strong><%= resultado.rangoFechas.inicioStr %></strong> al <strong><%= resultado.rangoFechas.finStr %></strong>
         <% if (resultado.ubicacion) { %>
           &nbsp;|&nbsp; Ubicación: <span class="badge bg-info"><%= resultado.ubicacion %></span>
         <% } %>
       </p>
     </div>
-    <div>
+    <div class="d-flex gap-2">
       <a href="/checador" class="btn btn-outline-primary">
-        <i class="bi bi-upload"></i> Nueva Importación
+        <i class="bi bi-upload me-1"></i>Nueva Importación
       </a>
+      <% if (typeof matchingData !== 'undefined' && matchingData.matching.length > 0) { %>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalGuardar">
+          <i class="bi bi-floppy me-1"></i>Guardar en Sistema
+        </button>
+      <% } %>
     </div>
   </div>
 
   <!-- Errores -->
   <% if (errores && errores.length > 0) { %>
     <div class="alert alert-warning alert-dismissible fade show">
-      <i class="bi bi-exclamation-triangle"></i> 
+      <i class="bi bi-exclamation-triangle"></i>
       <strong>Advertencias:</strong>
       <ul class="mb-0 mt-1">
         <% errores.forEach(function(err) { %>
@@ -42,6 +47,124 @@
       <span class="badge bg-success"><i class="bi bi-file-earmark"></i> RAM2: <%= archivos.ram2 %></span>
     <% } %>
   </div>
+
+  <!-- Matching Summary -->
+  <% if (typeof matchingData !== 'undefined') { %>
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-people me-2"></i>Vinculación con Sistema
+            </h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-success fs-6"><%= matchingData.matching.length %></span>
+                  <small>Empleados vinculados</small>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-danger fs-6"><%= matchingData.noMatcheados.length %></span>
+                  <small>Sin vincular</small>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-info fs-6"><%= matchingData.totalDB %></span>
+                  <small>Empleados en sistema</small>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-secondary fs-6"><%= matchingData.matching.filter(m => m.esMixto).length %></span>
+                  <small>Horario mixto</small>
+                </div>
+              </div>
+            </div>
+
+            <% if (matchingData.noMatcheados.length > 0) { %>
+              <div class="mt-3">
+                <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="collapse" data-bs-target="#noMatcheados">
+                  <i class="bi bi-exclamation-triangle me-1"></i>Ver empleados no vinculados (<%= matchingData.noMatcheados.length %>)
+                </button>
+                <div class="collapse mt-2" id="noMatcheados">
+                  <div class="alert alert-warning mb-0 py-2">
+                    <small>Estos empleados del checador no se encontraron en el sistema y <strong>no se guardarán</strong>:</small>
+                    <div class="row mt-1">
+                      <% matchingData.noMatcheados.forEach(function(nm) { %>
+                        <div class="col-6 col-md-4 col-lg-3">
+                          <small><i class="bi bi-person-x me-1"></i><%= nm.nombre %> <span class="text-body-secondary">(ID: <%= nm.idChecador %>)</span></small>
+                        </div>
+                      <% }); %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Extras Mixtos -->
+  <% if (typeof extrasMixtos !== 'undefined' && extrasMixtos.length > 0) { %>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-clock-fill text-warning me-2"></i>Horas Extras - Empleados Mixtos
+        </h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th class="text-center">Hrs Presenciales</th>
+                <th class="text-center">Extras (>15h pres.)</th>
+                <th class="text-center">Extras (>45h total)</th>
+                <th class="text-center">Total Extras Adic.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% extrasMixtos.forEach(function(mix) { %>
+                <tr>
+                  <td><%= mix.nombre %></td>
+                  <td class="text-center"><%= mix.horasPresenciales.toFixed(1) %>h</td>
+                  <td class="text-center">
+                    <% if (mix.extrasPresenciales > 0) { %>
+                      <span class="badge bg-warning"><%= mix.extrasPresenciales.toFixed(1) %>h</span>
+                    <% } else { %>
+                      <span class="text-body-secondary">0</span>
+                    <% } %>
+                  </td>
+                  <td class="text-center">
+                    <% if (mix.extrasSobreCap > 0) { %>
+                      <span class="badge bg-danger"><%= mix.extrasSobreCap.toFixed(1) %>h</span>
+                    <% } else { %>
+                      <span class="text-body-secondary">0</span>
+                    <% } %>
+                  </td>
+                  <td class="text-center fw-bold">
+                    <% if (mix.totalExtrasAdicionales > 0) { %>
+                      <span class="text-danger"><%= mix.totalExtrasAdicionales.toFixed(1) %>h</span>
+                    <% } else { %>
+                      <span class="text-body-secondary">0</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  <% } %>
 
   <!-- Resumen Cards -->
   <div class="row g-3 mb-4">
@@ -88,8 +211,8 @@
     <div class="col-6 col-lg-2">
       <div class="card stat-card stat-card-sm bg-secondary">
         <div class="card-body text-center">
-          <div class="stat-value"><%= resultado.resumen.promedioHorasPorEmpleado %></div>
-          <div class="stat-label">Prom. hrs/emp</div>
+          <div class="stat-value"><%= resultado.resumen.totalHorasExtrasTodas || 0 %></div>
+          <div class="stat-label">Hrs Extras</div>
         </div>
       </div>
     </div>
@@ -105,16 +228,18 @@
             <input type="text" class="form-control" id="buscarEmpleado" placeholder="Buscar empleado...">
           </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
           <select class="form-select form-select-sm" id="filtroEstado">
             <option value="todos">Todos los empleados</option>
             <option value="con-asistencia">Con asistencia</option>
             <option value="sin-asistencia">Sin asistencia</option>
             <option value="con-retardos">Con retardos</option>
             <option value="incompletos">Días incompletos</option>
+            <option value="vinculados">Vinculados al sistema</option>
+            <option value="no-vinculados">No vinculados</option>
           </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
           <select class="form-select form-select-sm" id="filtroOrden">
             <option value="nombre">Ordenar por nombre</option>
             <option value="horas-desc">Más horas trabajadas</option>
@@ -138,43 +263,69 @@
           <tr>
             <th class="text-center" style="width:50px">ID</th>
             <th>Nombre</th>
+            <th class="text-center" style="width:30px" title="Vinculado al sistema"><i class="bi bi-link-45deg"></i></th>
             <% resultado.rangoFechas.fechas.forEach(function(fecha, idx) { %>
               <%
                 const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                 const diaSemana = dias[fecha.getDay()];
                 const diaNum = fecha.getDate();
                 const esDomingo = fecha.getDay() === 0;
+                const esSabado = fecha.getDay() === 6;
               %>
-              <th class="text-center <%= esDomingo ? 'th-domingo' : '' %>" style="min-width:90px">
+              <th class="text-center <%= esDomingo ? 'th-domingo' : '' %> <%= esSabado ? 'th-sabado' : '' %>" style="min-width:90px">
                 <div class="small"><%= diaSemana %></div>
                 <div><%= diaNum %></div>
               </th>
             <% }); %>
-            <th class="text-center th-total" style="min-width:80px">Total Hrs</th>
+            <th class="text-center th-total" style="min-width:70px">Normales</th>
+            <th class="text-center" style="min-width:60px">Extras</th>
             <th class="text-center" style="min-width:60px">Días</th>
             <th class="text-center" style="min-width:60px">Ret.</th>
           </tr>
         </thead>
         <tbody>
+          <%
+            // Crear mapa de matching para lookup rápido
+            const matchMap = new Map();
+            if (typeof matchingData !== 'undefined') {
+              matchingData.matching.forEach(m => matchMap.set(m.idChecador, m));
+            }
+          %>
           <% resultado.empleados.forEach(function(emp) { %>
+            <%
+              const empMatch = matchMap.get(emp.idChecador);
+              const vinculado = !!empMatch;
+            %>
             <tr class="fila-empleado"
                 data-nombre="<%= emp.nombre.toLowerCase() %>"
                 data-horas="<%= emp.totalHorasTrabajadas %>"
                 data-dias="<%= emp.totalDiasTrabajados %>"
                 data-retardos="<%= emp.totalRetardos %>"
                 data-incompletos="<%= emp.totalDiasIncompletos || 0 %>"
+                data-vinculado="<%= vinculado ? '1' : '0' %>"
                 data-id="<%= emp.idChecador %>">
-              <td class="text-center"><small class="text-muted"><%= emp.idChecador %></small></td>
+              <td class="text-center"><small class="text-body-secondary"><%= emp.idChecador %></small></td>
               <td>
                 <a href="/checador/empleado/<%= emp.idChecador %>" class="text-decoration-none fw-semibold">
                   <%= emp.nombre %>
                 </a>
+                <% if (empMatch && empMatch.esMixto) { %>
+                  <span class="badge bg-info ms-1" style="font-size:0.6rem">MIXTO</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (vinculado) { %>
+                  <i class="bi bi-check-circle-fill text-success" title="Vinculado: <%= empMatch.nombreDB %>"></i>
+                <% } else { %>
+                  <i class="bi bi-x-circle text-danger" title="No vinculado al sistema"></i>
+                <% } %>
               </td>
               <% emp.dias.forEach(function(dia) { %>
                 <%
                   const esDom = dia.nombreDia && dia.nombreDia.toLowerCase().startsWith('dom');
+                  const esSab = dia.esSabado || (dia.nombreDia && dia.nombreDia.toLowerCase().startsWith('sáb'));
                   let bgClass = '';
-                  let textClass = 'text-muted';
+                  let textClass = 'text-body-secondary';
                   let cellContent = '-';
 
                   if (esDom) {
@@ -195,23 +346,40 @@
                     textClass = 'text-dark';
                     cellContent = dia.horasTrabajadas.toFixed(1) + 'h';
                   }
+
+                  // Build tooltip
+                  let tooltipText = 'Ausente';
+                  if (dia.presente) {
+                    tooltipText = (dia.entrada || '') + ' - ' + (dia.salida || '?');
+                    if (dia.entradaPago) tooltipText += ' | Pago: ' + dia.entradaPago;
+                    if (dia.horasExtras > 0) tooltipText += ' | Extras: ' + dia.horasExtras.toFixed(1) + 'h';
+                    if (dia.minutosComidaDescontados > 0) tooltipText += ' | -' + dia.minutosComidaDescontados + 'min comida';
+                  }
                 %>
-                <td class="text-center <%= bgClass %>" 
-                    title="<%= dia.presente ? (dia.entrada || '') + ' - ' + (dia.salida || '?') + (dia.minutosComidaDescontados > 0 ? ' (-' + dia.minutosComidaDescontados + 'min comida)' : '') : 'Ausente' %>"
+                <td class="text-center <%= bgClass %>"
+                    title="<%= tooltipText %>"
                     data-bs-toggle="tooltip">
                   <small class="<%= textClass %>">
                     <% if (dia.retardo) { %><i class="bi bi-exclamation-triangle-fill text-warning" style="font-size:0.6rem"></i> <% } %>
+                    <% if (esSab && dia.presente && dia.horasExtras > 0) { %><i class="bi bi-star-fill text-info" style="font-size:0.5rem"></i> <% } %>
                     <%- cellContent %>
                   </small>
                 </td>
               <% }); %>
               <td class="text-center fw-bold">
-                <% if (emp.totalHorasTrabajadas > 0) { %>
-                  <span class="<%= emp.totalHorasTrabajadas >= 40 ? 'text-success' : 'text-primary' %>">
-                    <%= emp.totalHorasTrabajadas.toFixed(1) %>
-                  </span>
+                <% if (emp.totalHorasNormales > 0) { %>
+                  <span class="text-primary"><%= (emp.totalHorasNormales || emp.totalHorasTrabajadas).toFixed(1) %></span>
+                <% } else if (emp.totalHorasTrabajadas > 0) { %>
+                  <span class="text-primary"><%= emp.totalHorasTrabajadas.toFixed(1) %></span>
                 <% } else { %>
-                  <span class="text-muted">0</span>
+                  <span class="text-body-secondary">0</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if ((emp.totalHorasExtras || 0) > 0) { %>
+                  <span class="badge bg-warning text-dark"><%= emp.totalHorasExtras.toFixed(1) %></span>
+                <% } else { %>
+                  <span class="text-body-secondary">0</span>
                 <% } %>
               </td>
               <td class="text-center">
@@ -223,7 +391,7 @@
                 <% if (emp.totalRetardos > 0) { %>
                   <span class="badge bg-warning text-dark"><%= emp.totalRetardos %></span>
                 <% } else { %>
-                  <span class="text-muted">0</span>
+                  <span class="text-body-secondary">0</span>
                 <% } %>
               </td>
             </tr>
@@ -236,17 +404,54 @@
   <!-- Leyenda -->
   <div class="card border-0 shadow-sm mt-3">
     <div class="card-body py-2">
-      <small class="text-muted">
-        <span class="badge bg-success">&nbsp;</span> Jornada completa (8h+) &nbsp;
+      <small class="text-body-secondary">
+        <span class="badge bg-success">&nbsp;</span> Jornada completa (9h) &nbsp;
         <span class="badge bg-warning">&nbsp;</span> Solo entrada (falta salida) &nbsp;
         <span class="badge bg-danger">&nbsp;</span> Ausente &nbsp;
-        <i class="bi bi-exclamation-triangle-fill text-warning"></i> Retardo (&gt;15 min) &nbsp;
+        <i class="bi bi-exclamation-triangle-fill text-warning"></i> Retardo &nbsp;
+        <i class="bi bi-star-fill text-info"></i> Horas extras (sábado) &nbsp;
         <span class="badge bg-light border text-dark">&nbsp;</span> Domingo &nbsp;
-        | Se descuenta 1h de comida (14:00-15:00) automáticamente
+        <i class="bi bi-check-circle-fill text-success"></i> Vinculado al sistema &nbsp;
+        | Comida: 14:00-15:00 | Extras después de 18:00 | Tolerancia: 15 min/hora
       </small>
     </div>
   </div>
 </div>
+
+<!-- Modal de confirmación para guardar -->
+<% if (typeof matchingData !== 'undefined' && matchingData.matching.length > 0) { %>
+<div class="modal fade" id="modalGuardar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-floppy me-2"></i>Guardar en Sistema</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Se guardarán los datos de asistencia en la base de datos:</p>
+        <ul class="list-unstyled">
+          <li><i class="bi bi-check-circle text-success me-2"></i><strong><%= matchingData.matching.length %></strong> empleados vinculados se guardarán</li>
+          <% if (matchingData.noMatcheados.length > 0) { %>
+            <li><i class="bi bi-exclamation-triangle text-warning me-2"></i><strong><%= matchingData.noMatcheados.length %></strong> empleados no vinculados se omitirán</li>
+          <% } %>
+          <li><i class="bi bi-calendar me-2"></i>Periodo: <%= resultado.rangoFechas.inicioStr %> al <%= resultado.rangoFechas.finStr %></li>
+        </ul>
+        <div class="alert alert-info py-2 mb-0">
+          <small><i class="bi bi-info-circle me-1"></i>Si ya existen registros para este periodo, se actualizarán con los nuevos datos.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" action="/checador/guardar" class="d-inline">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-floppy me-1"></i>Confirmar y Guardar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
 
 <%- contentFor('script') %>
 <script>
@@ -270,6 +475,7 @@
       var horas = parseFloat(fila.dataset.horas);
       var retardos = parseInt(fila.dataset.retardos);
       var incompletos = parseInt(fila.dataset.incompletos);
+      var vinculado = fila.dataset.vinculado === '1';
       var mostrar = true;
 
       // Filtro de texto
@@ -280,6 +486,8 @@
       if (estado === 'sin-asistencia' && horas > 0) mostrar = false;
       if (estado === 'con-retardos' && retardos === 0) mostrar = false;
       if (estado === 'incompletos' && incompletos === 0) mostrar = false;
+      if (estado === 'vinculados' && !vinculado) mostrar = false;
+      if (estado === 'no-vinculados' && vinculado) mostrar = false;
 
       fila.style.display = mostrar ? '' : 'none';
       if (mostrar) visibles++;

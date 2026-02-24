@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1">Registrar Horas Adicionales</h2>
-    <p class="text-muted mb-0">Agregar horas extra, dobles, triples o festivas</p>
+    <p class="text-body-secondary mb-0">Agregar horas extra, dobles, triples o festivas</p>
   </div>
   <a href="/horas-adicionales" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i> Volver
@@ -32,12 +32,12 @@
           </select>
         </div>
         
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
           <label for="Fecha" class="form-label">Fecha *</label>
           <input type="date" class="form-control" id="Fecha" name="Fecha" required>
         </div>
         
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
           <label for="Tipo_Hora" class="form-label">Tipo de Hora *</label>
           <select class="form-select" id="Tipo_Hora" name="Tipo_Hora" required>
             <option value="">Seleccionar...</option>
@@ -49,7 +49,7 @@
           </select>
         </div>
         
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
           <label for="Cantidad_Horas" class="form-label">Cantidad de Horas *</label>
           <input type="number" class="form-control" id="Cantidad_Horas" name="Cantidad_Horas" 
                  required min="0.5" max="24" step="0.5" placeholder="8">

@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-cash-stack me-2"></i>Dashboard de Nómina</h2>
-    <p class="text-muted mb-0">Resumen del sistema de nómina</p>
+    <p class="text-body-secondary mb-0">Resumen del sistema de nómina</p>
   </div>
   <div class="d-flex gap-2">
     <a href="/nomina/periodos/crear" class="btn btn-primary">
@@ -63,7 +63,7 @@
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <div class="stat-label">Próximo Pago</div>
-              <div class="stat-value" style="font-size: 1rem;">
+              <div class="stat-value stat-value-xs">
                 <%= stats.periodoPendiente.Fecha_Pago.toLocaleDateString('es-MX') %>
               </div>
               <small><%= stats.periodoPendiente.Nombre_Periodo %></small>
@@ -78,7 +78,7 @@
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <div class="stat-label">Próximo Pago</div>
-              <div class="stat-value" style="font-size: 1rem;">Sin periodos</div>
+              <div class="stat-value stat-value-xs">Sin periodos</div>
               <small>Crea un nuevo periodo</small>
             </div>
             <i class="bi bi-clock stat-icon"></i>
@@ -91,39 +91,39 @@
 
 <!-- Accesos rápidos -->
 <div class="row g-3 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <a href="/nomina/periodos" class="card h-100 text-decoration-none hover-shadow">
       <div class="card-body text-center py-4">
         <i class="bi bi-calendar3 fs-1 text-primary mb-2 d-block"></i>
         <h6 class="mb-1">Periodos</h6>
-        <small class="text-muted">Gestión de periodos</small>
+        <small class="text-body-secondary">Gestión de periodos</small>
       </div>
     </a>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <a href="/vacaciones" class="card h-100 text-decoration-none hover-shadow">
       <div class="card-body text-center py-4">
         <i class="bi bi-sun fs-1 text-success mb-2 d-block"></i>
         <h6 class="mb-1">Vacaciones</h6>
-        <small class="text-muted">Control de vacaciones</small>
+        <small class="text-body-secondary">Control de vacaciones</small>
       </div>
     </a>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <a href="/aguinaldo" class="card h-100 text-decoration-none hover-shadow">
       <div class="card-body text-center py-4">
         <i class="bi bi-gift fs-1 text-warning mb-2 d-block"></i>
         <h6 class="mb-1">Aguinaldo</h6>
-        <small class="text-muted">Cálculo de aguinaldo</small>
+        <small class="text-body-secondary">Cálculo de aguinaldo</small>
       </div>
     </a>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <a href="/finiquito" class="card h-100 text-decoration-none hover-shadow">
       <div class="card-body text-center py-4">
         <i class="bi bi-file-earmark-text fs-1 text-danger mb-2 d-block"></i>
         <h6 class="mb-1">Finiquito</h6>
-        <small class="text-muted">Cálculo de finiquito</small>
+        <small class="text-body-secondary">Cálculo de finiquito</small>
       </div>
     </a>
   </div>
@@ -152,7 +152,7 @@
         <tbody>
           <% if (periodosConTotales.length === 0) { %>
             <tr>
-              <td colspan="7" class="text-center py-4 text-muted">
+              <td colspan="7" class="text-center py-4 text-body-secondary">
                 <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
                 No hay periodos de nómina registrados
               </td>
@@ -202,13 +202,3 @@
     </div>
   </div>
 </div>
-
-<style>
-.hover-shadow {
-  transition: all 0.2s ease;
-}
-.hover-shadow:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-</style>

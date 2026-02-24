@@ -3,51 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iniciar Sesión | <%= appName || 'ERP RH' %></title>
-  
-  <!-- CSS Design System -->
+  <title>Iniciar Sesión | <%= appName || 'VITA' %></title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- VITA Design System -->
   <link rel="stylesheet" href="/css/variables.css">
-  <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/pages.css">
-  
-  <!-- Bootstrap Icons (iconografía profesional) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  
-  <!-- Bootstrap JS (solo para validación si es necesario) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
-  
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      height: 100%;
-      width: 100%;
-    }
-  </style>
 </head>
 <body class="login-page">
   <div class="login-wrapper">
     <div class="login-panel">
-      <!-- BRANDING: Identidad del sistema -->
+      <!-- BRANDING: Left column -->
       <div class="login-branding">
         <div class="login-icon-box">
           <img src="/img/logo_ram.png" alt="Logo Empresa" class="login-logo-img">
         </div>
-        <h1 class="login-app-name">ERP</h1>
+        <h1 class="login-app-name">VITA</h1>
         <p class="login-app-desc">Recursos Humanos</p>
       </div>
 
-      <!-- FORM SECTION: Entrada principal -->
+      <!-- FORM: Right column -->
       <div class="login-form-section">
         <div class="login-form-header">
           <h2>Accede a tu cuenta</h2>
           <p>Ingresa tus credenciales corporativas</p>
         </div>
 
-        <!-- Error Alert (solo si error existe y NO está vacío) -->
         <% if (error && error.trim && error.trim().length > 0) { %>
         <div class="alert-error">
           <i class="bi bi-exclamation-circle-fill"></i>
@@ -55,19 +44,16 @@
         </div>
         <% } %>
 
-        <!-- Formulario de autenticación -->
         <form action="/auth/login" method="POST" class="login-form" novalidate>
-          
-          <!-- Email Field -->
           <div class="form-group">
             <label for="email" class="form-label">Correo Electrónico</label>
             <div class="input-wrapper">
               <i class="bi bi-envelope input-prefix"></i>
-              <input 
-                type="email" 
-                class="form-input" 
-                id="email" 
-                name="email" 
+              <input
+                type="email"
+                class="form-input"
+                id="email"
+                name="email"
                 placeholder="correo@empresa.com"
                 value="<%= typeof email !== 'undefined' ? email : '' %>"
                 required
@@ -76,23 +62,21 @@
             </div>
           </div>
 
-          <!-- Password Field -->
           <div class="form-group">
             <label for="password" class="form-label">Contraseña</label>
             <div class="input-wrapper">
               <i class="bi bi-lock-fill input-prefix"></i>
-              <input 
-                type="password" 
-                class="form-input" 
-                id="password" 
-                name="password" 
-                placeholder="••••••••" 
+              <input
+                type="password"
+                class="form-input"
+                id="password"
+                name="password"
+                placeholder="••••••••"
                 required
               >
             </div>
           </div>
 
-          <!-- Acciones secundarias -->
           <div class="form-actions">
             <label class="form-checkbox">
               <input type="checkbox" name="remember">
@@ -101,7 +85,6 @@
             <a href="/auth/forgot" class="form-link">¿Olvidaste la contraseña?</a>
           </div>
 
-          <!-- Submit Button (CTA principal) -->
           <button type="submit" class="btn-submit">
             <span>Iniciar Sesión</span>
             <i class="bi bi-arrow-right"></i>
@@ -109,11 +92,14 @@
         </form>
       </div>
 
-      <!-- FOOTER: Información legal/corporativa -->
+      <!-- FOOTER -->
       <div class="login-footer">
-        <p>© <%= new Date().getFullYear() %> <%= appName || 'ERP RH' %>. Todos los derechos reservados.</p>
+        <p>&copy; <%= new Date().getFullYear() %> <%= appName || 'VITA' %>. Todos los derechos reservados.</p>
       </div>
     </div>
   </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

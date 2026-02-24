@@ -1,9 +1,9 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1">
       <i class="bi bi-gift me-2"></i>Aguinaldo <%= aguinaldo.Anio %>
     </h2>
-    <p class="text-muted mb-0">
+    <p class="text-body-secondary mb-0">
       <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %> <%= aguinaldo.empleado?.Apellido_Materno || '' %>
     </p>
   </div>
@@ -50,27 +50,27 @@
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-6">
-            <small class="text-muted d-block">Nombre Completo</small>
+            <small class="text-body-secondary d-block">Nombre Completo</small>
             <strong><%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %></strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Puesto</small>
+            <small class="text-body-secondary d-block">Puesto</small>
             <strong><%= aguinaldo.empleado?.puesto?.Nombre_Puesto || 'N/A' %></strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Área</small>
+            <small class="text-body-secondary d-block">Área</small>
             <strong><%= aguinaldo.empleado?.area?.Nombre_Area || 'N/A' %></strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Fecha de Ingreso</small>
+            <small class="text-body-secondary d-block">Fecha de Ingreso</small>
             <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Salario Diario</small>
+            <small class="text-body-secondary d-block">Salario Diario</small>
             <strong>$<%= parseFloat(aguinaldo.Salario_Diario).toFixed(2) %></strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Año Fiscal</small>
+            <small class="text-body-secondary d-block">Año Fiscal</small>
             <strong><%= aguinaldo.Anio %></strong>
           </div>
         </div>
@@ -87,11 +87,11 @@
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-6">
-            <small class="text-muted d-block">Días Laborados en el Año</small>
+            <small class="text-body-secondary d-block">Días Laborados en el Año</small>
             <strong><%= aguinaldo.Dias_Laborados %> días</strong>
           </div>
           <div class="col-md-6">
-            <small class="text-muted d-block">Días de Aguinaldo (LFT)</small>
+            <small class="text-body-secondary d-block">Días de Aguinaldo (LFT)</small>
             <strong><%= aguinaldo.Dias_Aguinaldo %> días</strong>
           </div>
           <div class="col-12 border-top pt-3">
@@ -121,7 +121,7 @@
       </div>
       <div class="card-body">
         <div class="mb-3">
-          <small class="text-muted d-block mb-1">Estado Actual</small>
+          <small class="text-body-secondary d-block mb-1">Estado Actual</small>
           <% if (aguinaldo.Pagado) { %>
             <span class="badge bg-success fs-6">
               <i class="bi bi-check-circle me-1"></i>PAGADO
@@ -135,19 +135,19 @@
 
         <% if (aguinaldo.Fecha_Pago) { %>
           <div class="mb-3">
-            <small class="text-muted d-block mb-1">Fecha de Pago</small>
+            <small class="text-body-secondary d-block mb-1">Fecha de Pago</small>
             <strong><%= aguinaldo.Fecha_Pago ? new Date(aguinaldo.Fecha_Pago).toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
         <% } %>
 
         <div class="mb-3">
-          <small class="text-muted d-block mb-1">Calculado el</small>
+          <small class="text-body-secondary d-block mb-1">Calculado el</small>
           <strong><%= aguinaldo.Fecha_Calculo ? new Date(aguinaldo.Fecha_Calculo).toLocaleDateString('es-MX') : 'N/A' %></strong>
         </div>
 
         <% if (aguinaldo.Observaciones) { %>
           <div class="mb-0">
-            <small class="text-muted d-block mb-1">Observaciones</small>
+            <small class="text-body-secondary d-block mb-1">Observaciones</small>
             <p class="mb-0"><%= aguinaldo.Observaciones %></p>
           </div>
         <% } %>
@@ -170,11 +170,11 @@
 
         <div class="row g-2">
           <div class="col-6">
-            <small class="text-muted d-block">Desde</small>
+            <small class="text-body-secondary d-block">Desde</small>
             <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
           <div class="col-6">
-            <small class="text-muted d-block">Hasta</small>
+            <small class="text-body-secondary d-block">Hasta</small>
             <strong><%= aguinaldo.Fecha_Corte ? new Date(aguinaldo.Fecha_Corte).toLocaleDateString('es-MX') : 'N/A' %></strong>
           </div>
         </div>

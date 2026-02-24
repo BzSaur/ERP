@@ -11,28 +11,28 @@
       <div class="card-body">
         <div class="row">
           <div class="col-md-3 text-center mb-4">
-            <div class="user-avatar-lg bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 100px; height: 100px; font-size: 2.5rem;">
+            <div class="profile-avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto">
               <i class="bi bi-person"></i>
             </div>
           </div>
           <div class="col-md-9">
             <table class="table table-borderless">
               <tr>
-                <td class="text-muted" style="width: 40%">Nombre Completo</td>
+                <td class="text-body-secondary w-auto">Nombre Completo</td>
                 <td><strong><%= usuario.Nombre_Completo %></strong></td>
               </tr>
               <tr>
-                <td class="text-muted">Email</td>
+                <td class="text-body-secondary">Email</td>
                 <td><%= usuario.Email_Office365 %></td>
               </tr>
               <tr>
-                <td class="text-muted">Rol</td>
+                <td class="text-body-secondary">Rol</td>
                 <td>
                   <span class="badge bg-primary"><%= usuario.rol ? usuario.rol.Nombre_Rol : '-' %></span>
                 </td>
               </tr>
               <tr>
-                <td class="text-muted">Estado</td>
+                <td class="text-body-secondary">Estado</td>
                 <td>
                   <span class="badge <%= usuario.Activo ? 'bg-success' : 'bg-danger' %>">
                     <%= usuario.Activo ? 'Activo' : 'Inactivo' %>
@@ -40,11 +40,11 @@
                 </td>
               </tr>
               <tr>
-                <td class="text-muted">Último Acceso</td>
+                <td class="text-body-secondary">Último Acceso</td>
                 <td><%= usuario.Ultimo_Acceso ? new Date(usuario.Ultimo_Acceso).toLocaleString('es-MX') : '-' %></td>
               </tr>
               <tr>
-                <td class="text-muted">Cuenta Creada</td>
+                <td class="text-body-secondary">Cuenta Creada</td>
                 <td><%= new Date(usuario.CreatedAt).toLocaleDateString('es-MX') %></td>
               </tr>
             </table>

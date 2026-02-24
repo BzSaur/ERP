@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-people me-2"></i>Elegibilidad de Vacaciones</h2>
-    <p class="text-muted mb-0">Empleados y su derecho a vacaciones <%= anioActual %></p>
+    <p class="text-body-secondary mb-0">Empleados y su derecho a vacaciones <%= anioActual %></p>
   </div>
   <a href="/vacaciones" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left me-1"></i> Volver
@@ -93,7 +93,7 @@
                   <small><%= emp.puesto.Nombre_Puesto %></small><br>
                 <% } %>
                 <% if (emp.area) { %>
-                  <small class="text-muted"><%= emp.area.Nombre_Area %></small>
+                  <small class="text-body-secondary"><%= emp.area.Nombre_Area %></small>
                 <% } %>
               </td>
               <td><%= emp.Fecha_Ingreso.toLocaleDateString('es-MX') %></td>
@@ -101,26 +101,26 @@
                 <% if (emp.antiguedad.anos > 0) { %>
                   <strong><%= emp.antiguedad.anos %></strong> años
                   <% if (emp.antiguedad.meses > 0) { %>
-                    <small class="text-muted"><%= emp.antiguedad.meses %> meses</small>
+                    <small class="text-body-secondary"><%= emp.antiguedad.meses %> meses</small>
                   <% } %>
                 <% } else { %>
-                  <small class="text-muted"><%= emp.antiguedad.meses %> meses</small>
+                  <small class="text-body-secondary"><%= emp.antiguedad.meses %> meses</small>
                 <% } %>
               </td>
               <td class="text-center">
                 <% if (emp.elegible) { %>
                   <strong><%= emp.diasCorrespondientes %></strong>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td class="text-center">
                 <% if (emp.elegible) { %>
-                  <strong class="<%= emp.diasPendientes > 0 ? 'text-success' : 'text-muted' %>">
+                  <strong class="<%= emp.diasPendientes > 0 ? 'text-success' : 'text-body-secondary' %>">
                     <%= emp.diasPendientes %>
                   </strong>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td>

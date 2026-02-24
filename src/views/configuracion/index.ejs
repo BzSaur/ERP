@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1">Configuración del Sistema</h2>
-    <p class="text-muted mb-0">Panel de administración para SuperAdministrador</p>
+    <p class="text-body-secondary mb-0">Panel de administración para SuperAdministrador</p>
   </div>
 </div>
 
@@ -27,7 +27,7 @@
       <div class="card-body text-center">
         <i class="bi bi-people text-primary fs-2"></i>
         <h3 class="mb-0 mt-2"><%= stats.totalEmpleados %></h3>
-        <small class="text-muted">Empleados</small>
+        <small class="text-body-secondary">Empleados</small>
       </div>
     </div>
   </div>
@@ -36,7 +36,7 @@
       <div class="card-body text-center">
         <i class="bi bi-person-gear text-info fs-2"></i>
         <h3 class="mb-0 mt-2"><%= stats.totalUsuarios %></h3>
-        <small class="text-muted">Usuarios Sistema</small>
+        <small class="text-body-secondary">Usuarios Sistema</small>
       </div>
     </div>
   </div>
@@ -45,7 +45,7 @@
       <div class="card-body text-center">
         <i class="bi bi-diagram-3 text-success fs-2"></i>
         <h3 class="mb-0 mt-2"><%= stats.totalAreas %></h3>
-        <small class="text-muted">Áreas</small>
+        <small class="text-body-secondary">Áreas</small>
       </div>
     </div>
   </div>
@@ -54,7 +54,7 @@
       <div class="card-body text-center">
         <i class="bi bi-briefcase text-warning fs-2"></i>
         <h3 class="mb-0 mt-2"><%= stats.totalPuestos %></h3>
-        <small class="text-muted">Puestos</small>
+        <small class="text-body-secondary">Puestos</small>
       </div>
     </div>
   </div>
@@ -71,7 +71,7 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="text-muted">Controla <strong>tasas de interés, deducciones (IMSS, ISR), préstamos, bonos</strong> y todos los parámetros del cálculo de nómina. Modifica las tasas a 0% para pruebas.</p>
+        <p class="text-body-secondary">Controla <strong>tasas de interés, deducciones (IMSS, ISR), préstamos, bonos</strong> y todos los parámetros del cálculo de nómina. Modifica las tasas a 0% para pruebas.</p>
         <div class="row text-center">
           <div class="col-3">
             <i class="bi bi-cash-stack text-success fs-3"></i>
@@ -107,14 +107,14 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="text-muted">Gestiona los roles y permisos de los usuarios del sistema.</p>
+        <p class="text-body-secondary">Gestiona los roles y permisos de los usuarios del sistema.</p>
         <ul class="list-unstyled">
           <% roles.forEach(rol => { %>
             <li class="d-flex align-items-center mb-2">
               <i class="bi bi-check-circle text-success me-2"></i>
               <strong><%= rol.Nombre_Rol %></strong>
               <% if (rol.Descripcion) { %>
-                <small class="text-muted ms-2">- <%= rol.Descripcion %></small>
+                <small class="text-body-secondary ms-2">- <%= rol.Descripcion %></small>
               <% } %>
             </li>
           <% }) %>
@@ -136,14 +136,14 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="text-muted">Define los estados posibles de los empleados.</p>
+        <p class="text-body-secondary">Define los estados posibles de los empleados.</p>
         <ul class="list-unstyled">
           <% estatusEmpleado.forEach(est => { %>
             <li class="d-flex align-items-center mb-2">
               <i class="bi bi-circle-fill text-<%= est.Nombre_Estatus === 'Activo' ? 'success' : 'secondary' %> me-2" style="font-size: 0.5rem;"></i>
               <strong><%= est.Nombre_Estatus %></strong>
               <% if (est.Descripcion) { %>
-                <small class="text-muted ms-2">- <%= est.Descripcion %></small>
+                <small class="text-body-secondary ms-2">- <%= est.Descripcion %></small>
               <% } %>
             </li>
           <% }) %>
@@ -165,7 +165,7 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="text-muted">Consulta el registro de accesos y actividades del sistema.</p>
+        <p class="text-body-secondary">Consulta el registro de accesos y actividades del sistema.</p>
         <div class="d-flex gap-3">
           <div class="text-center">
             <i class="bi bi-box-arrow-in-right text-success fs-1"></i>
@@ -197,23 +197,23 @@
         </h5>
       </div>
       <div class="card-body">
-        <p class="text-muted">Resumen de los catálogos disponibles.</p>
+        <p class="text-body-secondary">Resumen de los catálogos disponibles.</p>
         <div class="row text-center">
           <div class="col-6 mb-3">
             <strong class="fs-4"><%= stats.totalNacionalidades %></strong>
-            <p class="mb-0 small text-muted">Nacionalidades</p>
+            <p class="mb-0 small text-body-secondary">Nacionalidades</p>
           </div>
           <div class="col-6 mb-3">
             <strong class="fs-4"><%= stats.totalHorarios %></strong>
-            <p class="mb-0 small text-muted">Horarios</p>
+            <p class="mb-0 small text-body-secondary">Horarios</p>
           </div>
           <div class="col-6">
             <strong class="fs-4"><%= stats.totalRoles %></strong>
-            <p class="mb-0 small text-muted">Roles</p>
+            <p class="mb-0 small text-body-secondary">Roles</p>
           </div>
           <div class="col-6">
             <strong class="fs-4"><%= stats.totalEstatus %></strong>
-            <p class="mb-0 small text-muted">Estatus</p>
+            <p class="mb-0 small text-body-secondary">Estatus</p>
           </div>
         </div>
       </div>

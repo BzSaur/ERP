@@ -26,6 +26,13 @@ router.post('/procesar',
   checadorController.procesarArchivos
 );
 
+// Guardar resultados en base de datos
+router.post('/guardar',
+  isAuthenticated,
+  hasRole('Recursos Humanos', 'Administrador', 'SuperAdministrador'),
+  checadorController.guardarResultados
+);
+
 // Detalle de empleado
 router.get('/empleado/:idChecador',
   isAuthenticated,

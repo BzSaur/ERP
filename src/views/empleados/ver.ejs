@@ -1,5 +1,5 @@
 <!-- Header -->
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-1">
@@ -32,31 +32,31 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 40%">ID Empleado</td>
+            <td class="text-body-secondary" style="width: 40%">ID Empleado</td>
             <td><strong>#<%= empleado.ID_Empleado %></strong></td>
           </tr>
           <tr>
-            <td class="text-muted">Nombre Completo</td>
+            <td class="text-body-secondary">Nombre Completo</td>
             <td><strong><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %> <%= empleado.Apellido_Materno || '' %></strong></td>
           </tr>
           <tr>
-            <td class="text-muted">Fecha de Nacimiento</td>
+            <td class="text-body-secondary">Fecha de Nacimiento</td>
             <td><%= empleado.Fecha_Nacimiento ? new Date(empleado.Fecha_Nacimiento).toLocaleDateString('es-MX') : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Nacionalidad</td>
+            <td class="text-body-secondary">Nacionalidad</td>
             <td><%= empleado.nacionalidad ? empleado.nacionalidad.Nombre_Nacionalidad : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Documento de Identidad</td>
+            <td class="text-body-secondary">Documento de Identidad</td>
             <td><%= empleado.Tipo_Documento %>: <%= empleado.Documento_Identidad %></td>
           </tr>
           <tr>
-            <td class="text-muted">RFC</td>
+            <td class="text-body-secondary">RFC</td>
             <td><%= empleado.RFC || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">NSS</td>
+            <td class="text-body-secondary">NSS</td>
             <td><%= empleado.NSS || '-' %></td>
           </tr>
         </table>
@@ -76,7 +76,7 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 40%">Estatus</td>
+            <td class="text-body-secondary" style="width: 40%">Estatus</td>
             <td>
               <span class="badge <%= empleado.estatus && empleado.estatus.Nombre_Estatus === 'ACTIVO' ? 'bg-success' : 'bg-secondary' %>">
                 <%= empleado.estatus ? empleado.estatus.Nombre_Estatus : '-' %>
@@ -84,23 +84,23 @@
             </td>
           </tr>
           <tr>
-            <td class="text-muted">Área</td>
+            <td class="text-body-secondary">Área</td>
             <td><%= empleado.area ? empleado.area.Nombre_Area : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Puesto</td>
+            <td class="text-body-secondary">Puesto</td>
             <td><%= empleado.puesto ? empleado.puesto.Nombre_Puesto : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Tipo de Horario</td>
+            <td class="text-body-secondary">Tipo de Horario</td>
             <td><%= empleado.tipo_horario ? empleado.tipo_horario.Nombre_Horario : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Fecha de Ingreso</td>
+            <td class="text-body-secondary">Fecha de Ingreso</td>
             <td><%= new Date(empleado.Fecha_Ingreso).toLocaleDateString('es-MX') %></td>
           </tr>
           <tr>
-            <td class="text-muted">Fecha de Baja</td>
+            <td class="text-body-secondary">Fecha de Baja</td>
             <td><%= empleado.Fecha_Baja ? new Date(empleado.Fecha_Baja).toLocaleDateString('es-MX') : '-' %></td>
           </tr>
         </table>
@@ -120,15 +120,15 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 50%">Salario Diario</td>
+            <td class="text-body-secondary" style="width: 50%">Salario Diario</td>
             <td><%= empleado.Salario_Diario ? '$' + parseFloat(empleado.Salario_Diario).toFixed(2) : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Salario por Hora</td>
+            <td class="text-body-secondary">Salario por Hora</td>
             <td><%= empleado.Salario_Hora ? '$' + parseFloat(empleado.Salario_Hora).toFixed(2) : '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Horas Semanales</td>
+            <td class="text-body-secondary">Horas Semanales</td>
             <td><%= empleado.Horas_Semanales_Contratadas || '-' %></td>
           </tr>
         </table>
@@ -148,15 +148,15 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 40%">Email Personal</td>
+            <td class="text-body-secondary" style="width: 40%">Email Personal</td>
             <td><%= empleado.Email_Personal || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Email Corporativo</td>
+            <td class="text-body-secondary">Email Corporativo</td>
             <td><%= empleado.Email_Corporativo || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Teléfono Celular</td>
+            <td class="text-body-secondary">Teléfono Celular</td>
             <td><%= empleado.Telefono_Celular || '-' %></td>
           </tr>
         </table>
@@ -176,15 +176,15 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 40%">Nombre Completo</td>
+            <td class="text-body-secondary" style="width: 40%">Nombre Completo</td>
             <td><%= empleado.Nombre_Emergencia || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Parentesco</td>
+            <td class="text-body-secondary">Parentesco</td>
             <td><%= empleado.Parentesco_Emergencia || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Teléfono</td>
+            <td class="text-body-secondary">Teléfono</td>
             <td><%= empleado.Telefono_Emergencia || '-' %></td>
           </tr>
         </table>
@@ -204,30 +204,30 @@
       <div class="card-body">
         <table class="table table-borderless mb-0">
           <tr>
-            <td class="text-muted" style="width: 20%">Calle</td>
+            <td class="text-body-secondary" style="width: 20%">Calle</td>
             <td><%= empleado.Calle || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Número Exterior / Interior</td>
+            <td class="text-body-secondary">Número Exterior / Interior</td>
             <td>
               <%= empleado.Numero_Exterior || '-' %>
               <% if (empleado.Numero_Interior) { %> / <%= empleado.Numero_Interior %><% } %>
             </td>
           </tr>
           <tr>
-            <td class="text-muted">Colonia</td>
+            <td class="text-body-secondary">Colonia</td>
             <td><%= empleado.Colonia || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Ciudad</td>
+            <td class="text-body-secondary">Ciudad</td>
             <td><%= empleado.Ciudad || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Estado</td>
+            <td class="text-body-secondary">Estado</td>
             <td><%= empleado.Entidad_Federativa || '-' %></td>
           </tr>
           <tr>
-            <td class="text-muted">Código Postal</td>
+            <td class="text-body-secondary">Código Postal</td>
             <td><%= empleado.Codigo_Postal || '-' %></td>
           </tr>
         </table>

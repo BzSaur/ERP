@@ -1,11 +1,11 @@
 <div class="container-fluid py-4">
   <!-- Header -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
     <div>
       <h2 class="mb-1">
         <i class="bi bi-upload text-primary me-2"></i>Importar Checador
       </h2>
-      <p class="text-muted mb-0">
+      <p class="text-body-secondary mb-0">
         Suba los archivos XLSX de los checadores biométricos (RAM1 y/o RAM2) para calcular automáticamente las horas trabajadas.
       </p>
     </div>
@@ -46,7 +46,7 @@
                   <div class="upload-placeholder" id="placeholderRAM1">
                     <i class="bi bi-file-earmark-spreadsheet fs-1 text-primary"></i>
                     <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
-                    <p class="text-muted small">o haz clic para seleccionar</p>
+                    <p class="text-body-secondary small">o haz clic para seleccionar</p>
                     <span class="badge bg-light text-dark">.xlsx</span>
                   </div>
                   <div class="upload-selected d-none" id="selectedRAM1">
@@ -74,7 +74,7 @@
                   <div class="upload-placeholder" id="placeholderRAM2">
                     <i class="bi bi-file-earmark-spreadsheet fs-1 text-success"></i>
                     <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
-                    <p class="text-muted small">o haz clic para seleccionar</p>
+                    <p class="text-body-secondary small">o haz clic para seleccionar</p>
                     <span class="badge bg-light text-dark">.xlsx</span>
                   </div>
                   <div class="upload-selected d-none" id="selectedRAM2">
@@ -95,7 +95,7 @@
         <div class="card border-0 shadow-sm mt-4">
           <div class="card-body">
             <h6 class="card-title"><i class="bi bi-info-circle text-info me-1"></i> Información</h6>
-            <ul class="mb-0 small text-muted">
+            <ul class="mb-0 small text-body-secondary">
               <li>Puede subir <strong>uno o ambos</strong> archivos de checador</li>
               <li>Si sube ambos, el sistema combinará automáticamente las checadas</li>
               <li>Se resta automáticamente <strong>1 hora de comida</strong> (14:00 - 15:00) cuando aplica</li>

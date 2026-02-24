@@ -1,23 +1,23 @@
 /* ============================================================
-   LAYOUT
+   LAYOUT - Flexbox structure for sidebar + main content
    ============================================================ */
 
-.wrapper { 
-  display: flex; 
-  min-height: 100vh; 
+.wrapper {
+  display: flex;
+  min-height: 100vh;
 }
 
 .main-content {
   flex: 1;
-  margin-left: var(--sidebar-width);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: margin-left var(--transition);
+  transition: margin-left var(--transition), width var(--transition);
+  margin-left: var(--sidebar-width);
   width: calc(100% - var(--sidebar-width));
 }
 
-/* Cuando sidebar colapsado (drawer): main-content ocupa todo el ancho */
+/* Sidebar collapsed (drawer mode): main-content full width */
 body.sidebar-collapsed .main-content {
   margin-left: 0;
   width: 100%;
@@ -25,21 +25,12 @@ body.sidebar-collapsed .main-content {
 
 .content-wrapper {
   flex: 1;
-  padding: 24px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-/* Grids y boxes respiran naturalmente */
-.content-wrapper .row,
-.content-wrapper > div {
+  padding: 1.5rem;
   width: 100%;
 }
 
-.container-fluid { 
-  width: 100%; 
-  padding: 0; 
-  margin: 0; 
+.container-fluid {
+  width: 100%;
+  padding: 0;
+  margin: 0;
 }

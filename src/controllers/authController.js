@@ -28,7 +28,10 @@ export const processLogin = (req, res, next) => {
     
     if (!user) {
       // Log de login fallido
-      logAccess.login(null, req.body.email, req.ip, false);
+      logAccess.login(null, req.body.email, req.ip, false, {
+        userAgent: req.headers['user-agent'],
+        motivoError: info?.message || 'Credenciales inválidas'
+      });
       
       return res.render('login', {
         title: 'Iniciar Sesión',
@@ -48,7 +51,8 @@ export const processLogin = (req, res, next) => {
         user.ID_Usuario,
         user.Email_Office365,
         req.ip,
-        true
+        true,
+        { userAgent: req.headers['user-agent'] }
       );
       
       // Redirigir a la URL guardada o al home
@@ -82,7 +86,8 @@ export const logout = (req, res, next) => {
   if (req.user) {
     logAccess.logout(
       req.user.ID_Usuario,
-      req.user.Email_Office365
+      req.user.Email_Office365,
+      { ip: req.ip, userAgent: req.headers['user-agent'] }
     );
   }
   

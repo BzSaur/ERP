@@ -1,81 +1,72 @@
-<!-- Bienvenida -->
-<div class="d-flex justify-content-between align-items-center mb-4">
+<!-- Welcome Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
   <div>
-    <h2 class="mb-1">¡Bienvenido, <%= user ? user.Nombre_Completo.split(' ')[0] : 'Usuario' %>!</h2>
-    <p class="text-muted mb-0">Panel de control del sistema de Recursos Humanos</p>
+    <h2 class="fw-bold mb-1">¡Bienvenido, <%= user ? user.Nombre_Completo.split(' ')[0] : 'Usuario' %>!</h2>
+    <p class="text-body-secondary mb-0 small">Panel de control de VITA - Validación de Ingresos, Tiempo y Administración</p>
   </div>
   <div class="d-none d-md-block">
-    <span class="text-muted"><i class="bi bi-calendar3 me-1"></i> <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %></span>
+    <span class="text-body-secondary small">
+      <i class="bi bi-calendar3 me-1"></i>
+      <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+    </span>
   </div>
 </div>
 
 <!-- Dashboard Stats -->
 <div class="row g-3 mb-4">
-  <!-- Total Empleados -->
   <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-primary">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="stat-label">Total Empleados</div>
-            <div class="stat-value"><%= estadisticas.totalEmpleados %></div>
-          </div>
-          <i class="bi bi-people-fill stat-icon"></i>
+    <div class="card stat-card bg-primary h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Total Empleados</div>
+          <div class="stat-value"><%= estadisticas.totalEmpleados %></div>
         </div>
+        <i class="bi bi-people-fill stat-icon"></i>
       </div>
     </div>
   </div>
-  
-  <!-- Empleados Activos -->
+
   <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-success">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="stat-label">Activos</div>
-            <div class="stat-value"><%= estadisticas.empleadosActivos %></div>
-          </div>
-          <i class="bi bi-person-check-fill stat-icon"></i>
+    <div class="card stat-card bg-success h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Activos</div>
+          <div class="stat-value"><%= estadisticas.empleadosActivos %></div>
         </div>
+        <i class="bi bi-person-check-fill stat-icon"></i>
       </div>
     </div>
   </div>
-  
-  <!-- Áreas -->
+
   <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-info">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="stat-label">Áreas</div>
-            <div class="stat-value"><%= estadisticas.totalAreas %></div>
-          </div>
-          <i class="bi bi-diagram-3-fill stat-icon"></i>
+    <div class="card stat-card bg-info h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Áreas</div>
+          <div class="stat-value"><%= estadisticas.totalAreas %></div>
         </div>
+        <i class="bi bi-diagram-3-fill stat-icon"></i>
       </div>
     </div>
   </div>
-  
-  <!-- Puestos -->
+
   <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-warning">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="stat-label">Puestos</div>
-            <div class="stat-value"><%= estadisticas.totalPuestos %></div>
-          </div>
-          <i class="bi bi-briefcase-fill stat-icon"></i>
+    <div class="card stat-card bg-warning h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Puestos</div>
+          <div class="stat-value"><%= estadisticas.totalPuestos %></div>
         </div>
+        <i class="bi bi-briefcase-fill stat-icon"></i>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Quick Actions & Recent -->
-<div class="row g-4">
-  <!-- Acciones Rápidas -->
-  <div class="col-lg-4">
+<!-- Quick Actions & Recent Employees -->
+<div class="row g-3">
+  <!-- Quick Actions -->
+  <div class="col-12 col-lg-4 col-xl-3">
     <div class="card h-100">
       <div class="card-header">
         <h5 class="card-title mb-0">
@@ -83,32 +74,30 @@
           Acciones Rápidas
         </h5>
       </div>
-      <div class="card-body">
-        <div class="d-grid gap-2">
-          <a href="/empleados/crear" class="btn btn-outline-primary">
-            <i class="bi bi-person-plus me-2"></i>Nuevo Empleado
-          </a>
-          <a href="/horas-adicionales/crear" class="btn btn-outline-info">
-            <i class="bi bi-clock-history me-2"></i>Registrar Horas
-          </a>
-          <a href="/areas/crear" class="btn btn-outline-success">
-            <i class="bi bi-folder-plus me-2"></i>Nueva Área
-          </a>
-          <a href="/puestos/crear" class="btn btn-outline-warning">
-            <i class="bi bi-briefcase me-2"></i>Nuevo Puesto
-          </a>
-          <a href="/reportes" class="btn btn-outline-secondary">
-            <i class="bi bi-bar-chart me-2"></i>Ver Reportes
-          </a>
-        </div>
+      <div class="card-body d-grid gap-2">
+        <a href="/empleados/crear" class="btn btn-outline-primary">
+          <i class="bi bi-person-plus"></i> Nuevo Empleado
+        </a>
+        <a href="/horas-adicionales/crear" class="btn btn-outline-info">
+          <i class="bi bi-clock-history"></i> Registrar Horas
+        </a>
+        <a href="/areas/crear" class="btn btn-outline-success">
+          <i class="bi bi-folder-plus"></i> Nueva Área
+        </a>
+        <a href="/puestos/crear" class="btn btn-outline-warning">
+          <i class="bi bi-briefcase"></i> Nuevo Puesto
+        </a>
+        <a href="/reportes" class="btn btn-outline-secondary">
+          <i class="bi bi-bar-chart"></i> Ver Reportes
+        </a>
       </div>
     </div>
   </div>
-  
-  <!-- Últimos Empleados -->
-  <div class="col-lg-8">
+
+  <!-- Recent Employees -->
+  <div class="col-12 col-lg-8 col-xl-9">
     <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="card-header">
         <h5 class="card-title mb-0">
           <i class="bi bi-clock-history text-primary me-2"></i>
           Últimos Empleados
@@ -117,7 +106,7 @@
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table table-hover mb-0">
+          <table class="table table-hover align-middle mb-0">
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -131,10 +120,10 @@
                 <% ultimosEmpleados.forEach(function(emp) { %>
                 <tr>
                   <td>
-                    <strong><%= emp.Nombre %> <%= emp.Apellido_Paterno %></strong>
+                    <span class="fw-semibold"><%= emp.Nombre %> <%= emp.Apellido_Paterno %></span>
                   </td>
-                  <td class="d-none d-md-table-cell"><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
-                  <td class="d-none d-sm-table-cell"><%= emp.puesto ? emp.puesto.Nombre_Puesto : '-' %></td>
+                  <td class="d-none d-md-table-cell text-body-secondary"><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
+                  <td class="d-none d-sm-table-cell text-body-secondary"><%= emp.puesto ? emp.puesto.Nombre_Puesto : '-' %></td>
                   <td>
                     <span class="badge <%= emp.estatus && (emp.estatus.Nombre_Estatus === 'ACTIVO' || emp.estatus.Nombre_Estatus === 'Activo') ? 'bg-success' : 'bg-secondary' %>">
                       <%= emp.estatus ? emp.estatus.Nombre_Estatus : '-' %>
@@ -144,8 +133,8 @@
                 <% }); %>
               <% } else { %>
                 <tr>
-                  <td colspan="4" class="text-center text-muted py-4">
-                    <i class="bi bi-people fs-1 d-block mb-2"></i>
+                  <td colspan="4" class="text-center text-body-secondary py-5">
+                    <i class="bi bi-people d-block mb-2 fs-3"></i>
                     No hay empleados registrados
                   </td>
                 </tr>

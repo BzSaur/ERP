@@ -1,8 +1,8 @@
 <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
             <div>
                 <h1 class="h3 mb-1">Control de Asistencia</h1>
-                <p class="text-muted mb-0">
+                <p class="text-body-secondary mb-0">
                     Resumen del día: <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
                 </p>
             </div>
@@ -20,7 +20,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <p class="text-muted mb-1 small text-uppercase">Presentes</p>
+                                <p class="text-body-secondary mb-1 small text-uppercase">Presentes</p>
                                 <h2 class="mb-0 text-success"><%= resumen.totalPresentes %></h2>
                             </div>
                             <div class="bg-success bg-opacity-10 p-3 rounded">
@@ -28,7 +28,7 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <small class="text-muted">
+                            <small class="text-body-secondary">
                                 <%= resumen.porcentajeAsistencia %>% de asistencia
                             </small>
                         </div>
@@ -41,7 +41,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <p class="text-muted mb-1 small text-uppercase">Ausentes</p>
+                                <p class="text-body-secondary mb-1 small text-uppercase">Ausentes</p>
                                 <h2 class="mb-0 text-danger"><%= resumen.totalAusentes %></h2>
                             </div>
                             <div class="bg-danger bg-opacity-10 p-3 rounded">
@@ -49,7 +49,7 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <small class="text-muted">
+                            <small class="text-body-secondary">
                                 De <%= resumen.totalEmpleadosActivos %> empleados activos
                             </small>
                         </div>
@@ -62,7 +62,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <p class="text-muted mb-1 small text-uppercase">Retardos</p>
+                                <p class="text-body-secondary mb-1 small text-uppercase">Retardos</p>
                                 <h2 class="mb-0 text-warning"><%= resumen.conRetardo %></h2>
                             </div>
                             <div class="bg-warning bg-opacity-10 p-3 rounded">
@@ -70,7 +70,7 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            <small class="text-muted">
+                            <small class="text-body-secondary">
                                 Después de tolerancia (15 min)
                             </small>
                         </div>
@@ -83,7 +83,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <p class="text-muted mb-1 small text-uppercase">Por Ubicación</p>
+                                <p class="text-body-secondary mb-1 small text-uppercase">Por Ubicación</p>
                                 <h5 class="mb-0">
                                     <span class="badge bg-info me-1">RAM1: <%= resumen.porUbicacion.RAM1 || 0 %></span>
                                     <span class="badge bg-secondary">RAM2: <%= resumen.porUbicacion.RAM2 || 0 %></span>
@@ -133,7 +133,7 @@
                                                         <%= new Date(checada.Fecha_Hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) %>
                                                     </strong>
                                                     <br>
-                                                    <small class="text-muted">
+                                                    <small class="text-body-secondary">
                                                         <%= new Date(checada.Fecha_Hora).toLocaleDateString('es-MX') %>
                                                     </small>
                                                 </td>
@@ -144,7 +144,7 @@
                                                         <%= checada.asistencia.empleado.Apellido_Paterno %>
                                                     </a>
                                                     <br>
-                                                    <small class="text-muted">
+                                                    <small class="text-body-secondary">
                                                         #<%= checada.asistencia.empleado.ID_Empleado %>
                                                     </small>
                                                 </td>
@@ -174,7 +174,7 @@
                                                             <i class="bi bi-x-circle-fill"></i> Retardo
                                                         </span>
                                                     <% } else { %>
-                                                        <span class="text-muted">
+                                                        <span class="text-body-secondary">
                                                             <i class="bi bi-dash-circle"></i> <%= checada.Estado %>
                                                         </span>
                                                     <% } %>
@@ -183,7 +183,7 @@
                                         <% }); %>
                                     <% } else { %>
                                         <tr>
-                                            <td colspan="5" class="text-center py-4 text-muted">
+                                            <td colspan="5" class="text-center py-4 text-body-secondary">
                                                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                                 No hay checadas registradas hoy
                                             </td>

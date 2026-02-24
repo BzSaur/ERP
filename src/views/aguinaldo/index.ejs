@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-gift me-2"></i>Aguinaldo <%= filtros.anio %></h2>
-    <p class="text-muted mb-0">Cálculo y pago de aguinaldo según LFT</p>
+    <p class="text-body-secondary mb-0">Cálculo y pago de aguinaldo según LFT</p>
   </div>
   <div class="d-flex gap-2">
     <form action="/aguinaldo/calcular" method="POST" class="d-inline">
@@ -37,7 +37,7 @@
 
 <!-- Resumen -->
 <div class="row g-3 mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card stat-card bg-primary">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
@@ -50,39 +50,39 @@
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card stat-card bg-success">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
             <div class="stat-label">Total Bruto</div>
-            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.bruto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+            <div class="stat-value stat-value-sm">$<%= totales.bruto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
           </div>
           <i class="bi bi-currency-dollar stat-icon"></i>
         </div>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card stat-card bg-danger">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
             <div class="stat-label">Total ISR</div>
-            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.isr.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+            <div class="stat-value stat-value-sm">$<%= totales.isr.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
           </div>
           <i class="bi bi-receipt stat-icon"></i>
         </div>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card stat-card bg-info">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
             <div class="stat-label">Total Neto</div>
-            <div class="stat-value" style="font-size: 1.2rem;">$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
+            <div class="stat-value stat-value-sm">$<%= totales.neto.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) %></div>
           </div>
           <i class="bi bi-cash-stack stat-icon"></i>
         </div>
@@ -95,7 +95,7 @@
 <div class="card mb-4">
   <div class="card-body">
     <form action="/aguinaldo" method="GET" class="row g-3 align-items-end">
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <label for="anio" class="form-label">Año</label>
         <select class="form-select" id="anio" name="anio">
           <% for (let y = anioActual; y >= 2020; y--) { %>
@@ -103,7 +103,7 @@
           <% } %>
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md-3">
         <label for="estado" class="form-label">Estado</label>
         <select class="form-select" id="estado" name="estado">
           <option value="">Todos</option>
@@ -133,7 +133,7 @@
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="mb-0">Detalle de Aguinaldos</h5>
-    <small class="text-muted">
+    <small class="text-body-secondary">
       Pagados: <span class="badge bg-success"><%= totales.pagados %></span>
       Pendientes: <span class="badge bg-warning text-dark"><%= totales.pendientes %></span>
     </small>
@@ -157,7 +157,7 @@
         <tbody>
           <% if (aguinaldos.length === 0) { %>
             <tr>
-              <td colspan="9" class="text-center py-4 text-muted">
+              <td colspan="9" class="text-center py-4 text-body-secondary">
                 <i class="bi bi-gift fs-1 d-block mb-2"></i>
                 No hay aguinaldos calculados para este año
               </td>

@@ -1,7 +1,7 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-shield-check me-2"></i>Historial de Cambios</h2>
-    <p class="text-muted mb-0">Auditoría de modificaciones realizadas por ADMIN y RH</p>
+    <p class="text-body-secondary mb-0">Auditoría de modificaciones realizadas por ADMIN y RH</p>
   </div>
   <div>
     <a href="/auditoria/exportar?<%= new URLSearchParams(filtros).toString() %>" 
@@ -70,15 +70,15 @@
 
 <!-- Estadísticas rápidas -->
 <div class="row mb-4">
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card text-center">
       <div class="card-body">
-        <h5 class="text-muted">Total Cambios</h5>
+        <h5 class="text-body-secondary">Total Cambios</h5>
         <h2 class="mb-0"><%= pagination.total %></h2>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card text-center bg-success bg-opacity-10">
       <div class="card-body">
         <h5 class="text-success">Creaciones</h5>
@@ -88,7 +88,7 @@
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card text-center bg-warning bg-opacity-10">
       <div class="card-body">
         <h5 class="text-warning">Actualizaciones</h5>
@@ -98,7 +98,7 @@
       </div>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <div class="card text-center bg-danger bg-opacity-10">
       <div class="card-body">
         <h5 class="text-danger">Eliminaciones</h5>
@@ -130,7 +130,7 @@
         <tbody>
           <% if (cambios.length === 0) { %>
             <tr>
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="8" class="text-center py-4 text-body-secondary">
                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                 No hay cambios registrados con los filtros seleccionados
               </td>
@@ -140,11 +140,11 @@
               <tr>
                 <td>
                   <div><%= new Date(cambio.FechaHora).toLocaleDateString('es-MX') %></div>
-                  <small class="text-muted"><%= new Date(cambio.FechaHora).toLocaleTimeString('es-MX') %></small>
+                  <small class="text-body-secondary"><%= new Date(cambio.FechaHora).toLocaleTimeString('es-MX') %></small>
                 </td>
                 <td>
                   <div><%= cambio.Email_Usuario %></div>
-                  <small class="text-muted"><%= cambio.usuario.Nombre_Completo %></small>
+                  <small class="text-body-secondary"><%= cambio.usuario.Nombre_Completo %></small>
                 </td>
                 <td>
                   <span class="badge bg-secondary"><%= cambio.Rol_Usuario %></span>
@@ -217,7 +217,7 @@
       </ul>
     </nav>
     <div class="text-center mt-2">
-      <small class="text-muted">
+      <small class="text-body-secondary">
         Mostrando página <%= pagination.page %> de <%= pagination.totalPages %> 
         (<%= pagination.total %> registros totales)
       </small>

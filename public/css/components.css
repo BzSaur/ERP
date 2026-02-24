@@ -1,24 +1,24 @@
 /* ============================================================
-   CARDS
+   COMPONENTS - VITA Design System enhancements over Bootstrap
+   Only custom styles that extend or enhance Bootstrap 5
    ============================================================ */
 
+/* ---- Cards ---- */
 .card {
-  background: var(--color-white);
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  border-color: var(--color-border);
   box-shadow: var(--shadow);
-  overflow: hidden;
-  margin-bottom: 24px;
 }
 
 .card-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  border-bottom-color: var(--color-border);
+  padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .card-title {
@@ -27,28 +27,30 @@
   color: var(--color-dark);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   margin: 0;
 }
 
-.card-body { 
-  padding: 20px; 
+.card-body {
+  padding: 1.25rem;
 }
 
-.card-footer { 
-  padding: 16px 20px; 
-  border-top: 1px solid var(--color-border); 
-  background: var(--color-light); 
+.card-footer {
+  border-top-color: var(--color-border);
+  background: var(--color-light);
+  padding: 1rem 1.25rem;
 }
 
-/* Stat Cards */
-.stat-card { 
-  border: none; 
-  border-radius: 12px; 
+/* ---- Stat Cards ---- */
+.stat-card {
+  border: none;
+  border-radius: var(--radius-lg);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.stat-card .card-body { 
-  padding: 20px; 
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card.bg-primary {
@@ -81,303 +83,134 @@
   color: #475569;
 }
 
-.stat-label { 
-  font-size: 0.85rem; 
-  font-weight: 500; 
-  margin-bottom: 4px; 
-  opacity: 0.9; 
+.stat-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
-.stat-value { 
-  font-size: 2rem; 
-  font-weight: 700; 
-  line-height: 1.2; 
-  margin: 0; 
+.stat-value {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
 }
 
-.stat-icon { 
-  font-size: 2.5rem; 
-  opacity: 0.5; 
+.stat-icon {
+  font-size: 2.25rem;
+  opacity: 0.4;
 }
 
-.stat-card-sm .card-body { 
-  padding: 14px 16px; 
+.stat-card-sm .card-body { padding: 0.875rem 1rem; }
+.stat-card-sm .stat-value { font-size: 1.5rem; }
+.stat-card-sm .stat-label { font-size: 0.7rem; }
+
+/* Hover shadow utility */
+.hover-shadow {
+  transition: all 0.2s ease;
 }
 
-.stat-card-sm .stat-value { 
-  font-size: 1.6rem; 
+.hover-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.stat-card-sm .stat-label { 
-  font-size: 0.75rem; 
-}
+.stat-value-sm { font-size: 1.2rem !important; }
+.stat-value-xs { font-size: 1rem !important; }
+.stat-label-xs { font-size: 0.7rem; margin-top: 2px; }
 
-/* ============================================================
-   BUTTONS
-   ============================================================ */
-
+/* ---- Buttons (enhance Bootstrap) ---- */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
-  font-size: 0.9rem;
   font-weight: 500;
   border-radius: var(--radius);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
-.btn:hover { 
-  transform: translateY(-1px); 
-  box-shadow: var(--shadow); 
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
 }
 
-.btn:active { 
-  transform: translateY(0); 
+.btn:active {
+  transform: translateY(0);
 }
 
-.btn:disabled { 
-  opacity: 0.6; 
-  cursor: not-allowed; 
-  transform: none; 
+.btn:disabled {
+  transform: none;
+  box-shadow: none;
 }
 
-.btn-primary { 
-  background: var(--color-primary); 
-  color: var(--color-white); 
+.btn-primary {
+  --bs-btn-bg: var(--color-primary);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-bg: var(--color-primary-dark);
+  --bs-btn-hover-border-color: var(--color-primary-dark);
 }
 
-.btn-primary:hover { 
-  background: var(--color-primary-dark); 
-  color: var(--color-white); 
-}
-
-.btn-secondary { 
-  background: var(--color-gray-600); 
-  color: var(--color-white); 
-}
-
-.btn-success { 
-  background: var(--color-success); 
-  color: var(--color-white); 
-}
-
-.btn-danger { 
-  background: var(--color-danger); 
-  color: var(--color-white); 
-}
-
-.btn-warning { 
-  background: var(--color-warning); 
-  color: var(--color-white); 
-}
-
-.btn-info { 
-  background: var(--color-info); 
-  color: var(--color-white); 
-}
-
-.btn-outline-primary {
-  background: transparent;
-  border: 2px solid var(--color-primary);
-  color: var(--color-primary);
-}
-
-.btn-outline-primary:hover { 
-  background: var(--color-primary); 
-  color: var(--color-white); 
-}
-
-.btn-outline-secondary {
-  background: transparent;
-  border: 2px solid var(--color-gray-400);
-  color: var(--color-gray-600);
-}
-
-.btn-outline-secondary:hover { 
-  background: var(--color-gray-600); 
-  color: var(--color-white); 
-}
-
-.btn-outline-info {
-  background: transparent;
-  border: 2px solid var(--color-info);
-  color: var(--color-info);
-}
-
-.btn-outline-info:hover { 
-  background: var(--color-info); 
-  color: var(--color-white); 
-}
-
-.btn-outline-danger {
-  background: transparent;
-  border: 2px solid var(--color-danger);
-  color: var(--color-danger);
-}
-
-.btn-outline-danger:hover { 
-  background: var(--color-danger); 
-  color: var(--color-white); 
-}
-
-.btn-sm { 
-  padding: 6px 12px; 
-  font-size: 0.8rem; 
-}
-
-.btn-lg { 
-  padding: 14px 28px; 
-  font-size: 1rem; 
-}
-
-.btn-link { 
-  background: none; 
-  border: none; 
-  color: var(--color-primary); 
-  padding: 0; 
-}
-
-.btn-link:hover { 
-  text-decoration: underline; 
-  transform: none; 
-  box-shadow: none; 
-}
-
-/* ============================================================
-   FORMS
-   ============================================================ */
-
-.form-label { 
-  display: block; 
-  margin-bottom: 6px; 
-  font-weight: 500; 
-  font-size: 0.9rem; 
-}
-
-.form-control, .form-select {
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 0.9rem;
-  font-family: inherit;
-  border: 1px solid var(--color-border);
+/* ---- Forms (enhance Bootstrap) ---- */
+.form-control,
+.form-select {
+  border-color: var(--color-border);
   border-radius: var(--radius);
-  background: var(--color-white);
-  transition: all 0.2s;
+  font-size: 0.9rem;
+  padding: 0.625rem 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.form-control:focus, .form-select:focus {
-  outline: none;
+.form-control:focus,
+.form-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
 }
 
-.form-control:disabled, .form-select:disabled { 
-  background: var(--color-light); 
-  cursor: not-allowed; 
+.form-label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  margin-bottom: 0.375rem;
 }
 
-.form-control.is-invalid { 
-  border-color: var(--color-danger); 
+/* ---- Tables (enhance Bootstrap) ---- */
+.table {
+  font-size: 0.9rem;
 }
 
-.form-text { 
-  font-size: 0.8rem; 
-  color: var(--color-gray-600); 
-  margin-top: 4px; 
+.table > thead {
+  background: var(--color-light);
 }
 
-.invalid-feedback { 
-  color: var(--color-danger); 
-  font-size: 0.8rem; 
-  margin-top: 4px; 
-}
-
-.form-check { 
-  display: flex; 
-  align-items: center; 
-  gap: 8px; 
-}
-
-.form-check-input { 
-  width: 18px; 
-  height: 18px; 
-  cursor: pointer; 
-}
-
-.form-check-label { 
-  cursor: pointer; 
-  font-size: 0.9rem; 
-}
-
-/* ============================================================
-   TABLES
-   ============================================================ */
-
-.table-responsive { 
-  overflow-x: auto; 
-  -webkit-overflow-scrolling: touch; 
-}
-
-.table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  font-size: 0.9rem; 
-}
-
-.table thead { 
-  background: var(--color-light); 
-}
-
-.table th {
-  padding: 12px 16px;
-  text-align: left;
+.table > thead th {
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-gray-600);
   white-space: nowrap;
-  border-bottom: 2px solid var(--color-border);
+  border-bottom-width: 2px;
+  border-bottom-color: var(--color-border);
+  padding: 0.75rem 1rem;
 }
 
-.table td {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
+.table > tbody td {
+  padding: 0.875rem 1rem;
   vertical-align: middle;
+  border-bottom-color: var(--color-border);
 }
 
-.table tbody tr { 
-  transition: background 0.2s; 
+.table-hover > tbody > tr:hover {
+  --bs-table-hover-bg: rgba(59, 130, 246, 0.04);
 }
 
-.table-hover tbody tr:hover { 
-  background: rgba(59,130,246,0.04); 
-}
-
-.table .text-end { 
-  text-align: right; 
-}
-
-.table .text-center { 
-  text-align: center; 
-}
-
-.table-light { 
-  background: var(--color-light) !important; 
-}
-
+/* Dense table for checador */
 .checador-table thead th {
-  padding: 8px 6px;
+  padding: 0.5rem 0.375rem;
   font-size: 0.7rem;
 }
 
 .checador-table td {
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   font-size: 0.82rem;
 }
 
@@ -399,116 +232,111 @@
 .table-totals-footer td {
   border-top: 2px solid var(--color-primary) !important;
   font-weight: 600;
-  padding: 12px 16px;
 }
 
-/* ============================================================
-   BADGES
-   ============================================================ */
-
+/* ---- Badges (enhance Bootstrap) ---- */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  font-size: 0.75rem;
   font-weight: 500;
   border-radius: 9999px;
+  padding: 0.3em 0.65em;
+  font-size: 0.75rem;
 }
 
-.bg-success, .badge-success { 
-  background: rgba(16,185,129,0.15) !important; 
-  color: #065f46 !important; 
+/* Soft badge variants */
+.badge.bg-success {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #065f46 !important;
 }
 
-.bg-danger, .badge-danger { 
-  background: rgba(239,68,68,0.15) !important; 
-  color: #991b1b !important; 
+.badge.bg-danger {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #991b1b !important;
 }
 
-.bg-warning, .badge-warning { 
-  background: rgba(249,115,22,0.15) !important; 
-  color: #9a3412 !important; 
+.badge.bg-warning {
+  background: rgba(249, 115, 22, 0.15) !important;
+  color: #9a3412 !important;
 }
 
-.bg-info, .badge-info { 
-  background: rgba(59,130,246,0.15) !important; 
-  color: #1e40af !important; 
+.badge.bg-info {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #1e40af !important;
 }
 
-.bg-secondary, .badge-secondary { 
-  background: rgba(107,114,128,0.15) !important; 
-  color: var(--color-gray-600) !important; 
+.badge.bg-secondary {
+  background: rgba(107, 114, 128, 0.15) !important;
+  color: var(--color-gray-600) !important;
 }
 
-.bg-primary, .badge-primary { 
-  background: var(--color-primary) !important; 
-  color: var(--color-white) !important; 
-}
-
-/* ============================================================
-   ALERTS
-   ============================================================ */
-
+/* ---- Alerts (enhance Bootstrap) ---- */
 .alert {
-  padding: 14px 20px;
+  border: none;
   border-radius: var(--radius);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   font-size: 0.9rem;
 }
 
-.alert-success { 
-  background: rgba(16,185,129,0.1); 
-  color: #065f46; 
-  border-left: 4px solid var(--color-success); 
+.alert-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+  border-left: 4px solid var(--color-success);
 }
 
-.alert-danger { 
-  background: rgba(239,68,68,0.1); 
-  color: #991b1b; 
-  border-left: 4px solid var(--color-danger); 
+.alert-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #991b1b;
+  border-left: 4px solid var(--color-danger);
 }
 
-.alert-warning { 
-  background: rgba(249,115,22,0.1); 
-  color: #9a3412; 
-  border-left: 4px solid var(--color-warning); 
+.alert-warning {
+  background: rgba(249, 115, 22, 0.1);
+  color: #9a3412;
+  border-left: 4px solid var(--color-warning);
 }
 
-.alert-info { 
-  background: rgba(59,130,246,0.1); 
-  color: #1e40af; 
-  border-left: 4px solid var(--color-info); 
+.alert-info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1e40af;
+  border-left: 4px solid var(--color-info);
 }
 
-.alert-dismissible .btn-close { 
-  margin-left: auto; 
+/* ---- Pagination (enhance Bootstrap) ---- */
+.page-link {
+  border-color: var(--color-border);
+  border-radius: var(--radius) !important;
+  color: var(--color-gray-600);
+  font-size: 0.875rem;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ============================================================
-   FOOTER
-   ============================================================ */
+.page-link:hover {
+  background: var(--color-light);
+  border-color: var(--color-gray-300);
+}
 
+.page-item.active .page-link {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* ---- Footer ---- */
 .footer {
   background: var(--color-white);
   border-top: 1px solid var(--color-border);
-  padding: 16px 24px;
-  font-size: 0.85rem;
+  padding: 1rem 1.5rem;
+  font-size: 0.8rem;
   color: var(--color-gray-600);
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
-/* ============================================================
-   AVATAR
-   ============================================================ */
-
+/* ---- Avatar ---- */
 .avatar-circle {
-  width: 36px; 
+  width: 36px;
   height: 36px;
   background: var(--color-primary);
   color: var(--color-white);
@@ -521,10 +349,7 @@
   flex-shrink: 0;
 }
 
-/* ============================================================
-   UPLOAD ZONE
-   ============================================================ */
-
+/* ---- Upload Zone ---- */
 .upload-zone {
   border: 2px dashed var(--color-border);
   border-radius: var(--radius);
@@ -535,6 +360,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
 }
 
 .upload-zone:hover {

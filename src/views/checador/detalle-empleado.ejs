@@ -1,6 +1,6 @@
 <div class="container-fluid py-4">
   <!-- Header -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
     <div>
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-1">
@@ -11,7 +11,7 @@
       <h2 class="mb-1">
         <i class="bi bi-person-badge text-primary me-2"></i><%= empleado.nombre %>
       </h2>
-      <p class="text-muted mb-0">
+      <p class="text-body-secondary mb-0">
         ID Checador: <strong>#<%= empleado.idChecador %></strong>
         &nbsp;|&nbsp; Periodo: <strong><%= rangoFechas.inicioStr %></strong> al <strong><%= rangoFechas.finStr %></strong>
         <% if (empleado.ubicacion) { %>
@@ -35,7 +35,7 @@
             <div>
               <div class="stat-label">Horas Trabajadas</div>
               <div class="stat-value"><%= empleado.totalHorasTrabajadas.toFixed(1) %></div>
-              <div class="stat-label" style="font-size:0.7rem; margin-top:2px">(<%= formatearHoras(empleado.totalHorasTrabajadas) %>)</div>
+              <div class="stat-label stat-label-xs">(<%= formatearHoras(empleado.totalHorasTrabajadas) %>)</div>
             </div>
             <i class="bi bi-clock-fill stat-icon"></i>
           </div>
@@ -153,7 +153,7 @@
                     <%= dia.entrada %>
                   </span>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td class="text-center">
@@ -162,7 +162,7 @@
                 <% } else if (dia.presente) { %>
                   <span class="text-warning"><i class="bi bi-question-circle"></i> Sin registro</span>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td class="text-center">
@@ -171,23 +171,23 @@
                     <%= dia.totalChecadas %>
                   </span>
                 <% } else if (dia.presente) { %>
-                  <span class="text-muted"><%= dia.totalChecadas || (dia.entrada ? 1 : 0) %></span>
+                  <span class="text-body-secondary"><%= dia.totalChecadas || (dia.entrada ? 1 : 0) %></span>
                 <% } else { %>
-                  <span class="text-muted">0</span>
+                  <span class="text-body-secondary">0</span>
                 <% } %>
               </td>
               <td class="text-center">
                 <% if (dia.horasTrabajadasBruto > 0) { %>
-                  <small class="text-muted"><%= dia.horasTrabajadasBruto.toFixed(1) %>h</small>
+                  <small class="text-body-secondary"><%= dia.horasTrabajadasBruto.toFixed(1) %>h</small>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td class="text-center">
                 <% if (dia.minutosComidaDescontados > 0) { %>
                   <small class="text-danger">-<%= dia.minutosComidaDescontados %>m</small>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td class="text-center fw-bold">
@@ -196,7 +196,7 @@
                     <%= dia.horasTrabajadas.toFixed(2) %>h
                   </span>
                 <% } else { %>
-                  <span class="text-muted">0</span>
+                  <span class="text-body-secondary">0</span>
                 <% } %>
               </td>
               <td class="text-center">
@@ -205,7 +205,7 @@
                 <% } else if (dia.presente && dia.entrada) { %>
                   <i class="bi bi-check-circle text-success"></i>
                 <% } else { %>
-                  <span class="text-muted">-</span>
+                  <span class="text-body-secondary">-</span>
                 <% } %>
               </td>
               <td>
@@ -222,7 +222,7 @@
                 <% } %>
               </td>
               <td>
-                <small class="text-muted"><%= dia.notas || '' %></small>
+                <small class="text-body-secondary"><%= dia.notas || '' %></small>
               </td>
             </tr>
           <% }); %>

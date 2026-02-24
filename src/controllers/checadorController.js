@@ -7,6 +7,7 @@
 import multer from 'multer';
 import path from 'path';
 import checadorImportService from '../services/checadorImportService.js';
+import { emparejarEmpleados, guardarEnBaseDatos, calcularExtrasMixtos, formatearHoras } from '../services/checadorImportService.js';
 
 // ============================================================
 // CONFIGURACIÓN DE MULTER (upload de archivos)
@@ -101,8 +102,26 @@ export const procesarArchivos = async (req, res, next) => {
       resultado = datosRAM1 || datosRAM2;
     }
 
+    // Emparejar empleados del checador con empleados del sistema
+    let matchingData = { matching: [], noMatcheados: [], totalDB: 0 };
+    try {
+      matchingData = await emparejarEmpleados(resultado.empleados);
+    } catch (err) {
+      errores.push(`Error al emparejar empleados con el sistema: ${err.message}`);
+    }
+
+    // Calcular extras para empleados mixtos
+    let extrasMixtos = [];
+    try {
+      extrasMixtos = await calcularExtrasMixtos(resultado, matchingData);
+    } catch (err) {
+      errores.push(`Error al calcular extras mixtos: ${err.message}`);
+    }
+
     // Guardar en sesión para poder navegar entre vistas
     req.session.checadorResultado = resultado;
+    req.session.checadorMatching = matchingData;
+    req.session.checadorExtrasMixtos = extrasMixtos;
     req.session.checadorArchivos = {
       ram1: archivoRAM1 ? archivoRAM1.originalname : null,
       ram2: archivoRAM2 ? archivoRAM2.originalname : null
@@ -111,9 +130,11 @@ export const procesarArchivos = async (req, res, next) => {
     res.render('checador/resultado', {
       title: 'Resultado de Checador',
       resultado,
+      matchingData,
+      extrasMixtos,
       archivos: req.session.checadorArchivos,
       errores,
-      formatearHoras: checadorImportService.formatearHoras,
+      formatearHoras,
       user: req.user
     });
 
@@ -159,9 +180,56 @@ export const detalleEmpleado = async (req, res, next) => {
   }
 };
 
+/**
+ * Guardar los resultados del checador en la base de datos
+ */
+export const guardarResultados = async (req, res, next) => {
+  try {
+    const resultado = req.session.checadorResultado;
+    const matchingData = req.session.checadorMatching;
+
+    if (!resultado || !matchingData) {
+      req.flash('error', 'No hay datos de checador para guardar. Importe los archivos primero.');
+      return res.redirect('/checador');
+    }
+
+    if (matchingData.matching.length === 0) {
+      req.flash('error', 'No se encontraron empleados vinculados con el sistema. No hay datos para guardar.');
+      return res.redirect('/checador');
+    }
+
+    const resumen = await guardarEnBaseDatos(resultado, matchingData, req.user.ID_Usuario);
+
+    // Limpiar datos de sesión
+    delete req.session.checadorResultado;
+    delete req.session.checadorMatching;
+    delete req.session.checadorExtrasMixtos;
+    delete req.session.checadorArchivos;
+
+    // Construir mensaje de resultado
+    let mensaje = `Se guardaron ${resumen.guardados} empleados (${resumen.diasGuardados} días) en el sistema.`;
+    if (resumen.noMatcheados > 0) {
+      mensaje += ` ${resumen.noMatcheados} empleados no se pudieron vincular.`;
+    }
+    if (resumen.errores.length > 0) {
+      mensaje += ` ${resumen.errores.length} errores durante el guardado.`;
+      req.flash('warning', resumen.errores.map(e => `${e.empleado}: ${e.error}`).join('; '));
+    }
+
+    req.flash('success', mensaje);
+    return res.redirect('/checador');
+
+  } catch (error) {
+    console.error('Error guardando checador:', error);
+    req.flash('error', `Error al guardar en base de datos: ${error.message}`);
+    return res.redirect('/checador');
+  }
+};
+
 export default {
   index,
   procesarArchivos,
   detalleEmpleado,
+  guardarResultados,
   upload
 };
