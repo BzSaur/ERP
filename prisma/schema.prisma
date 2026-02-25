@@ -60,6 +60,8 @@ model Cat_Tipo_Horario {
   Nombre_Horario  String   @unique @db.VarChar(30)
   Descripcion     String?  @db.VarChar(255)
   Horas_Semana    Int?
+  Dias_Semana     Int      @default(6)  // 5 o 6 días laborables por semana
+  Horas_Jornada   Int      @default(8)  // Horas por jornada diaria
   CreatedAt       DateTime @default(now())
 
   // Relaciones
@@ -107,6 +109,8 @@ model Cat_Tipo_Incidencia {
   Requiere_Documento Boolean  @default(false)
   Afecta_Puntualidad Boolean  @default(true)
   Afecta_Asistencia  Boolean  @default(true)
+  Afecta_Aguinaldo   Boolean  @default(false) // Si descuenta días para cálculo de aguinaldo
+  Afecta_Vacaciones  Boolean  @default(false) // Si descuenta días para cálculo de vacaciones
   Dias_Maximos       Int?
   Activo             Boolean  @default(true)
   CreatedAt          DateTime @default(now())
@@ -441,6 +445,8 @@ model Nomina {
   Horas_Extra            Decimal   @default(0) @db.Decimal(8, 2)
   Horas_Dobles           Decimal   @default(0) @db.Decimal(8, 2)
   Horas_Triples          Decimal   @default(0) @db.Decimal(8, 2)
+  Horas_Faltantes        Decimal   @default(0) @db.Decimal(8, 2) // Horas no trabajadas en la semana
+  Descuento_Horas_Faltantes Decimal @default(0) @db.Decimal(12, 2) // Monto descontado por horas faltantes
 
   // Percepciones
   Salario_Base           Decimal   @db.Decimal(12, 2)
@@ -494,21 +500,23 @@ model Nomina {
 // ============================================================
 
 model Vacaciones {
-  ID_Vacacion           Int       @id @default(autoincrement())
-  ID_Empleado           Int
-  Anio                  Int
-  Dias_Correspondientes Int
-  Dias_Tomados          Int       @default(0)
-  Dias_Pendientes       Int
-  Prima_Vacacional_Pagada Boolean @default(false)
-  Fecha_Inicio          DateTime? @db.Date
-  Fecha_Fin             DateTime? @db.Date
-  Estado                String    @default("PENDIENTE") @db.VarChar(20)
-  Aprobado_Por          Int?
-  Fecha_Aprobacion      DateTime?
-  Observaciones         String?   @db.VarChar(500)
-  CreatedAt             DateTime  @default(now())
-  UpdatedAt             DateTime  @updatedAt
+  ID_Vacacion             Int       @id @default(autoincrement())
+  ID_Empleado             Int
+  Anio                    Int
+  Dias_Correspondientes   Int       // Días base por antigüedad (tabla LFT)
+  Dias_Proporcionales     Int?      // Días ajustados por jornada (proporcionalidad)
+  Factor_Jornada          Decimal?  @db.Decimal(8, 6) // Ej: 0.5 para medio tiempo
+  Dias_Tomados            Int       @default(0)
+  Dias_Pendientes         Int
+  Prima_Vacacional_Pagada Boolean   @default(false)
+  Fecha_Inicio            DateTime? @db.Date
+  Fecha_Fin               DateTime? @db.Date
+  Estado                  String    @default("PENDIENTE") @db.VarChar(20)
+  Aprobado_Por            Int?
+  Fecha_Aprobacion        DateTime?
+  Observaciones           String?   @db.VarChar(500)
+  CreatedAt               DateTime  @default(now())
+  UpdatedAt               DateTime  @updatedAt
 
   // Relaciones
   empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
@@ -521,22 +529,28 @@ model Vacaciones {
 }
 
 model Aguinaldo {
-  ID_Aguinaldo    Int       @id @default(autoincrement())
-  ID_Empleado     Int
-  Anio            Int
-  Fecha_Ingreso   DateTime  @db.Date
-  Fecha_Corte     DateTime  @db.Date
-  Dias_Laborados  Int
-  Dias_Aguinaldo  Int       @default(15)
-  Salario_Diario  Decimal   @db.Decimal(10, 2)
-  Monto_Bruto     Decimal   @db.Decimal(12, 2)
-  Deduccion_ISR   Decimal   @default(0) @db.Decimal(12, 2)
-  Monto_Neto      Decimal   @db.Decimal(12, 2)
-  Pagado          Boolean   @default(false)
-  Fecha_Pago      DateTime?
-  Calculado_Por   Int?
-  Fecha_Calculo   DateTime  @default(now())
-  Observaciones   String?   @db.VarChar(500)
+  ID_Aguinaldo           Int       @id @default(autoincrement())
+  ID_Empleado            Int
+  Anio                   Int
+  Fecha_Ingreso          DateTime  @db.Date
+  Fecha_Corte            DateTime  @db.Date
+  Dias_Laborados         Int
+  Dias_Aguinaldo         Int       @default(15)
+  Salario_Diario         Decimal   @db.Decimal(10, 2)
+  Monto_Bruto            Decimal   @db.Decimal(12, 2)
+  Deduccion_ISR          Decimal   @default(0) @db.Decimal(12, 2)
+  Monto_Neto             Decimal   @db.Decimal(12, 2)
+  // Proporcionalidad
+  Faltas_Injustificadas  Int       @default(0)  // Faltas que descuentan del aguinaldo
+  Horas_Faltantes        Decimal   @default(0) @db.Decimal(10, 2) // Horas no trabajadas acumuladas
+  Faltas_Equivalentes    Decimal   @default(0) @db.Decimal(10, 2) // Horas_Faltantes / Horas_Jornada = faltas equivalentes
+  Dias_Efectivos         Int       @default(0)  // Dias_Laborados - Faltas - Faltas_Equivalentes
+  Factor_Proporcionalidad Decimal  @default(1) @db.Decimal(8, 6) // Dias_Efectivos / Dias_Laborados
+  Pagado                 Boolean   @default(false)
+  Fecha_Pago             DateTime?
+  Calculado_Por          Int?
+  Fecha_Calculo          DateTime  @default(now())
+  Observaciones          String?   @db.VarChar(500)
 
   // Relaciones
   empleado          Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
@@ -562,6 +576,9 @@ model Finiquito_Liquidacion {
   Antiguedad_Dias            Int
   Salario_Diario             Decimal   @db.Decimal(10, 2)
   Salario_Diario_Integrado   Decimal   @db.Decimal(10, 2)
+
+  // Proporcionalidad
+  Dias_Faltas                Int       @default(0)
 
   // Percepciones finiquito
   Dias_Trabajados_Pendientes Int       @default(0)

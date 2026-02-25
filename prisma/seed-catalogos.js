@@ -19,6 +19,8 @@ const tiposIncidencia = [
     Requiere_Documento: false,
     Afecta_Puntualidad: true,
     Afecta_Asistencia: true,
+    Afecta_Aguinaldo: true,
+    Afecta_Vacaciones: true,
     Dias_Maximos: null
   },
   {
@@ -29,6 +31,32 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: true,
     Afecta_Asistencia: true,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
+    Dias_Maximos: null
+  },
+  {
+    Codigo: 'INASISTENCIA',
+    Nombre: 'Inasistencia',
+    Descripcion: 'Empleado no se presenta y no avisa',
+    Con_Goce_Sueldo: false,
+    Requiere_Documento: false,
+    Afecta_Puntualidad: true,
+    Afecta_Asistencia: true,
+    Afecta_Aguinaldo: true,
+    Afecta_Vacaciones: true,
+    Dias_Maximos: null
+  },
+  {
+    Codigo: 'ABANDONO',
+    Nombre: 'Abandono de Trabajo',
+    Descripcion: 'Abandono de trabajo sin aviso - causal de rescisión (Art. 47 LFT)',
+    Con_Goce_Sueldo: false,
+    Requiere_Documento: false,
+    Afecta_Puntualidad: true,
+    Afecta_Asistencia: true,
+    Afecta_Aguinaldo: true,
+    Afecta_Vacaciones: true,
     Dias_Maximos: null
   },
   {
@@ -39,6 +67,8 @@ const tiposIncidencia = [
     Requiere_Documento: false,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 3
   },
   {
@@ -49,16 +79,20 @@ const tiposIncidencia = [
     Requiere_Documento: false,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: true,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 15
   },
   {
     Codigo: 'INCAP_EG',
     Nombre: 'Incapacidad por Enfermedad General',
-    Descripcion: 'Incapacidad IMSS por enfermedad general',
+    Descripcion: 'Incapacidad IMSS por enfermedad general (1-3 días paga empleador, 4+ paga IMSS)',
     Con_Goce_Sueldo: false,
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: null
   },
   {
@@ -69,6 +103,8 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: null
   },
   {
@@ -79,6 +115,8 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 84
   },
   {
@@ -89,6 +127,8 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 5
   },
   {
@@ -99,6 +139,8 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 3
   },
   {
@@ -109,6 +151,8 @@ const tiposIncidencia = [
     Requiere_Documento: true,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 3
   },
   {
@@ -119,16 +163,20 @@ const tiposIncidencia = [
     Requiere_Documento: false,
     Afecta_Puntualidad: false,
     Afecta_Asistencia: false,
+    Afecta_Aguinaldo: false,
+    Afecta_Vacaciones: false,
     Dias_Maximos: 2
   },
   {
     Codigo: 'SUSPENSION',
     Nombre: 'Suspensión Laboral',
-    Descripcion: 'Suspensión disciplinaria sin goce de sueldo',
+    Descripcion: 'Suspensión disciplinaria / acta administrativa sin goce de sueldo (máx 8 días)',
     Con_Goce_Sueldo: false,
     Requiere_Documento: true,
     Afecta_Puntualidad: true,
     Afecta_Asistencia: true,
+    Afecta_Aguinaldo: true,
+    Afecta_Vacaciones: true,
     Dias_Maximos: 8
   }
 ];

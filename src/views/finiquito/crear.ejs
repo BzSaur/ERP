@@ -30,12 +30,12 @@
               <select class="form-select" id="ID_Empleado" name="ID_Empleado" required>
                 <option value="">-- Seleccione un empleado --</option>
                 <% empleados.forEach(e => { %>
-                  <option value="<%= e.ID_Empleado %>" 
+                  <option value="<%= e.ID_Empleado %>"
                           data-fecha-ingreso="<%= e.Fecha_Ingreso.toISOString().split('T')[0] %>"
-                          data-sueldo="<%= Number(e.Sueldo) %>">
-                    <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %> 
-                    - <%= e.departamento?.Nombre || 'Sin departamento' %>
-                    ($<%= Number(e.Sueldo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>)
+                          data-sueldo="<%= Number(e.Salario_Diario || 0) * 30 %>">
+                    <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %>
+                    - <%= e.area?.Nombre_Area || 'Sin área' %>
+                    ($<%= (Number(e.Salario_Diario || 0) * 30).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %>/mes)
                   </option>
                 <% }) %>
               </select>
@@ -45,8 +45,8 @@
             <div class="col-md-6">
               <label for="Tipo" class="form-label">Tipo de Terminación <span class="text-danger">*</span></label>
               <select class="form-select" id="Tipo" name="Tipo" required>
-                <option value="FINIQUITO">Finiquito (Renuncia voluntaria)</option>
-                <option value="LIQUIDACION">Liquidación (Despido injustificado)</option>
+                <option value="LIQUIDACION">Liquidación (Renuncia voluntaria / Despido justificado)</option>
+                <option value="FINIQUITO">Finiquito (Despido injustificado - incluye indemnización y prima de antigüedad)</option>
               </select>
             </div>
 
@@ -61,13 +61,13 @@
             <div class="col-md-12">
               <label for="Motivo_Baja" class="form-label">Motivo de Baja <span class="text-danger">*</span></label>
               <select class="form-select" id="Motivo_Baja" name="Motivo_Baja" required>
-                <optgroup label="Finiquito">
+                <optgroup label="Liquidación (renuncia/justificado)">
                   <option value="Renuncia voluntaria">Renuncia voluntaria</option>
                   <option value="Término de contrato">Término de contrato temporal</option>
                   <option value="Mutuo acuerdo">Mutuo acuerdo</option>
                   <option value="Jubilación">Jubilación</option>
                 </optgroup>
-                <optgroup label="Liquidación">
+                <optgroup label="Finiquito (despido injustificado)">
                   <option value="Despido injustificado">Despido injustificado</option>
                   <option value="Recorte de personal">Recorte de personal</option>
                   <option value="Cierre de empresa">Cierre de empresa</option>
@@ -76,11 +76,19 @@
               </select>
             </div>
 
+            <!-- Días Faltados -->
+            <div class="col-md-6">
+              <label for="Dias_Faltas" class="form-label">Días faltados (sin justificar)</label>
+              <input type="number" class="form-control" id="Dias_Faltas" name="Dias_Faltas"
+                     value="0" min="0" max="365">
+              <small class="text-body-secondary">Reduce el aguinaldo proporcional</small>
+            </div>
+
             <!-- Observaciones -->
-            <div class="col-md-12">
+            <div class="col-md-6">
               <label for="Observaciones" class="form-label">Observaciones</label>
-              <textarea class="form-control" id="Observaciones" name="Observaciones" rows="3"
-                        placeholder="Información adicional sobre la terminación laboral..."></textarea>
+              <textarea class="form-control" id="Observaciones" name="Observaciones" rows="2"
+                        placeholder="Información adicional..."></textarea>
             </div>
           </div>
 
@@ -130,7 +138,7 @@
         <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i> Información Legal</h6>
       </div>
       <div class="card-body small">
-        <h6 class="text-primary">Finiquito (Art. 76, 80, 87 LFT)</h6>
+        <h6 class="text-primary">Liquidación (Renuncia / Justificado)</h6>
         <ul class="ps-3 mb-3">
           <li>Días trabajados no pagados</li>
           <li>Vacaciones proporcionales según antigüedad</li>
@@ -138,11 +146,18 @@
           <li>Aguinaldo proporcional (15 días mínimo)</li>
         </ul>
 
-        <h6 class="text-warning">Liquidación (Art. 48, 50, 162 LFT)</h6>
+        <h6 class="text-warning">Finiquito (Despido injustificado)</h6>
         <ul class="ps-3 mb-3">
-          <li><strong>Incluye todo lo del finiquito</strong></li>
-          <li><strong>Indemnización constitucional:</strong> 3 meses de salario integrado</li>
-          <li><strong>Prima de antigüedad:</strong> 12 días de salario por año trabajado (topado a 2 salarios mínimos)</li>
+          <li><strong>Incluye todo lo de liquidación</strong></li>
+          <li><strong>Indemnización constitucional:</strong> SDI × 90 días (Art. 48, 50 LFT)</li>
+          <li><strong>Prima de antigüedad:</strong> SDI × 12 × años trabajados (Art. 162 LFT)</li>
+          <li><small class="text-body-secondary">Prima topada: mín. 1 SM, máx. 2 SM por día</small></li>
+        </ul>
+
+        <h6 class="text-info">SDI - Salario Diario Integrado</h6>
+        <ul class="ps-3 mb-3">
+          <li>SD + Proporción de aguinaldo + Proporción de prima vacacional</li>
+          <li><small class="text-body-secondary">El factor varía según antigüedad (más días de vacaciones = mayor SDI)</small></li>
         </ul>
 
         <div class="alert alert-info mb-0">
@@ -229,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Actualizar motivos según tipo
   tipoSelect.addEventListener('change', function() {
-    if (this.value === 'FINIQUITO') {
+    if (this.value === 'LIQUIDACION') {
       motivoSelect.value = 'Renuncia voluntaria';
     } else {
       motivoSelect.value = 'Despido injustificado';

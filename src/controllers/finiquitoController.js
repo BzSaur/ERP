@@ -1,25 +1,39 @@
 /**
  * Controlador de Finiquito y Liquidación
  * Cálculo según LFT México
+ *
+ * TERMINOLOGÍA:
+ * - FINIQUITO: Despido injustificado = partes proporcionales + Indemnización 90 días + Prima de antigüedad
+ * - LIQUIDACION: Renuncia voluntaria / despido justificado = solo partes proporcionales
+ *
+ * SDI DINÁMICO:
+ * SDI = SD × (1 + 15/365 + DiasVacaciones×0.25/365)
+ * El factor varía según antigüedad porque los días de vacaciones cambian
+ *
+ * PRIMA DE ANTIGÜEDAD:
+ * SDI × 12 × Años de trabajo
+ * Tope mínimo: 1 salario mínimo diario × 12
+ * Tope máximo: 2 salarios mínimos diarios × 12
  */
 
 import prisma from '../config/database.js';
+import { getConfig } from '../services/nominaService.js';
 
 // Listar finiquitos
 export const index = async (req, res) => {
   try {
     const { tipo, estado } = req.query;
-    
+
     let where = {};
-    
+
     if (tipo) {
       where.Tipo = tipo;
     }
-    
+
     if (estado) {
       where.Estado = estado;
     }
-    
+
     const finiquitos = await prisma.finiquito_Liquidacion.findMany({
       where,
       include: {
@@ -36,7 +50,7 @@ export const index = async (req, res) => {
       orderBy: { Fecha_Baja: 'desc' },
       take: 100
     });
-    
+
     // Estadísticas
     const stats = {
       finiquitos: await prisma.finiquito_Liquidacion.count({ where: { Tipo: 'FINIQUITO' } }),
@@ -44,7 +58,7 @@ export const index = async (req, res) => {
       pendientes: await prisma.finiquito_Liquidacion.count({ where: { Estado: 'CALCULADO' } }),
       pagados: await prisma.finiquito_Liquidacion.count({ where: { Pagado: true } })
     };
-    
+
     res.render('finiquito/index', {
       title: 'Finiquito y Liquidación',
       finiquitos,
@@ -70,7 +84,7 @@ export const crear = async (req, res) => {
       },
       orderBy: { Nombre: 'asc' }
     });
-    
+
     res.render('finiquito/crear', {
       title: 'Calcular Finiquito/Liquidación',
       empleados
@@ -85,90 +99,107 @@ export const crear = async (req, res) => {
 // Calcular y guardar finiquito
 export const calcular = async (req, res) => {
   try {
-    const { ID_Empleado, Tipo, Fecha_Baja, Motivo_Baja } = req.body;
-    
+    const { ID_Empleado, Tipo, Fecha_Baja, Motivo_Baja, Dias_Faltas } = req.body;
+    const diasFaltas = parseInt(Dias_Faltas) || 0;
+
     const empleado = await prisma.empleados.findUnique({
-      where: { ID_Empleado: parseInt(ID_Empleado) }
+      where: { ID_Empleado: parseInt(ID_Empleado) },
+      include: { tipo_horario: true }
     });
-    
+
     if (!empleado) {
       req.flash('error', 'Empleado no encontrado');
       return res.redirect('/finiquito/crear');
     }
-    
+
     const fechaIngreso = new Date(empleado.Fecha_Ingreso);
     const fechaBaja = new Date(Fecha_Baja);
     const salarioDiario = Number(empleado.Salario_Diario) || 0;
-    
+
+    // Obtener salario mínimo de configuración
+    const salarioMinimo = await getConfig('SALARIO_MINIMO_2026', 278.80);
+    const diasAguinaldoConfig = await getConfig('DIAS_AGUINALDO', 15);
+    const primaVacacionalPct = (await getConfig('PRIMA_VACACIONAL_PCT', 25)) / 100;
+
     // Calcular antigüedad
     const diferenciaMs = fechaBaja - fechaIngreso;
     const diasTotales = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
     const anosAntiguedad = Math.floor(diasTotales / 365);
     const mesesRestantes = Math.floor((diasTotales % 365) / 30);
     const diasRestantes = diasTotales % 30;
-    
-    // Salario Diario Integrado (SDI) para liquidación
-    // SDI = Salario Diario + (Salario Diario × Factor de integración)
-    // Factor aproximado: Aguinaldo (15/365) + Vacaciones (12/365) + Prima (0.25×12/365) = 0.0493
-    const factorIntegracion = 1.0493;
-    const salarioDiarioIntegrado = salarioDiario * factorIntegracion;
-    
+
+    // ========================================
+    // SDI DINÁMICO (varía según antigüedad)
+    // SDI = SD × (1 + Aguinaldo/365 + DiasVac×PrimaVac/365)
+    // ========================================
+    const diasVacacionesSDI = calcularDiasVacaciones(anosAntiguedad);
+    const factorIntegracion = 1 + (diasAguinaldoConfig / 365) + (diasVacacionesSDI * primaVacacionalPct / 365);
+    const salarioDiarioIntegrado = redondear(salarioDiario * factorIntegracion);
+
     // ========================================
     // CÁLCULOS DE FINIQUITO (siempre aplica)
     // ========================================
-    
+
     // 1. Días trabajados del mes actual
     const inicioMes = new Date(fechaBaja.getFullYear(), fechaBaja.getMonth(), 1);
     const diasTrabajadosMes = Math.ceil((fechaBaja - inicioMes) / (1000 * 60 * 60 * 24)) + 1;
-    const pagoDiasTrabajados = diasTrabajadosMes * salarioDiario;
-    
+    const pagoDiasTrabajados = redondear(diasTrabajadosMes * salarioDiario);
+
     // 2. Vacaciones proporcionales (días según antigüedad)
     const diasVacaciones = calcularDiasVacaciones(anosAntiguedad);
     const diasMesActual = fechaBaja.getMonth() + 1;
     const vacacionesProporcionales = Math.round((diasVacaciones / 12) * diasMesActual);
-    
+
     // 3. Prima vacacional (25% mínimo sobre salario de vacaciones)
-    const primaVacacional = vacacionesProporcionales * salarioDiario * 0.25;
-    
-    // 4. Aguinaldo proporcional (15 días / 12 meses × meses trabajados)
-    const mesesTrabajadosAnio = fechaBaja.getMonth() + 1;
-    const aguinaldoProporcional = (15 / 12) * mesesTrabajadosAnio * salarioDiario;
-    
+    const primaVacacional = redondear(vacacionesProporcionales * salarioDiario * primaVacacionalPct);
+
+    // 4. Aguinaldo proporcional con proporcionalidad por faltas
+    // Fórmula: (SD × DiasAguinaldo / 365) × DiasEfectivos
+    const inicioAnio = new Date(fechaBaja.getFullYear(), 0, 1);
+    const fechaRefAguinaldo = fechaIngreso > inicioAnio ? fechaIngreso : inicioAnio;
+    const diasLaboradosAnio = Math.ceil((fechaBaja - fechaRefAguinaldo) / (1000 * 60 * 60 * 24)) + 1;
+    const diasEfectivos = Math.max(0, diasLaboradosAnio - diasFaltas);
+    const aguinaldoProporcional = redondear((salarioDiario * diasAguinaldoConfig / 365) * diasEfectivos);
+
     // ========================================
-    // CÁLCULOS DE LIQUIDACIÓN (solo despido injustificado)
+    // CÁLCULOS EXTRA FINIQUITO (despido injustificado)
+    // Finiquito = partes proporcionales + Indemnización + Prima de antigüedad
     // ========================================
-    
+
     let indemnizacion90Dias = 0;
     let primaAntiguedad = 0;
     let salariosVencidos = 0;
-    
-    if (Tipo === 'LIQUIDACION') {
-      // 1. Indemnización constitucional: 3 meses de salario (Art. 48 y 50 LFT)
-      indemnizacion90Dias = 90 * salarioDiarioIntegrado;
-      
+
+    if (Tipo === 'FINIQUITO') {
+      // 1. Indemnización constitucional: 3 meses de salario integrado (Art. 48 y 50 LFT)
+      // Indemnización = SDI × 90 días
+      indemnizacion90Dias = redondear(90 * salarioDiarioIntegrado);
+
       // 2. Prima de antigüedad: 12 días por año (Art. 162 LFT)
-      // Tope: doble del salario mínimo × 12 días
-      const salarioMinimo = 312.41; // 2024
-      const topeSDIPrima = Math.min(salarioDiarioIntegrado, salarioMinimo * 2);
-      primaAntiguedad = anosAntiguedad * 12 * topeSDIPrima;
-      
+      // SDI × 12 × Años de trabajo
+      // Tope: el SDI usado para prima NO puede ser menor a 1 SM ni mayor a 2 SM
+      const sdiParaPrima = Math.max(salarioMinimo, Math.min(salarioDiarioIntegrado, salarioMinimo * 2));
+      primaAntiguedad = redondear(anosAntiguedad * 12 * sdiParaPrima);
+
       // 3. Salarios vencidos: solo si hay juicio laboral (no calculamos aquí)
       salariosVencidos = 0;
     }
-    
+
     // ========================================
     // TOTALES
     // ========================================
-    
-    const totalBruto = pagoDiasTrabajados + (vacacionesProporcionales * salarioDiario) + 
-                       primaVacacional + aguinaldoProporcional + 
-                       indemnizacion90Dias + primaAntiguedad + salariosVencidos;
-    
-    // ISR (simplificado - en realidad es más complejo)
-    const isrEstimado = totalBruto * 0.25; // Tasa aproximada
-    
-    const totalNeto = totalBruto - isrEstimado;
-    
+
+    const totalBruto = redondear(
+      pagoDiasTrabajados + (vacacionesProporcionales * salarioDiario) +
+      primaVacacional + aguinaldoProporcional +
+      indemnizacion90Dias + primaAntiguedad + salariosVencidos
+    );
+
+    // ISR (simplificado - en realidad es más complejo, se implementará después)
+    const isrEstimado = redondear(totalBruto * 0.25);
+
+    const totalNeto = redondear(totalBruto - isrEstimado);
+
     // Guardar
     const finiquito = await prisma.finiquito_Liquidacion.create({
       data: {
@@ -182,6 +213,7 @@ export const calcular = async (req, res) => {
         Antiguedad_Dias: diasRestantes,
         Salario_Diario: salarioDiario,
         Salario_Diario_Integrado: salarioDiarioIntegrado,
+        Dias_Faltas: diasFaltas,
         Dias_Trabajados_Pendientes: diasTrabajadosMes,
         Pago_Dias_Trabajados: pagoDiasTrabajados,
         Vacaciones_Pendientes: vacacionesProporcionales,
@@ -198,8 +230,8 @@ export const calcular = async (req, res) => {
         CreatedBy: req.session.user?.Email_Office365 || null
       }
     });
-    
-    req.flash('success', `${Tipo === 'FINIQUITO' ? 'Finiquito' : 'Liquidación'} calculado exitosamente`);
+
+    req.flash('success', `${Tipo === 'FINIQUITO' ? 'Finiquito' : 'Liquidación'} calculado(a) exitosamente. SDI usado: $${salarioDiarioIntegrado} (factor: ${factorIntegracion.toFixed(4)})`);
     res.redirect(`/finiquito/${finiquito.ID_Finiquito}`);
   } catch (error) {
     console.error('Error al calcular finiquito:', error);
@@ -212,7 +244,7 @@ export const calcular = async (req, res) => {
 export const ver = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const finiquito = await prisma.finiquito_Liquidacion.findUnique({
       where: { ID_Finiquito: parseInt(id) },
       include: {
@@ -224,12 +256,12 @@ export const ver = async (req, res) => {
         }
       }
     });
-    
+
     if (!finiquito) {
       req.flash('error', 'Registro no encontrado');
       return res.redirect('/finiquito');
     }
-    
+
     res.render('finiquito/ver', {
       title: `${finiquito.Tipo === 'FINIQUITO' ? 'Finiquito' : 'Liquidación'}`,
       finiquito
@@ -245,7 +277,7 @@ export const ver = async (req, res) => {
 export const aprobar = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     await prisma.finiquito_Liquidacion.update({
       where: { ID_Finiquito: parseInt(id) },
       data: {
@@ -254,7 +286,7 @@ export const aprobar = async (req, res) => {
         Fecha_Aprobacion: new Date()
       }
     });
-    
+
     req.flash('success', 'Finiquito aprobado');
     res.redirect(`/finiquito/${id}`);
   } catch (error) {
@@ -264,12 +296,12 @@ export const aprobar = async (req, res) => {
   }
 };
 
-// Pagar finiquito
+// Pagar finiquito y dar de baja al empleado
 export const pagar = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    await prisma.finiquito_Liquidacion.update({
+
+    const finiquito = await prisma.finiquito_Liquidacion.update({
       where: { ID_Finiquito: parseInt(id) },
       data: {
         Estado: 'PAGADO',
@@ -277,8 +309,17 @@ export const pagar = async (req, res) => {
         Fecha_Pago: new Date()
       }
     });
-    
-    req.flash('success', 'Finiquito pagado');
+
+    // Marcar al empleado como BAJA (ID_Estatus = 2)
+    await prisma.empleados.update({
+      where: { ID_Empleado: finiquito.ID_Empleado },
+      data: {
+        ID_Estatus: 2, // BAJA
+        Fecha_Baja: finiquito.Fecha_Baja
+      }
+    });
+
+    req.flash('success', 'Finiquito pagado — empleado dado de baja');
     res.redirect(`/finiquito/${id}`);
   } catch (error) {
     console.error('Error:', error);
@@ -287,7 +328,45 @@ export const pagar = async (req, res) => {
   }
 };
 
-// Función auxiliar para calcular días de vacaciones
+// Eliminar finiquito (solo si no está pagado)
+export const eliminar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const finiquito = await prisma.finiquito_Liquidacion.findUnique({
+      where: { ID_Finiquito: parseInt(id) }
+    });
+
+    if (!finiquito) {
+      req.flash('error', 'Registro no encontrado');
+      return res.redirect('/finiquito');
+    }
+
+    if (finiquito.Pagado) {
+      req.flash('error', 'No se puede eliminar un finiquito ya pagado');
+      return res.redirect(`/finiquito/${id}`);
+    }
+
+    await prisma.finiquito_Liquidacion.delete({
+      where: { ID_Finiquito: parseInt(id) }
+    });
+
+    req.flash('success', 'Registro eliminado');
+    res.redirect('/finiquito');
+  } catch (error) {
+    console.error('Error al eliminar:', error);
+    req.flash('error', 'Error al eliminar el registro');
+    res.redirect('/finiquito');
+  }
+};
+
+// ============================================================
+// FUNCIONES AUXILIARES
+// ============================================================
+
+/**
+ * Calcula días de vacaciones según LFT reformada 2023
+ */
 function calcularDiasVacaciones(anosAntiguedad) {
   if (anosAntiguedad <= 0) return 0;
   if (anosAntiguedad === 1) return 12;
@@ -301,4 +380,26 @@ function calcularDiasVacaciones(anosAntiguedad) {
   if (anosAntiguedad <= 25) return 28;
   if (anosAntiguedad <= 30) return 30;
   return 32;
+}
+
+/**
+ * Redondea a 2 decimales
+ */
+function redondear(valor) {
+  return Math.round(valor * 100) / 100;
+}
+
+/**
+ * Calcula el SDI dinámico según antigüedad
+ * SDI = SD × (1 + DiasAguinaldo/365 + DiasVacaciones×PrimaVacacional/365)
+ * Exportado para uso en otros módulos
+ */
+export function calcularSDI(salarioDiario, anosAntiguedad, diasAguinaldo = 15, primaVacacionalPct = 0.25) {
+  const diasVacaciones = calcularDiasVacaciones(anosAntiguedad);
+  const factorIntegracion = 1 + (diasAguinaldo / 365) + (diasVacaciones * primaVacacionalPct / 365);
+  return {
+    sdi: redondear(salarioDiario * factorIntegracion),
+    factor: factorIntegracion,
+    diasVacaciones
+  };
 }

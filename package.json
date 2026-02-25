@@ -43,6 +43,9 @@
     "winston-daily-rotate-file": "^4.7.1",
     "xlsx": "^0.18.5"
   },
+  "prisma": {
+    "seed": "node prisma/seed.js && node prisma/seed-catalogos.js && node prisma/seed-configuracion.js"
+  },
   "devDependencies": {
     "nodemon": "^3.0.2",
     "prisma": "^5.7.0"

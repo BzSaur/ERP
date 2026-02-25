@@ -286,6 +286,42 @@ const configuracionNomina = [
     Valor: '278.80',
     Descripcion: 'Salario mínimo diario 2026',
     Tipo_Dato: 'DECIMAL'
+  },
+
+  // Proporcionalidad y jornada
+  {
+    Clave: 'HORAS_JORNADA_COMPLETA',
+    Valor: '48',
+    Descripcion: 'Horas semanales de jornada completa (base para proporcionalidad)',
+    Tipo_Dato: 'INT'
+  },
+  {
+    Clave: 'DIAS_JORNADA_COMPLETA',
+    Valor: '6',
+    Descripcion: 'Días laborables de jornada completa (5 o 6)',
+    Tipo_Dato: 'INT'
+  },
+  {
+    Clave: 'HORAS_FALTANTES_ACUMULAR',
+    Valor: 'true',
+    Descripcion: 'Si las horas faltantes se acumulan para generar faltas equivalentes en aguinaldo',
+    Tipo_Dato: 'BOOLEAN'
+  },
+
+  // Incapacidad IMSS
+  {
+    Clave: 'INCAPACIDAD_DIAS_EMPLEADOR',
+    Valor: '3',
+    Descripcion: 'Días de incapacidad que paga el empleador (1-3), a partir del 4to paga IMSS',
+    Tipo_Dato: 'INT'
+  },
+
+  // Suspensión/Acta administrativa
+  {
+    Clave: 'SUSPENSION_DIAS_MAXIMO',
+    Valor: '8',
+    Descripcion: 'Días máximos de suspensión por acta administrativa',
+    Tipo_Dato: 'INT'
   }
 ];
 

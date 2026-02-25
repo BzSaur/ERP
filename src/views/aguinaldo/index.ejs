@@ -16,6 +16,12 @@
           <i class="bi bi-cash-coin me-1"></i> Pagar Todos
         </button>
       </form>
+      <form action="/aguinaldo?_method=DELETE" method="POST" class="d-inline"
+            onsubmit="return confirm('¿Eliminar todos los aguinaldos pendientes?')">
+        <button type="submit" class="btn btn-outline-danger">
+          <i class="bi bi-trash me-1"></i> Eliminar Pendientes
+        </button>
+      </form>
     <% } %>
   </div>
 </div>
@@ -189,6 +195,12 @@
                     <form action="/aguinaldo/<%= a.ID_Aguinaldo %>/pagar" method="POST" class="d-inline">
                       <button type="submit" class="btn btn-sm btn-outline-success" title="Marcar pagado">
                         <i class="bi bi-check-lg"></i>
+                      </button>
+                    </form>
+                    <form action="/aguinaldo/<%= a.ID_Aguinaldo %>?_method=DELETE" method="POST" class="d-inline"
+                          onsubmit="return confirm('¿Eliminar?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                        <i class="bi bi-trash"></i>
                       </button>
                     </form>
                   <% } %>

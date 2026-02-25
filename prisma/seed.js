@@ -54,14 +54,23 @@ async function main() {
   // ============================================================
   await prisma.cat_Areas.createMany({
     data: [
-      { Nombre_Area: 'LABORATORIO', Descripcion: 'Área de laboratorio', Tipo_Area: 'PRODUCCION' },
+      // Áreas administrativas y generales
+      { Nombre_Area: 'LABORATORIO', Descripcion: 'Área de laboratorio general', Tipo_Area: 'PRODUCCION' },
       { Nombre_Area: 'SISTEMAS', Descripcion: 'Tecnologías de información', Tipo_Area: 'SISTEMAS' },
-      { Nombre_Area: 'COSMETICA', Descripcion: 'Producción cosmética', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'COSMETICA', Descripcion: 'Lijado y liberación de componentes', Tipo_Area: 'PRODUCCION' },
       { Nombre_Area: 'ADMINISTRACIÓN', Descripcion: 'Área administrativa', Tipo_Area: 'ADMINISTRATIVO' },
       { Nombre_Area: 'RECURSOS HUMANOS', Descripcion: 'Gestión de personal', Tipo_Area: 'ADMINISTRATIVO' },
       { Nombre_Area: 'CALIDAD', Descripcion: 'Control de calidad', Tipo_Area: 'PRODUCCION' },
       { Nombre_Area: 'ALMACÉN', Descripcion: 'Almacén y logística', Tipo_Area: 'OPERACIONES' },
-      { Nombre_Area: 'VENTAS', Descripcion: 'Área comercial', Tipo_Area: 'COMERCIAL' }
+      { Nombre_Area: 'VENTAS', Descripcion: 'Área comercial', Tipo_Area: 'COMERCIAL' },
+      // Áreas de producción MERO
+      { Nombre_Area: 'LABORATORIO - TEST INICIAL', Descripcion: 'Pruebas iniciales y desensamble', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'LABORATORIO - REPARACIÓN', Descripcion: 'Reparación de equipos por nivel', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'LAVADO', Descripcion: 'Lavado de componentes', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'LABORATORIO - RETEST', Descripcion: 'Verificación post-reparación', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'EMPAQUE', Descripcion: 'Ensamble, etiquetado y empaquetado final', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'PINTURA', Descripcion: 'Pintura de componentes', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'SERIGRAFÍA', Descripcion: 'Serigrafía de componentes', Tipo_Area: 'PRODUCCION' }
     ],
     skipDuplicates: true
   });
@@ -88,83 +97,40 @@ async function main() {
   // ============================================================
   // 6. CREAR PUESTOS
   // ============================================================
-  // Primero obtenemos las áreas para relacionarlas
-  const areaSistemas = await prisma.cat_Areas.findUnique({
-    where: { Nombre_Area: 'SISTEMAS' }
-  });
-  
-  const areaRH = await prisma.cat_Areas.findUnique({
-    where: { Nombre_Area: 'RECURSOS HUMANOS' }
-  });
-  
-  const areaCosmetica = await prisma.cat_Areas.findUnique({
-    where: { Nombre_Area: 'COSMETICA' }
-  });
-  
-  const areaAdmin = await prisma.cat_Areas.findUnique({
-    where: { Nombre_Area: 'ADMINISTRACIÓN' }
-  });
+  // Obtenemos todas las áreas para relacionar puestos
+  const areas = await prisma.cat_Areas.findMany();
+  const areaMap = {};
+  areas.forEach(a => { areaMap[a.Nombre_Area] = a.ID_Area; });
 
-  if (areaSistemas && areaRH && areaCosmetica && areaAdmin) {
+  // Sueldo homogéneo $8,364 para todos excepto encargados/supervisores
+  const S = 8364, H = 35;
+
+  const puestosData = [
+    // Administrativos y generales — mismo sueldo base
+    { Nombre_Puesto: 'Técnico Sistemas', ID_Area: areaMap['SISTEMAS'], Descripcion: 'Soporte técnico y mantenimiento', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Desarrollador Software', ID_Area: areaMap['SISTEMAS'], Descripcion: 'Desarrollo de aplicaciones', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Coordinador RH', ID_Area: areaMap['RECURSOS HUMANOS'], Descripcion: 'Coordinación de recursos humanos (encargado)', Salario_Base_Referencia: 15215, Salario_Hora_Referencia: 63 },
+    { Nombre_Puesto: 'Auxiliar RH', ID_Area: areaMap['RECURSOS HUMANOS'], Descripcion: 'Apoyo en gestión de personal', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Contador General', ID_Area: areaMap['ADMINISTRACIÓN'], Descripcion: 'Contabilidad general', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Auxiliar Administrativo', ID_Area: areaMap['ADMINISTRACIÓN'], Descripcion: 'Apoyo administrativo', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Supervisor Producción', ID_Area: areaMap['COSMETICA'], Descripcion: 'Supervisión de líneas de producción (encargado)', Salario_Base_Referencia: 13927, Salario_Hora_Referencia: 58 },
+    { Nombre_Puesto: 'Ejecutivo Ventas', ID_Area: areaMap['VENTAS'], Descripcion: 'Ventas y relación con clientes', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Almacenista', ID_Area: areaMap['ALMACÉN'], Descripcion: 'Control de inventario y almacén', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Inspector Calidad', ID_Area: areaMap['CALIDAD'], Descripcion: 'Inspección y control de calidad', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    // Puestos de producción MERO
+    { Nombre_Puesto: 'Operador Test Inicial', ID_Area: areaMap['LABORATORIO - TEST INICIAL'], Descripcion: 'Pruebas iniciales y desensamble', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Reparación', ID_Area: areaMap['LABORATORIO - REPARACIÓN'], Descripcion: 'Reparación de equipos por nivel', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Lavado', ID_Area: areaMap['LAVADO'], Descripcion: 'Lavado de componentes', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Retest', ID_Area: areaMap['LABORATORIO - RETEST'], Descripcion: 'Verificación post-reparación', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Empaque', ID_Area: areaMap['EMPAQUE'], Descripcion: 'Ensamble, etiquetado y empaquetado', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Cosmética', ID_Area: areaMap['COSMETICA'], Descripcion: 'Lijado y liberación de componentes', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Pintura', ID_Area: areaMap['PINTURA'], Descripcion: 'Pintura de componentes', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+    { Nombre_Puesto: 'Operador Serigrafía', ID_Area: areaMap['SERIGRAFÍA'], Descripcion: 'Serigrafía de componentes', Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+  ].filter(p => p.ID_Area);
+
+  if (puestosData.length) {
     await prisma.cat_Puestos.createMany({
-      data: [
-        {
-          Nombre_Puesto: 'Técnico Sistemas',
-          ID_Area: areaSistemas.ID_Area,
-          Descripcion: 'Soporte técnico y mantenimiento',
-          Salario_Base_Referencia: 12000,
-          Salario_Hora_Referencia: 150
-        },
-        {
-          Nombre_Puesto: 'Desarrollador Software',
-          ID_Area: areaSistemas.ID_Area,
-          Descripcion: 'Desarrollo de aplicaciones',
-          Salario_Base_Referencia: 25000,
-          Salario_Hora_Referencia: 300
-        },
-        {
-          Nombre_Puesto: 'Coordinador RH',
-          ID_Area: areaRH.ID_Area,
-          Descripcion: 'Coordinación de recursos humanos',
-          Salario_Base_Referencia: 18000,
-          Salario_Hora_Referencia: 220
-        },
-        {
-          Nombre_Puesto: 'Auxiliar RH',
-          ID_Area: areaRH.ID_Area,
-          Descripcion: 'Apoyo en gestión de personal',
-          Salario_Base_Referencia: 10000,
-          Salario_Hora_Referencia: 120
-        },
-        {
-          Nombre_Puesto: 'Operador Cosmética',
-          ID_Area: areaCosmetica.ID_Area,
-          Descripcion: 'Operador de línea de producción',
-          Salario_Base_Referencia: 8000,
-          Salario_Hora_Referencia: 100
-        },
-        {
-          Nombre_Puesto: 'Supervisor Producción',
-          ID_Area: areaCosmetica.ID_Area,
-          Descripcion: 'Supervisión de líneas de producción',
-          Salario_Base_Referencia: 15000,
-          Salario_Hora_Referencia: 180
-        },
-        {
-          Nombre_Puesto: 'Contador General',
-          ID_Area: areaAdmin.ID_Area,
-          Descripcion: 'Contabilidad general',
-          Salario_Base_Referencia: 20000,
-          Salario_Hora_Referencia: 250
-        },
-        {
-          Nombre_Puesto: 'Auxiliar Administrativo',
-          ID_Area: areaAdmin.ID_Area,
-          Descripcion: 'Apoyo administrativo',
-          Salario_Base_Referencia: 9000,
-          Salario_Hora_Referencia: 110
-        }
-      ],
+      data: puestosData,
       skipDuplicates: true
     });
     console.log('✅ Puestos creados');

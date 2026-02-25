@@ -1,13 +1,19 @@
 /**
  * Servicio de Cálculo de Nómina
- * 
+ *
  * Configuración:
  * - Pago: SEMANAL (viernes)
- * - Semana laboral: 6 días (Lunes a Sábado) - Domingos NO se trabajan
+ * - Semana laboral: configurable 5 o 6 días según tipo de horario
  * - Salario semanal = salario diario × 7 (incluye domingo de descanso LFT Art. 69/72)
  * - Deducciones controladas por SuperAdmin (IMSS, ISR, préstamos con tasa de interés configurable)
  * - Bono de puntualidad: configurable ($50 default)
  * - Horas extra: hasta 9 dobles, después triples
+ *
+ * PROPORCIONALIDAD:
+ * - Factor de días: 5/7 o 6/7 según jornada del empleado
+ * - Valor del día varía según si trabaja 5 o 6 días
+ * - Horas faltantes: si trabajó menos horas de las esperadas, se descuenta proporcionalmente
+ *   y se acumulan para generar faltas equivalentes (afecta aguinaldo)
  */
 
 import prisma from '../config/database.js';
@@ -24,11 +30,11 @@ export async function getConfig(clave, valorDefault = null) {
     const config = await prisma.configuracion_Nomina.findUnique({
       where: { Clave: clave }
     });
-    
+
     if (!config || !config.Activo) {
       return valorDefault;
     }
-    
+
     // Convertir según tipo de dato
     switch (config.Tipo_Dato) {
       case 'INT':
@@ -96,28 +102,31 @@ export async function updateConfig(clave, valor, updatedBy = null) {
 
 /**
  * Calcula la nómina semanal de un empleado
- * 
+ *
  * FÓRMULA REAL DE NÓMINA (conforme a LFT):
  * - Salario diario = Salario mensual / 30
  * - Salario semanal = Salario diario × 7 (incluye domingo descanso LFT Art. 69/72)
- * - Salario hora = Salario diario / 8
- * - Base: Si trabajó los 6 días (L-S), se paga semanal completo (7 días)
+ * - Salario hora = Salario diario / horas jornada
+ * - Base: Si trabajó los días laborables completos, se paga semanal completo (7 días)
  * - Si faltó, se descuenta proporcionalmente incluyendo parte del domingo
+ * - Horas faltantes: si un día trabajó menos horas de lo esperado, se descuenta
  * - Horas dobles/triples sobre salario hora
  * - Deducciones según config del SuperAdmin
- * 
+ *
  * @param {Object} params - Parámetros del cálculo
  * @returns {Object} - Desglose de nómina
  */
 export async function calcularNominaSemanal({
   salarioMensual,
-  diasTrabajados = 6,  // Días reales trabajados según checador (de 6 posibles L-S)
+  diasTrabajados = 6,  // Días reales trabajados según checador
   horasDobles = 0,
   horasTriples = 0,
   checadasCorrectas = 0,
   diasConChecada = 0,
   faltas = 0,
-  empleadoId = null
+  horasFaltantes = 0, // Horas que trabajó de menos en la semana
+  empleadoId = null,
+  diasLaborablesSemana = null // 5 o 6, se obtiene del tipo de horario si no se pasa
 }) {
   // Obtener configuración completa
   const config = await getConfigMultiple([
@@ -130,29 +139,51 @@ export async function calcularNominaSemanal({
     'TASA_IMSS_EMPLEADO',
     'TASA_ISR',
     'PRESTAMOS_TASA_INTERES',
-    'PRESTAMOS_ACTIVO'
+    'PRESTAMOS_ACTIVO',
+    'DIAS_JORNADA_COMPLETA',
+    'HORAS_DIARIAS'
   ]);
+
+  // ============================================================
+  // DETERMINAR DÍAS LABORABLES DEL EMPLEADO
+  // Si tiene tipo de horario con Dias_Semana, usar ese. Si no, usar config global.
+  // ============================================================
+  let diasLaborables = diasLaborablesSemana || config.DIAS_JORNADA_COMPLETA || 6;
+  const horasJornada = config.HORAS_DIARIAS || 8;
+
+  // Si se pasó empleadoId, obtener su tipo de horario
+  if (empleadoId && !diasLaborablesSemana) {
+    const empleado = await prisma.empleados.findUnique({
+      where: { ID_Empleado: empleadoId },
+      include: { tipo_horario: true }
+    });
+    if (empleado?.tipo_horario?.Dias_Semana) {
+      diasLaborables = empleado.tipo_horario.Dias_Semana;
+    }
+  }
+
+  // Factor de proporcionalidad: 5/7 o 6/7
+  const factorDias = diasLaborables / 7;
 
   // ============================================================
   // SALARIOS BASE (LFT)
   // ============================================================
-  const diasLaborables = 6; // L-S
   const salarioDiario = redondear(salarioMensual / 30);
   const salarioSemanal = redondear(salarioDiario * 7); // 7 días incluido domingo descanso (LFT Art. 69/72)
-  const salarioHora = redondear(salarioDiario / 8);
+  const salarioHora = redondear(salarioDiario / horasJornada);
 
   // ============================================================
   // PERCEPCIONES
   // ============================================================
 
   // Salario base semanal
-  // Si trabajó los 6 días = pago completo (7 días con domingo)
+  // Si trabajó todos los días laborables = pago completo (7 días con domingo)
   // Si faltó, se descuenta proporcionalmente
   let pagoSalarioBase;
   let pagoDomingoLFT = 0;
 
   if (faltas === 0 && diasTrabajados >= diasLaborables) {
-    // Semana completa: 7 días (6 laborales + domingo descanso)
+    // Semana completa: 7 días (días laborales + domingo descanso)
     pagoSalarioBase = salarioSemanal;
     pagoDomingoLFT = salarioDiario;
   } else {
@@ -163,13 +194,26 @@ export async function calcularNominaSemanal({
     pagoSalarioBase = redondear(pagoSalarioBase + pagoDomingoLFT);
   }
 
+  // Descuento por horas faltantes
+  // Si un día trabajó 5 de 8 horas, le faltan 3. Se descuenta proporcionalmente.
+  let descuentoHorasFaltantes = 0;
+  if (horasFaltantes > 0) {
+    descuentoHorasFaltantes = redondear(horasFaltantes * salarioHora);
+    pagoSalarioBase = redondear(pagoSalarioBase - descuentoHorasFaltantes);
+    pagoSalarioBase = Math.max(0, pagoSalarioBase); // No puede ser negativo
+  }
+
   // Bono de puntualidad (si cumple requisitos)
   let bonoPuntualidad = 0;
-  const cumplePuntualidad = 
-    checadasCorrectas >= (config.BONO_PUNTUALIDAD_CHECADAS || 12) &&
-    diasConChecada >= (config.BONO_PUNTUALIDAD_DIAS || 6) &&
-    faltas === 0;
-  
+  const checadasRequeridas = config.BONO_PUNTUALIDAD_CHECADAS || (diasLaborables * 2);
+  const diasRequeridos = config.BONO_PUNTUALIDAD_DIAS || diasLaborables;
+
+  const cumplePuntualidad =
+    checadasCorrectas >= checadasRequeridas &&
+    diasConChecada >= diasRequeridos &&
+    faltas === 0 &&
+    horasFaltantes === 0; // Horas faltantes también anulan el bono
+
   if (cumplePuntualidad) {
     bonoPuntualidad = config.BONO_PUNTUALIDAD_MONTO || 50;
   }
@@ -181,8 +225,8 @@ export async function calcularNominaSemanal({
 
   // Total percepciones
   const totalPercepciones = redondear(
-    pagoSalarioBase + 
-    bonoPuntualidad + 
+    pagoSalarioBase +
+    bonoPuntualidad +
     totalHorasExtra
   );
 
@@ -237,19 +281,24 @@ export async function calcularNominaSemanal({
   // ============================================================
   // RESULTADO
   // ============================================================
-  
+
   return {
     // Datos base
     salarioMensual,
     salarioDiario,
     salarioSemanal,
     salarioHora,
-    
-    // Días
+
+    // Días y proporcionalidad
     diasTrabajados,
     faltas,
     diasLaborables,
-    
+    factorDias, // 5/7 o 6/7
+
+    // Horas faltantes
+    horasFaltantes,
+    descuentoHorasFaltantes,
+
     // Percepciones
     percepciones: {
       salarioBase: pagoSalarioBase,
@@ -266,7 +315,7 @@ export async function calcularNominaSemanal({
       totalHorasExtra,
       total: totalPercepciones
     },
-    
+
     // Deducciones
     deducciones: {
       imss: deduccionIMSS,
@@ -274,18 +323,19 @@ export async function calcularNominaSemanal({
       prestamo: deduccionPrestamo,
       total: totalDeducciones
     },
-    
+
     // Neto
     sueldoNeto,
-    
+
     // Validaciones
     cumplePuntualidad,
     horasExtraTotales: horasDobles + horasTriples,
-    
+
     // Metadata
     calculadoEl: new Date(),
     configuracion: {
-      diasLaborablesSemana: 6,
+      diasLaborablesSemana: diasLaborables,
+      factorDias,
       domingosTrabajados: false,
       calculaIMSS: config.CALCULAR_IMSS === true,
       calculaISR: config.CALCULAR_ISR === true,
@@ -311,29 +361,29 @@ export async function calcularFiniquitoEstimado({
   fechaCalculo = new Date()
 }) {
   const salarioDiario = salarioMensual / 30;
-  
+
   // Calcular antigüedad
   const antiguedadMs = fechaCalculo - new Date(fechaIngreso);
   const antiguedadDias = Math.floor(antiguedadMs / (1000 * 60 * 60 * 24));
   const antiguedadAnios = Math.floor(antiguedadDias / 365);
-  
+
   // Días trabajados del período actual (proporcional)
   const diasPeriodoActual = antiguedadDias % 30; // Días del mes actual
   const pagoDiasTrabajados = redondear(salarioDiario * diasPeriodoActual);
-  
+
   // Vacaciones proporcionales
   const diasVacaciones = calcularDiasVacaciones(antiguedadAnios);
   const vacacionesProporcionales = redondear((diasVacaciones / 365) * antiguedadDias);
   const pagoVacaciones = redondear(salarioDiario * vacacionesProporcionales);
-  
+
   // Prima vacacional (25%)
   const primaVacacional = redondear(pagoVacaciones * 0.25);
-  
+
   // Aguinaldo proporcional
   const diasAguinaldo = 15; // Mínimo de ley
   const aguinaldoProporcional = redondear((diasAguinaldo / 365) * antiguedadDias);
   const pagoAguinaldo = redondear(salarioDiario * aguinaldoProporcional);
-  
+
   // Total finiquito
   const totalFiniquito = redondear(
     pagoDiasTrabajados +
@@ -341,7 +391,7 @@ export async function calcularFiniquitoEstimado({
     primaVacacional +
     pagoAguinaldo
   );
-  
+
   return {
     salarioDiario,
     antiguedad: {
@@ -374,14 +424,22 @@ export async function calcularFiniquitoEstimado({
 
 /**
  * Evalúa si un empleado cumple con los requisitos de puntualidad
- * Nota: Semana laboral = 6 días (L-S), domingos NO se trabajan
+ * Nota: Semana laboral configurable (5 o 6 días)
  */
 export async function evaluarPuntualidad({
   empleadoId,
   fechaInicio,
   fechaFin
 }) {
-  // Obtener registros de asistencia de la semana (L-S, sin domingos)
+  // Obtener el tipo de horario del empleado para saber días laborables
+  const empleado = await prisma.empleados.findUnique({
+    where: { ID_Empleado: empleadoId },
+    include: { tipo_horario: true }
+  });
+
+  const diasLaborables = empleado?.tipo_horario?.Dias_Semana || 6;
+
+  // Obtener registros de asistencia de la semana
   const asistencias = await prisma.empleados_Asistencia.findMany({
     where: {
       ID_Empleado: empleadoId,
@@ -401,13 +459,12 @@ export async function evaluarPuntualidad({
   ]);
 
   const toleranciaMinutos = config.TOLERANCIA_MINUTOS || 15;
-  const horaLimite = new Date();
-  horaLimite.setHours(8, toleranciaMinutos, 0, 0);
 
   let checadasCorrectas = 0;
   let diasConChecada = 0;
   let faltas = 0;
   let retardos = 0;
+  let horasFaltantes = 0;
 
   for (const asistencia of asistencias) {
     // Ignorar domingos (día 0)
@@ -426,21 +483,31 @@ export async function evaluarPuntualidad({
     // Verificar entrada y salida
     if (asistencia.Hora_Entrada && asistencia.Hora_Salida) {
       checadasCorrectas += 2;
-      
+
       // Verificar si llegó tarde
       const horaEntrada = new Date(asistencia.Hora_Entrada);
-      if (horaEntrada.getHours() > 8 || 
+      if (horaEntrada.getHours() > 8 ||
           (horaEntrada.getHours() === 8 && horaEntrada.getMinutes() > toleranciaMinutos)) {
         retardos++;
       }
     } else if (asistencia.Hora_Entrada || asistencia.Hora_Salida) {
       checadasCorrectas += 1;
     }
+
+    // Calcular horas faltantes del día
+    const horasTrabajadas = Number(asistencia.Horas_Trabajadas) || 0;
+    const horasEsperadas = empleado?.tipo_horario?.Horas_Jornada || 8;
+    if (horasTrabajadas < horasEsperadas && asistencia.Presente) {
+      horasFaltantes += (horasEsperadas - horasTrabajadas);
+    }
   }
 
-  const cumpleRequisitos = 
-    checadasCorrectas >= (config.BONO_PUNTUALIDAD_CHECADAS || 12) &&  // 2 checadas * 6 días
-    diasConChecada >= (config.BONO_PUNTUALIDAD_DIAS || 6) &&  // L-S
+  const checadasRequeridas = config.BONO_PUNTUALIDAD_CHECADAS || (diasLaborables * 2);
+  const diasRequeridos = config.BONO_PUNTUALIDAD_DIAS || diasLaborables;
+
+  const cumpleRequisitos =
+    checadasCorrectas >= checadasRequeridas &&
+    diasConChecada >= diasRequeridos &&
     faltas === 0 &&
     retardos === 0;
 
@@ -452,10 +519,11 @@ export async function evaluarPuntualidad({
     checadasCorrectas,
     faltas,
     retardos,
+    horasFaltantes: redondear(horasFaltantes),
     requisitos: {
-      checadasRequeridas: config.BONO_PUNTUALIDAD_CHECADAS || 12,
-      diasRequeridos: config.BONO_PUNTUALIDAD_DIAS || 6,
-      diasLaborables: 6  // L-S, domingos NO
+      checadasRequeridas,
+      diasRequeridos,
+      diasLaborables
     },
     cumpleRequisitos,
     montoBono: cumpleRequisitos ? (config.BONO_PUNTUALIDAD_MONTO || 50) : 0
@@ -495,17 +563,17 @@ function redondear(valor) {
 export function getSemanaActual() {
   const hoy = new Date();
   const diaSemana = hoy.getDay(); // 0 = domingo
-  
+
   // Calcular lunes de esta semana
   const lunes = new Date(hoy);
   lunes.setDate(hoy.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1));
   lunes.setHours(0, 0, 0, 0);
-  
+
   // Calcular sábado de esta semana
   const sabado = new Date(lunes);
   sabado.setDate(lunes.getDate() + 5);
   sabado.setHours(23, 59, 59, 999);
-  
+
   return { lunes, sabado };
 }
 

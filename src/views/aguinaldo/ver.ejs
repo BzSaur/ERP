@@ -14,6 +14,12 @@
           <i class="bi bi-check-circle me-1"></i> Aprobar y Pagar
         </button>
       </form>
+      <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>?_method=DELETE" method="POST" class="d-inline"
+            onsubmit="return confirm('¿Eliminar este aguinaldo?')">
+        <button type="submit" class="btn btn-outline-danger ms-2">
+          <i class="bi bi-trash me-1"></i> Eliminar
+        </button>
+      </form>
     <% } else { %>
       <span class="badge bg-success">
         <i class="bi bi-check-circle me-1"></i>Pagado
@@ -94,6 +100,40 @@
             <small class="text-body-secondary d-block">Días de Aguinaldo (LFT)</small>
             <strong><%= aguinaldo.Dias_Aguinaldo %> días</strong>
           </div>
+
+          <!-- Proporcionalidad -->
+          <div class="col-12 border-top pt-3">
+            <h6 class="text-body-secondary mb-2"><i class="bi bi-pie-chart me-1"></i> Proporcionalidad</h6>
+            <% if (!aguinaldo.Pagado) { %>
+            <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/editar-faltas" method="POST" class="row g-2 align-items-end mb-2">
+              <div class="col-auto">
+                <label for="Dias_Faltas" class="form-label small mb-0">Días faltados</label>
+                <input type="number" class="form-control form-control-sm" id="Dias_Faltas" name="Dias_Faltas"
+                       value="<%= aguinaldo.Faltas_Injustificadas %>" min="0" max="<%= aguinaldo.Dias_Laborados %>" style="width: 80px;">
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Recalcular
+                </button>
+              </div>
+            </form>
+            <% } %>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <small class="text-body-secondary d-block">Faltas</small>
+                <strong class="<%= aguinaldo.Faltas_Injustificadas > 0 ? 'text-danger' : '' %>"><%= aguinaldo.Faltas_Injustificadas %> días</strong>
+              </div>
+              <div class="col-md-4">
+                <small class="text-body-secondary d-block">Días Efectivos</small>
+                <strong><%= aguinaldo.Dias_Efectivos || aguinaldo.Dias_Laborados %> días</strong>
+              </div>
+              <div class="col-md-4">
+                <small class="text-body-secondary d-block">Factor</small>
+                <strong><%= (parseFloat(aguinaldo.Factor_Proporcionalidad || 1) * 100).toFixed(1) %>%</strong>
+              </div>
+            </div>
+          </div>
+
           <div class="col-12 border-top pt-3">
             <div class="d-flex justify-content-between mb-2">
               <span>Monto Bruto:</span>

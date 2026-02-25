@@ -85,8 +85,17 @@ router.post('/aguinaldo/pagar-todos', aguinaldoController.pagarTodos);
 // Ver detalle
 router.get('/aguinaldo/:id', aguinaldoController.ver);
 
+// Editar faltas y recalcular
+router.post('/aguinaldo/:id/editar-faltas', aguinaldoController.editarFaltas);
+
 // Marcar como pagado
 router.post('/aguinaldo/:id/pagar', aguinaldoController.pagar);
+
+// Eliminar aguinaldo individual
+router.delete('/aguinaldo/:id', aguinaldoController.eliminar);
+
+// Eliminar todos los pendientes
+router.delete('/aguinaldo', aguinaldoController.eliminarTodos);
 
 // ============================================================
 // FINIQUITO / LIQUIDACIÓN
@@ -109,6 +118,9 @@ router.post('/finiquito/:id/aprobar', finiquitoController.aprobar);
 
 // Pagar
 router.post('/finiquito/:id/pagar', finiquitoController.pagar);
+
+// Eliminar
+router.delete('/finiquito/:id', finiquitoController.eliminar);
 
 // ============================================================
 // HORAS ADICIONALES

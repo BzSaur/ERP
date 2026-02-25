@@ -2,9 +2,9 @@
   <div>
     <h2 class="mb-1">
       <% if (finiquito.Tipo === 'FINIQUITO') { %>
-        <i class="bi bi-file-check me-2"></i>Finiquito
+        <i class="bi bi-file-earmark-medical me-2"></i>Finiquito
       <% } else { %>
-        <i class="bi bi-file-earmark-medical me-2"></i>Liquidación
+        <i class="bi bi-file-check me-2"></i>Liquidación
       <% } %>
       #<%= finiquito.ID_Finiquito %>
     </h2>
@@ -23,6 +23,14 @@
       <form action="/finiquito/<%= finiquito.ID_Finiquito %>/pagar" method="POST" class="d-inline">
         <button type="submit" class="btn btn-success">
           <i class="bi bi-cash me-1"></i> Registrar Pago
+        </button>
+      </form>
+    <% } %>
+    <% if (!finiquito.Pagado) { %>
+      <form action="/finiquito/<%= finiquito.ID_Finiquito %>?_method=DELETE" method="POST" class="d-inline"
+            onsubmit="return confirm('¿Eliminar este registro?')">
+        <button type="submit" class="btn btn-outline-danger ms-2">
+          <i class="bi bi-trash me-1"></i> Eliminar
         </button>
       </form>
     <% } %>
@@ -65,12 +73,12 @@
             <strong><%= finiquito.empleado.Nombre %> <%= finiquito.empleado.Apellido_Paterno %> <%= finiquito.empleado.Apellido_Materno || '' %></strong>
           </div>
           <div class="col-md-4">
-            <small class="text-body-secondary d-block">Departamento</small>
-            <strong><%= finiquito.empleado.departamento?.Nombre || 'N/A' %></strong>
+            <small class="text-body-secondary d-block">Área</small>
+            <strong><%= finiquito.empleado.area?.Nombre_Area || 'N/A' %></strong>
           </div>
           <div class="col-md-4">
             <small class="text-body-secondary d-block">Puesto</small>
-            <strong><%= finiquito.empleado.puesto?.Nombre || 'N/A' %></strong>
+            <strong><%= finiquito.empleado.puesto?.Nombre_Puesto || 'N/A' %></strong>
           </div>
           <div class="col-6 col-md-3">
             <small class="text-body-secondary d-block">Fecha de Ingreso</small>
@@ -87,9 +95,9 @@
           <div class="col-6 col-md-3">
             <small class="text-body-secondary d-block">Tipo</small>
             <% if (finiquito.Tipo === 'FINIQUITO') { %>
-              <span class="badge bg-info fs-6">Finiquito</span>
+              <span class="badge bg-warning text-dark fs-6">Finiquito</span>
             <% } else { %>
-              <span class="badge bg-warning text-dark fs-6">Liquidación</span>
+              <span class="badge bg-info fs-6">Liquidación</span>
             <% } %>
           </div>
         </div>
@@ -97,11 +105,15 @@
         <div class="row g-3">
           <div class="col-md-4">
             <small class="text-body-secondary d-block">Salario Mensual</small>
-            <strong>$<%= Number(finiquito.Salario_Mensual).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+            <strong>$<%= (Number(finiquito.Salario_Diario) * 30).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-2">
             <small class="text-body-secondary d-block">Salario Diario</small>
             <strong>$<%= Number(finiquito.Salario_Diario).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+          </div>
+          <div class="col-md-2">
+            <small class="text-body-secondary d-block">SDI</small>
+            <strong>$<%= Number(finiquito.Salario_Diario_Integrado).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
           </div>
           <div class="col-md-4">
             <small class="text-body-secondary d-block">Motivo de Baja</small>
@@ -132,8 +144,8 @@
                 <i class="bi bi-calendar-day me-2 text-primary"></i>
                 Días trabajados no pagados
               </td>
-              <td class="text-center"><%= finiquito.Dias_Trabajados %> días</td>
-              <td class="text-end">$<%= Number(finiquito.Monto_Dias_Trabajados).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              <td class="text-center"><%= finiquito.Dias_Trabajados_Pendientes %> días</td>
+              <td class="text-end">$<%= Number(finiquito.Pago_Dias_Trabajados).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
             </tr>
 
             <!-- Vacaciones -->
@@ -143,8 +155,8 @@
                 Vacaciones proporcionales
                 <small class="text-body-secondary d-block">Correspondientes al año actual</small>
               </td>
-              <td class="text-center"><%= Number(finiquito.Dias_Vacaciones).toFixed(2) %> días</td>
-              <td class="text-end">$<%= Number(finiquito.Monto_Vacaciones).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              <td class="text-center"><%= finiquito.Vacaciones_Pendientes %> días</td>
+              <td class="text-end">$<%= (Number(finiquito.Vacaciones_Pendientes) * Number(finiquito.Salario_Diario)).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
             </tr>
 
             <!-- Prima Vacacional -->
@@ -155,7 +167,7 @@
                 <small class="text-body-secondary d-block">25% sobre vacaciones (Art. 80 LFT)</small>
               </td>
               <td class="text-center">25%</td>
-              <td class="text-end">$<%= Number(finiquito.Monto_Prima_Vacacional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              <td class="text-end">$<%= Number(finiquito.Prima_Vacacional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
             </tr>
 
             <!-- Aguinaldo -->
@@ -163,13 +175,13 @@
               <td>
                 <i class="bi bi-gift me-2 text-success"></i>
                 Aguinaldo proporcional
-                <small class="text-body-secondary d-block">15 días mínimo (Art. 87 LFT)</small>
+                <small class="text-body-secondary d-block">15 días mínimo (Art. 87 LFT)<% if (finiquito.Dias_Faltas > 0) { %> — <%= finiquito.Dias_Faltas %> falta(s) descontada(s)<% } %></small>
               </td>
-              <td class="text-center"><%= Number(finiquito.Dias_Aguinaldo).toFixed(2) %> días</td>
-              <td class="text-end">$<%= Number(finiquito.Monto_Aguinaldo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              <td class="text-center"><%= Number(finiquito.Salario_Diario) > 0 ? (Number(finiquito.Aguinaldo_Proporcional) / Number(finiquito.Salario_Diario)).toFixed(2) : '0.00' %> días</td>
+              <td class="text-end">$<%= Number(finiquito.Aguinaldo_Proporcional).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
             </tr>
 
-            <% if (finiquito.Tipo === 'LIQUIDACION') { %>
+            <% if (finiquito.Tipo === 'FINIQUITO') { %>
               <!-- Indemnización -->
               <tr class="table-warning">
                 <td>
@@ -179,7 +191,7 @@
                 </td>
                 <td class="text-center">90 días</td>
                 <td class="text-end">
-                  <strong>$<%= Number(finiquito.Monto_Indemnizacion).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                  <strong>$<%= Number(finiquito.Indemnizacion_90_Dias).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
                 </td>
               </tr>
 
@@ -192,7 +204,7 @@
                 </td>
                 <td class="text-center"><%= finiquito.Antiguedad_Anos %> año(s)</td>
                 <td class="text-end">
-                  <strong>$<%= Number(finiquito.Monto_Prima_Antiguedad).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
+                  <strong>$<%= Number(finiquito.Prima_Antiguedad).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong>
                 </td>
               </tr>
             <% } %>
@@ -202,10 +214,10 @@
               <td colspan="2" class="text-end"><strong>Subtotal Percepciones:</strong></td>
               <td class="text-end"><strong>$<%= Number(finiquito.Total_Bruto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></strong></td>
             </tr>
-            <% if (finiquito.ISR_Retenido > 0) { %>
+            <% if (Number(finiquito.Deduccion_ISR) > 0) { %>
             <tr class="table-danger">
               <td colspan="2" class="text-end">(-) ISR Retenido:</td>
-              <td class="text-end text-danger">$<%= Number(finiquito.ISR_Retenido).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
+              <td class="text-end text-danger">$<%= Number(finiquito.Deduccion_ISR).toLocaleString('es-MX', { minimumFractionDigits: 2 }) %></td>
             </tr>
             <% } %>
             <tr class="table-success">
@@ -239,9 +251,9 @@
           </div>
           <div class="col-6 text-end">
             <% if (finiquito.Tipo === 'FINIQUITO') { %>
-              <span class="badge bg-info">Finiquito</span>
+              <span class="badge bg-warning text-dark">Finiquito</span>
             <% } else { %>
-              <span class="badge bg-warning text-dark">Liquidación</span>
+              <span class="badge bg-info">Liquidación</span>
             <% } %>
           </div>
           <div class="col-6">
@@ -305,19 +317,19 @@
         <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Base Legal</h6>
       </div>
       <div class="card-body small">
+        <p class="mb-2">
+          <strong>Art. 76 LFT:</strong> Vacaciones mínimas según antigüedad.
+        </p>
+        <p class="mb-2">
+          <strong>Art. 80 LFT:</strong> Prima vacacional del 25% mínimo.
+        </p>
+        <p class="mb-2">
+          <strong>Art. 87 LFT:</strong> Aguinaldo de 15 días mínimo.
+        </p>
         <% if (finiquito.Tipo === 'FINIQUITO') { %>
+          <hr>
           <p class="mb-2">
-            <strong>Art. 76 LFT:</strong> Vacaciones mínimas según antigüedad.
-          </p>
-          <p class="mb-2">
-            <strong>Art. 80 LFT:</strong> Prima vacacional del 25% mínimo.
-          </p>
-          <p class="mb-0">
-            <strong>Art. 87 LFT:</strong> Aguinaldo de 15 días mínimo.
-          </p>
-        <% } else { %>
-          <p class="mb-2">
-            <strong>Art. 48-50 LFT:</strong> Indemnización de 3 meses de salario.
+            <strong>Art. 48-50 LFT:</strong> Indemnización de 3 meses de salario integrado.
           </p>
           <p class="mb-0">
             <strong>Art. 162 LFT:</strong> Prima de antigüedad de 12 días por año trabajado.

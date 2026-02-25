@@ -194,6 +194,14 @@
                   <a href="/finiquito/<%= f.ID_Finiquito %>" class="btn btn-sm btn-outline-primary" title="Ver detalle">
                     <i class="bi bi-eye"></i>
                   </a>
+                  <% if (!f.Pagado) { %>
+                    <form action="/finiquito/<%= f.ID_Finiquito %>?_method=DELETE" method="POST" class="d-inline"
+                          onsubmit="return confirm('¿Eliminar?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  <% } %>
                 </td>
               </tr>
             <% }) %>
