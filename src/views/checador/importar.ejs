@@ -25,6 +25,12 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
     <% } %>
+    <% if (messages.info) { %>
+      <div class="alert alert-info alert-dismissible fade show">
+        <i class="bi bi-info-circle"></i> <%= messages.info %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    <% } %>
   <% } %>
 
   <!-- Formulario de carga -->
@@ -41,18 +47,20 @@
                 <h5 class="mb-0 mt-1">Checador RAM1</h5>
               </div>
               <div class="card-body text-center p-4">
-                <div class="upload-zone" id="dropZoneRAM1">
+                <div class="upload-zone rounded border border-2 border-dashed p-4 cursor-pointer" id="dropZoneRAM1" role="button" tabindex="0">
                   <input type="file" name="ram1" id="fileRAM1" accept=".xlsx,.xls" class="d-none">
+                  
                   <div class="upload-placeholder" id="placeholderRAM1">
                     <i class="bi bi-file-earmark-spreadsheet fs-1 text-primary"></i>
                     <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
                     <p class="text-body-secondary small">o haz clic para seleccionar</p>
-                    <span class="badge bg-light text-dark">.xlsx</span>
+                    <span class="badge bg-light text-dark">.xlsx / .xls</span>
                   </div>
+
                   <div class="upload-selected d-none" id="selectedRAM1">
                     <i class="bi bi-file-earmark-check fs-1 text-success"></i>
                     <p class="mt-2 mb-0 fw-semibold text-success" id="fileNameRAM1"></p>
-                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearFile('RAM1')">
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 btn-clear-file" data-checador="RAM1">
                       <i class="bi bi-x"></i> Quitar
                     </button>
                   </div>
@@ -69,18 +77,20 @@
                 <h5 class="mb-0 mt-1">Checador RAM2</h5>
               </div>
               <div class="card-body text-center p-4">
-                <div class="upload-zone" id="dropZoneRAM2">
+                <div class="upload-zone rounded border border-2 border-dashed p-4 cursor-pointer" id="dropZoneRAM2" role="button" tabindex="0">
                   <input type="file" name="ram2" id="fileRAM2" accept=".xlsx,.xls" class="d-none">
+                  
                   <div class="upload-placeholder" id="placeholderRAM2">
                     <i class="bi bi-file-earmark-spreadsheet fs-1 text-success"></i>
                     <p class="mt-2 mb-1 fw-semibold">Arrastra el archivo aquí</p>
                     <p class="text-body-secondary small">o haz clic para seleccionar</p>
-                    <span class="badge bg-light text-dark">.xlsx</span>
+                    <span class="badge bg-light text-dark">.xlsx / .xls</span>
                   </div>
+
                   <div class="upload-selected d-none" id="selectedRAM2">
                     <i class="bi bi-file-earmark-check fs-1 text-success"></i>
                     <p class="mt-2 mb-0 fw-semibold text-success" id="fileNameRAM2"></p>
-                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearFile('RAM2')">
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 btn-clear-file" data-checador="RAM2">
                       <i class="bi bi-x"></i> Quitar
                     </button>
                   </div>
@@ -116,70 +126,125 @@
   </div>
 </div>
 
-<%- contentFor('script') %>
 <script>
-  // Drag & Drop y selección de archivos
-  ['RAM1', 'RAM2'].forEach(function(checador) {
-    const dropZone = document.getElementById('dropZone' + checador);
-    const fileInput = document.getElementById('file' + checador);
-    const placeholder = document.getElementById('placeholder' + checador);
-    const selected = document.getElementById('selected' + checador);
-    const fileName = document.getElementById('fileName' + checador);
+  document.addEventListener('DOMContentLoaded', function () {
+    const tiposPermitidos = ['.xlsx', '.xls'];
 
-    // Click para seleccionar
-    dropZone.addEventListener('click', function() {
-      fileInput.click();
-    });
+    function isExcelFile(fileName) {
+      const lowerName = (fileName || '').toLowerCase();
+      return tiposPermitidos.some(function (ext) {
+        return lowerName.endsWith(ext);
+      });
+    }
 
-    // Drag & Drop
-    dropZone.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', function() {
-      dropZone.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      if (e.dataTransfer.files.length > 0) {
-        fileInput.files = e.dataTransfer.files;
-        showFile(checador, e.dataTransfer.files[0].name);
+    function showFile(checador, name) {
+      document.getElementById('placeholder' + checador).classList.add('d-none');
+      document.getElementById('selected' + checador).classList.remove('d-none');
+      document.getElementById('fileName' + checador).textContent = name;
+      updateButton();
+    }
+
+    function clearFile(checador) {
+      const input = document.getElementById('file' + checador);
+      input.value = '';
+      document.getElementById('placeholder' + checador).classList.remove('d-none');
+      document.getElementById('selected' + checador).classList.add('d-none');
+      document.getElementById('fileName' + checador).textContent = '';
+      updateButton();
+    }
+
+    function updateButton() {
+      const hasRAM1 = document.getElementById('fileRAM1').files.length > 0;
+      const hasRAM2 = document.getElementById('fileRAM2').files.length > 0;
+      document.getElementById('btnProcesar').disabled = !(hasRAM1 || hasRAM2);
+    }
+
+    function processSelectedFile(checador, file) {
+      const input = document.getElementById('file' + checador);
+
+      if (!file) {
+        clearFile(checador);
+        return;
       }
-    });
 
-    // File selected
-    fileInput.addEventListener('change', function() {
-      if (fileInput.files.length > 0) {
-        showFile(checador, fileInput.files[0].name);
+      if (!isExcelFile(file.name)) {
+        alert('Solo se permiten archivos .xlsx o .xls');
+        input.value = '';
+        clearFile(checador);
+        return;
       }
+
+      showFile(checador, file.name);
+    }
+
+    ['RAM1', 'RAM2'].forEach(function (checador) {
+      const dropZone = document.getElementById('dropZone' + checador);
+      const fileInput = document.getElementById('file' + checador);
+
+      if (!dropZone || !fileInput) return;
+
+      dropZone.addEventListener('click', function (e) {
+        if (e.target.closest('.btn-clear-file')) return;
+        fileInput.click();
+      });
+
+      dropZone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fileInput.click();
+        }
+      });
+
+      dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+      });
+
+      dropZone.addEventListener('dragleave', function () {
+        dropZone.classList.remove('drag-over');
+      });
+
+      dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        const file = files[0];
+
+        if (!isExcelFile(file.name)) {
+          alert('Solo se permiten archivos .xlsx o .xls');
+          return;
+        }
+
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        processSelectedFile(checador, file);
+      });
+
+      fileInput.addEventListener('change', function () {
+        const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        processSelectedFile(checador, file);
+      });
     });
-  });
 
-  function showFile(checador, name) {
-    document.getElementById('placeholder' + checador).classList.add('d-none');
-    document.getElementById('selected' + checador).classList.remove('d-none');
-    document.getElementById('fileName' + checador).textContent = name;
+    document.querySelectorAll('.btn-clear-file').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        clearFile(this.dataset.checador);
+      });
+    });
+
+    document.getElementById('formChecador').addEventListener('submit', function () {
+      const btn = document.getElementById('btnProcesar');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+    });
+
     updateButton();
-  }
-
-  function clearFile(checador) {
-    document.getElementById('file' + checador).value = '';
-    document.getElementById('placeholder' + checador).classList.remove('d-none');
-    document.getElementById('selected' + checador).classList.add('d-none');
-    updateButton();
-  }
-
-  function updateButton() {
-    var hasRAM1 = document.getElementById('fileRAM1').files.length > 0;
-    var hasRAM2 = document.getElementById('fileRAM2').files.length > 0;
-    document.getElementById('btnProcesar').disabled = !(hasRAM1 || hasRAM2);
-  }
-
-  // Loading state on submit
-  document.getElementById('formChecador').addEventListener('submit', function() {
-    var btn = document.getElementById('btnProcesar');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
   });
 </script>

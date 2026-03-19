@@ -40,14 +40,12 @@ document.addEventListener('DOMContentLoaded', function() {
     sidebarOverlay.addEventListener('click', closeSidebar);
   }
 
-  // Close on Escape key
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && sidebar && sidebar.classList.contains('show')) {
       closeSidebar();
     }
   });
 
-  // Close on resize to mobile
   window.addEventListener('resize', function() {
     if (window.innerWidth < 992) {
       closeSidebar();
@@ -76,7 +74,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Init open submenu arrows
   document.querySelectorAll('.sidebar-submenu.show').forEach(function(submenu) {
     const arrow = submenu.previousElementSibling
       ? submenu.previousElementSibling.querySelector('.submenu-arrow')
@@ -86,7 +83,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Close drawer when clicking a nav link (not submenu toggle)
   document.querySelectorAll('.sidebar-nav a:not(.submenu-toggle)').forEach(function(link) {
     link.addEventListener('click', closeSidebar);
   });
@@ -163,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ============================================================
   document.querySelectorAll('button[type="submit"]').forEach(function(button) {
     var form = button.closest('form');
-    if (form) {
+    if (form && !form.id) {
       form.addEventListener('submit', function() {
         button.disabled = true;
         var originalText = button.innerHTML;

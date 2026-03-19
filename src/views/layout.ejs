@@ -22,6 +22,10 @@
   <link href="/css/components.css" rel="stylesheet">
   <link href="/css/pages.css" rel="stylesheet">
   <link href="/css/responsive.css" rel="stylesheet">
+
+  <% if (typeof style !== 'undefined') { %>
+    <%- style %>
+  <% } %>
 </head>
 <body>
   <div class="wrapper">
@@ -48,5 +52,9 @@
   
   <!-- Custom JS -->
   <script src="/js/main.js"></script>
+
+  <% if (typeof script !== 'undefined') { %>
+    <%- script %>
+  <% } %>
 </body>
 </html>
