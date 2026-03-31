@@ -3,6 +3,14 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
+const isProduction = process.env.NODE_ENV === 'production';
+const enableHsts = process.env.ENABLE_HSTS
+  ? process.env.ENABLE_HSTS === 'true'
+  : isProduction;
+const forceSecureCookie = process.env.SESSION_COOKIE_SECURE
+  ? process.env.SESSION_COOKIE_SECURE === 'true'
+  : null;
+
 // ============================================================
 // CONFIGURACIÓN DE HELMET (Seguridad de headers)
 // ============================================================
@@ -18,11 +26,13 @@ export const helmetConfig = helmet({
     }
   },
   crossOriginEmbedderPolicy: false,
-  hsts: {
-    maxAge: 31536000, // 1 año
-    includeSubDomains: true,
-    preload: true
-  }
+  hsts: enableHsts
+    ? {
+        maxAge: 31536000, // 1 año
+        includeSubDomains: true,
+        preload: true
+      }
+    : false
 });
 
 // ============================================================
@@ -58,7 +68,8 @@ export const getSessionConfig = (secret) => ({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // Solo HTTPS en producción
+    // secure:auto evita bloquear login en HTTP y mantiene cookies seguras bajo HTTPS/proxy
+    secure: forceSecureCookie ?? (isProduction ? 'auto' : false),
     httpOnly: true, // Protege contra XSS
     sameSite: 'strict', // Protege contra CSRF
     maxAge: 1000 * 60 * 60 * 8 // 8 horas

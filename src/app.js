@@ -16,6 +16,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+if (config.isProduction) {
+  // Permite detectar HTTPS correctamente cuando hay reverse proxy (Nginx/Traefik)
+  app.set('trust proxy', 1);
+}
+
 // ============================================================
 // SEGURIDAD - Headers y Rate Limiting
 // ============================================================
