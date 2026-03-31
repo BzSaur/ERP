@@ -7,6 +7,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const enableHsts = process.env.ENABLE_HSTS
   ? process.env.ENABLE_HSTS === 'true'
   : isProduction;
+const enableCspHttpsUpgrade = process.env.CSP_UPGRADE_INSECURE_REQUESTS === 'true';
 const forceSecureCookie = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === 'true'
   : null;
@@ -22,9 +23,13 @@ export const helmetConfig = helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://cdn.jsdelivr.net"]
+      connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      // Prevent HTTP deployments from being auto-upgraded to HTTPS by CSP.
+      upgradeInsecureRequests: enableCspHttpsUpgrade ? [] : null
     }
   },
+  crossOriginOpenerPolicy: false,
+  originAgentCluster: false,
   crossOriginEmbedderPolicy: false,
   hsts: enableHsts
     ? {
