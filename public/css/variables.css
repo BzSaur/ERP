@@ -39,14 +39,24 @@
 }
 
 /* Base reset - complement Bootstrap's reboot */
+html,
+body {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--color-light);
   color: var(--color-dark);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
 }
+
 
 a {
   text-decoration: none;

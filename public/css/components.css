@@ -373,3 +373,16 @@
   background-color: rgba(30, 58, 138, 0.06);
   box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
 }
+
+.footer {
+  margin-top: auto;
+  background: var(--color-white);
+  border-top: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+  font-size: 0.8rem;
+  color: var(--color-gray-600);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

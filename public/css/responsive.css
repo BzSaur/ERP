@@ -1,38 +1,63 @@
 /* ============================================================
    RESPONSIVE - Layout-specific breakpoints
-   Bootstrap 5 handles grid, display, and spacing responsiveness.
-   These rules only cover custom VITA layout elements.
    ============================================================ */
 
 /* ---- Tablet (< 992px): Sidebar becomes drawer ---- */
 @media (max-width: 991.98px) {
+  html,
+  body {
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
+  }
+
+  .wrapper,
+  .main-content {
+    min-height: 100dvh;
+  }
+
+.content-wrapper {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
+}
+
   .sidebar {
     transform: translateX(-100%);
-    width: var(--sidebar-width) !important;
+    width: min(86vw, var(--sidebar-width)) !important;
+    height: 100dvh;
   }
 
   .sidebar.show {
     transform: translateX(0);
-  }
-
-  .main-content {
-    margin-left: 0 !important;
-    width: 100% !important;
   }
 }
 
 /* ---- Mobile (< 768px): Compact spacing ---- */
 @media (max-width: 767.98px) {
   .content-wrapper {
-    padding: 1rem;
+    padding: 1rem 0.875rem;
   }
 
   .navbar {
-    padding: 0 1rem;
+    min-height: 60px;
+    padding: 0 0.75rem;
+    gap: 0.5rem;
   }
 
   .page-title {
-    font-size: 1rem;
+    font-size: 0.95rem;
+  }
+
+  .navbar .ms-auto,
+  .navbar .d-flex.ms-auto {
+    gap: 0.25rem;
+  }
+
+  .user-dropdown-toggle {
+    padding: 0.2rem 0.45rem;
   }
 
   .card-header {
@@ -66,5 +91,31 @@
 
   .stat-card .card-body {
     padding: 1rem;
+  }
+
+  .navbar {
+    min-height: 58px;
+  }
+
+  .page-title {
+    font-size: 0.9rem;
+  }
+
+  .btn-icon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    font-size: 1.15rem;
+  }
+
+  .user-dropdown-toggle {
+    min-height: 38px;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .user-avatar-sm {
+    width: 30px;
+    height: 30px;
   }
 }
