@@ -2,7 +2,6 @@
  * VITA ERP - JavaScript Principal
  */
 document.addEventListener('DOMContentLoaded', function () {
-
   // ============================================================
   // SIDEBAR DRAWER
   // ============================================================
@@ -20,27 +19,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let lockedScrollY = 0;
 
-function openSidebar() {
-  lockedScrollY = window.scrollY || window.pageYOffset || 0;
+  const scrollContainer =
+    document.querySelector('.content-wrapper') ||
+    document.querySelector('main') ||
+    document.documentElement;
 
-  if (sidebar) sidebar.classList.add('show');
-  if (sidebarOverlay) sidebarOverlay.classList.add('show');
+  function openSidebar() {
+    lockedScrollY = scrollContainer ? scrollContainer.scrollTop : 0;
 
-  document.body.classList.add('sidebar-open');
-  document.body.style.top = `-${lockedScrollY}px`;
-}
+    if (sidebar) sidebar.classList.add('show');
+    if (sidebarOverlay) sidebarOverlay.classList.add('show');
 
-function closeSidebar() {
-  if (sidebar) sidebar.classList.remove('show');
-  if (sidebarOverlay) sidebarOverlay.classList.remove('show');
+    document.body.classList.add('sidebar-open');
+  }
 
-  document.body.classList.remove('sidebar-open');
-  document.body.style.top = '';
+  function closeSidebar() {
+    if (sidebar) sidebar.classList.remove('show');
+    if (sidebarOverlay) sidebarOverlay.classList.remove('show');
 
-  window.scrollTo(0, lockedScrollY);
-}
+    document.body.classList.remove('sidebar-open');
 
-   // ============================================================
+    if (scrollContainer) {
+      scrollContainer.scrollTop = lockedScrollY;
+    }
+  }
+
+  // ============================================================
   // MOBILE SWIPE FOR SIDEBAR + PULL TO REFRESH CUSTOM
   // ============================================================
   let touchStartX = 0;
@@ -56,11 +60,6 @@ function closeSidebar() {
   const VERTICAL_TOLERANCE = 45;
   const HORIZONTAL_RATIO = 1.5;
   const PULL_REFRESH_THRESHOLD = 80;
-
-  const scrollContainer =
-    document.querySelector('.content-wrapper') ||
-    document.querySelector('main') ||
-    document.body;
 
   let pullRefreshEl = document.querySelector('.mobile-pull-refresh');
   if (!pullRefreshEl) {
@@ -82,119 +81,131 @@ function closeSidebar() {
     pullRefreshEl.textContent = 'Desliza para recargar';
   }
 
-  document.addEventListener('touchstart', function (e) {
-    if (!e.changedTouches || !e.changedTouches.length) return;
-    if (window.innerWidth >= 992) return;
+  document.addEventListener(
+    'touchstart',
+    function (e) {
+      if (!e.changedTouches || !e.changedTouches.length) return;
+      if (window.innerWidth >= 992) return;
 
-    const target = e.target;
-    if (isInteractiveElement(target)) {
-      isTrackingSwipe = false;
-      isPullingToRefresh = false;
-      return;
-    }
-
-    touchStartX = e.changedTouches[0].clientX;
-    touchStartY = e.changedTouches[0].clientY;
-    touchCurrentX = touchStartX;
-    touchCurrentY = touchStartY;
-    startScrollY = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
-    isVerticalScroll = false;
-    isTrackingSwipe = true;
-
-    isPullingToRefresh = !!(
-      scrollContainer &&
-      scrollContainer.scrollTop <= 0 &&
-      touchStartY <= 140
-    );
-
-    if (isPullingToRefresh) {
-      pullRefreshEl.classList.add('show');
-      pullRefreshEl.classList.remove('ready');
-      pullRefreshEl.textContent = 'Desliza para recargar';
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchmove', function (e) {
-    if (!isTrackingSwipe || !e.changedTouches || !e.changedTouches.length) return;
-
-    touchCurrentX = e.changedTouches[0].clientX;
-    touchCurrentY = e.changedTouches[0].clientY;
-
-    const diffX = Math.abs(touchCurrentX - touchStartX);
-    const diffY = Math.abs(touchCurrentY - touchStartY);
-
-    if (diffY > 12 && diffY > diffX) {
-      isVerticalScroll = true;
-    }
-
-    if (isPullingToRefresh) {
-      const pullDistance = touchCurrentY - touchStartY;
-
-      if (pullDistance > 0) {
-        pullRefreshEl.classList.add('show');
-
-        if (pullDistance >= PULL_REFRESH_THRESHOLD) {
-          pullRefreshEl.classList.add('ready');
-          pullRefreshEl.textContent = 'Suelta para recargar';
-        } else {
-          pullRefreshEl.classList.remove('ready');
-          pullRefreshEl.textContent = 'Desliza para recargar';
-        }
-      } else {
-        resetPullRefresh();
-      }
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchend', function (e) {
-    if (!isTrackingSwipe || !e.changedTouches || !e.changedTouches.length) return;
-    if (window.innerWidth >= 992) return;
-
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
-
-    const diffX = touchEndX - touchStartX;
-    const absX = Math.abs(diffX);
-    const absY = Math.abs(touchEndY - touchStartY);
-    const scrollMoved = Math.abs(
-      (scrollContainer ? scrollContainer.scrollTop : window.scrollY) - startScrollY
-    );
-    const isOpen = sidebar && sidebar.classList.contains('show');
-    const pullDistance = touchEndY - touchStartY;
-
-    isTrackingSwipe = false;
-
-    // Pull to refresh custom
-    if (isPullingToRefresh) {
-      if (pullDistance >= PULL_REFRESH_THRESHOLD) {
-        pullRefreshEl.classList.add('show');
-        pullRefreshEl.classList.remove('ready');
-        pullRefreshEl.textContent = 'Recargando...';
-        window.location.reload();
+      const target = e.target;
+      if (isInteractiveElement(target)) {
+        isTrackingSwipe = false;
+        isPullingToRefresh = false;
         return;
       }
 
-      resetPullRefresh();
-      return;
-    }
+      touchStartX = e.changedTouches[0].clientX;
+      touchStartY = e.changedTouches[0].clientY;
+      touchCurrentX = touchStartX;
+      touchCurrentY = touchStartY;
+      startScrollY = scrollContainer ? scrollContainer.scrollTop : 0;
+      isVerticalScroll = false;
+      isTrackingSwipe = true;
 
-    // Swipe lateral sidebar
-    if (isVerticalScroll) return;
-    if (scrollMoved > 8) return;
-    if (absY > VERTICAL_TOLERANCE) return;
-    if (absX < MIN_SWIPE) return;
-    if (absX <= absY * HORIZONTAL_RATIO) return;
+      isPullingToRefresh = !!(
+        scrollContainer &&
+        scrollContainer.scrollTop <= 0 &&
+        touchStartY <= 140
+      );
 
-    if (!isOpen && diffX > 0) {
-      openSidebar();
-      return;
-    }
+      if (isPullingToRefresh) {
+        pullRefreshEl.classList.add('show');
+        pullRefreshEl.classList.remove('ready');
+        pullRefreshEl.textContent = 'Desliza para recargar';
+      }
+    },
+    { passive: true }
+  );
 
-    if (isOpen && diffX < 0) {
-      closeSidebar();
-    }
-  }, { passive: true });
-  
+  document.addEventListener(
+    'touchmove',
+    function (e) {
+      if (!isTrackingSwipe || !e.changedTouches || !e.changedTouches.length) return;
+
+      touchCurrentX = e.changedTouches[0].clientX;
+      touchCurrentY = e.changedTouches[0].clientY;
+
+      const diffX = Math.abs(touchCurrentX - touchStartX);
+      const diffY = Math.abs(touchCurrentY - touchStartY);
+
+      if (diffY > 12 && diffY > diffX) {
+        isVerticalScroll = true;
+      }
+
+      if (isPullingToRefresh) {
+        const pullDistance = touchCurrentY - touchStartY;
+
+        if (pullDistance > 0) {
+          pullRefreshEl.classList.add('show');
+
+          if (pullDistance >= PULL_REFRESH_THRESHOLD) {
+            pullRefreshEl.classList.add('ready');
+            pullRefreshEl.textContent = 'Suelta para recargar';
+          } else {
+            pullRefreshEl.classList.remove('ready');
+            pullRefreshEl.textContent = 'Desliza para recargar';
+          }
+        } else {
+          resetPullRefresh();
+        }
+      }
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    'touchend',
+    function (e) {
+      if (!isTrackingSwipe || !e.changedTouches || !e.changedTouches.length) return;
+      if (window.innerWidth >= 992) return;
+
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+
+      const diffX = touchEndX - touchStartX;
+      const absX = Math.abs(diffX);
+      const absY = Math.abs(touchEndY - touchStartY);
+      const scrollMoved = Math.abs(
+        (scrollContainer ? scrollContainer.scrollTop : 0) - startScrollY
+      );
+      const isOpen = sidebar && sidebar.classList.contains('show');
+      const pullDistance = touchEndY - touchStartY;
+
+      isTrackingSwipe = false;
+
+      // Pull to refresh custom
+      if (isPullingToRefresh) {
+        if (pullDistance >= PULL_REFRESH_THRESHOLD) {
+          pullRefreshEl.classList.add('show');
+          pullRefreshEl.classList.remove('ready');
+          pullRefreshEl.textContent = 'Recargando...';
+          window.location.reload();
+          return;
+        }
+
+        resetPullRefresh();
+        return;
+      }
+
+      // Swipe lateral sidebar
+      if (isVerticalScroll) return;
+      if (scrollMoved > 8) return;
+      if (absY > VERTICAL_TOLERANCE) return;
+      if (absX < MIN_SWIPE) return;
+      if (absX <= absY * HORIZONTAL_RATIO) return;
+
+      if (!isOpen && diffX > 0) {
+        openSidebar();
+        return;
+      }
+
+      if (isOpen && diffX < 0) {
+        closeSidebar();
+      }
+    },
+    { passive: true }
+  );
+
   if (navbarToggle) {
     navbarToggle.addEventListener('click', function () {
       const isOpen = sidebar && sidebar.classList.contains('show');
@@ -208,30 +219,29 @@ function closeSidebar() {
   }
 
   if (sidebarOverlay) {
-  sidebarOverlay.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
 
-  sidebarOverlay.addEventListener(
-    'touchmove',
-    function (e) {
-      e.preventDefault();
-    },
-    { passive: false }
-  );
-}
-
-    document.addEventListener(
+    sidebarOverlay.addEventListener(
       'touchmove',
       function (e) {
-        if (
-          document.body.classList.contains('sidebar-open') &&
-          sidebar &&
-          !sidebar.contains(e.target)
-        ) {
-          e.preventDefault();
-        }
+        e.preventDefault();
       },
       { passive: false }
     );
+  }
+
+  document.addEventListener(
+    'touchmove',
+    function (e) {
+      if (!document.body.classList.contains('sidebar-open')) return;
+      if (!sidebar) return;
+      if (sidebar.contains(e.target)) return;
+      if (sidebarOverlay && sidebarOverlay.contains(e.target)) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && sidebar && sidebar.classList.contains('show')) {
@@ -400,7 +410,6 @@ function closeSidebar() {
       });
     }
   }
-
 });
 
 /* ============================================================*/

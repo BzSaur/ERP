@@ -146,7 +146,7 @@ cd erp-rh
 # 2. Configurar variables de entorno
 cp .env.example .env
 
-# 3. Construir e iniciar contenedores
+# 3. Construir e iniciar contenedaores
 docker-compose up -d
 
 # 4. Ejecutar migraciones (primera vez)

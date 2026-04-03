@@ -7,22 +7,23 @@
   html,
   body {
     overscroll-behavior-x: none;
-    overscroll-behavior-y: none;
+    overscroll-behavior-y: auto;
   }
 
   .wrapper,
   .main-content {
+    height: 100dvh;
     min-height: 100dvh;
   }
 
-.content-wrapper {
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  overscroll-behavior-x: none;
-}
+  .content-wrapper {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: none;
+  }
 
   .sidebar {
     transform: translateX(-100%);
