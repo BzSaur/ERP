@@ -297,6 +297,47 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+    // ============================================================
+  // AUTH SWEET ALERTS
+  // ============================================================
+  if (window.Swal && window.AUTH_ALERTS?.loginSuccess) {
+    Swal.fire({
+      icon: 'success',
+      title: window.AUTH_ALERTS.loginSuccess,
+      confirmButtonText: 'Aceptar',
+      timer: 1800,
+      timerProgressBar: true
+    });
+  }
+
+  document.querySelectorAll('a[href="/auth/logout"]').forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      if (!window.Swal) {
+        const confirmed = confirm('¿Seguro que quieres salir?');
+        if (confirmed) {
+          window.location.href = this.href;
+        }
+        return;
+      }
+
+      Swal.fire({
+        icon: 'warning',
+        title: '¿Seguro que quieres salir?',
+        text: 'Se cerrará tu sesión actual.',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, salir',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = this.href;
+        }
+      });
+    });
+  });
+  
   // ============================================================
   // CONFIRM DELETE
   // ============================================================

@@ -72,17 +72,22 @@ app.use((req, res, next) => {
   res.locals.appName = config.appName;
   res.locals.currentPath = req.path;
   res.locals.currentYear = new Date().getFullYear();
+  
   // Flash messages - join arrays into strings for easier template usage
-  const successMsgs = req.flash('success');
-  const errorMsgs = req.flash('error');
-  const infoMsgs = req.flash('info');
-  const warningMsgs = req.flash('warning');
-  res.locals.messages = {
-    success: successMsgs.length > 0 ? successMsgs.join(', ') : null,
-    error: errorMsgs.length > 0 ? errorMsgs.join(', ') : null,
-    info: infoMsgs.length > 0 ? infoMsgs.join(', ') : null,
-    warning: warningMsgs.length > 0 ? warningMsgs.join(', ') : null
-  };
+    const successMsgs = req.flash('success');
+    const errorMsgs = req.flash('error');
+    const infoMsgs = req.flash('info');
+    const warningMsgs = req.flash('warning');
+    const authSuccessMsgs = req.flash('auth_success');
+
+    res.locals.messages = {
+      success: successMsgs.length > 0 ? successMsgs.join(', ') : null,
+      error: errorMsgs.length > 0 ? errorMsgs.join(', ') : null,
+      info: infoMsgs.length > 0 ? infoMsgs.join(', ') : null,
+      warning: warningMsgs.length > 0 ? warningMsgs.join(', ') : null,
+      authSuccess: authSuccessMsgs.length > 0 ? authSuccessMsgs.join(', ') : null
+    };
+
   // Helper para plantillas: verificar roles de usuario de forma normalizada
   res.locals.hasRole = (...roles) => {
     try {

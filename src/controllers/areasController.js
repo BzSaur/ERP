@@ -169,11 +169,30 @@ export const destroy = async (req, res, next) => {
 
     // Obtener datos antes de eliminar
     const area = await prisma.cat_Areas.findUnique({
-      where: { ID_Area: idNum }
+      where: { ID_Area: idNum },
+      include: {
+        _count: {
+          select: { puestos: true }
+        }
+      }
     });
 
-    await prisma.cat_Areas.delete({
-      where: { ID_Area: idNum }
+    if (!area) {
+      return res.status(404).render('errors/404', {
+        title: 'Área no encontrada',
+        message: 'El área solicitada no existe'
+      });
+    }
+
+    // Eliminar primero los puestos relacionados y luego el área
+    await prisma.$transaction(async (tx) => {
+      await tx.cat_Puestos.deleteMany({
+        where: { ID_Area: idNum }
+      });
+
+      await tx.cat_Areas.delete({
+        where: { ID_Area: idNum }
+      });
     });
 
     // Registrar en auditoría
@@ -187,7 +206,8 @@ export const destroy = async (req, res, next) => {
         ID_Area: area.ID_Area,
         Nombre_Area: area.Nombre_Area,
         Descripcion: area.Descripcion,
-        Tipo_Area: area.Tipo_Area
+        Tipo_Area: area.Tipo_Area,
+        Puestos_Eliminados: area._count.puestos
       },
       ip: obtenerIP(req)
     });

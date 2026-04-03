@@ -120,3 +120,20 @@
     height: 30px;
   }
 }
+
+.horas-adicionales-filtros-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 575.98px) {
+  .horas-adicionales-filtros-acciones {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .horas-adicionales-filtros-acciones .btn {
+    width: 100%;
+  }
+}

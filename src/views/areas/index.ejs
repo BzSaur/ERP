@@ -45,19 +45,20 @@
               <td class="text-center">
                 <span class="badge bg-success"><%= area._count.puestos %></span>
               </td>
-              <td class="text-end">
+                <td class="text-end">
                 <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador', 'SUPER_ADMIN')) { %>
-                <a href="/areas/<%= area.ID_Area %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
-                  <i class="bi bi-pencil"></i>
-                </a>
-                <% if (area._count.empleados === 0 && area._count.puestos === 0) { %>
-                <form action="/areas/<%= area.ID_Area %>/eliminar" method="POST" class="d-inline"
-                      onsubmit="return confirm('¿Eliminar esta área?')">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
-                <% } %>
+                <div class="d-inline-flex gap-2">
+                  <a href="/areas/<%= area.ID_Area %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+
+                  <form action="/areas/<%= area.ID_Area %>/eliminar" method="POST" class="d-inline"
+                        onsubmit="return confirm('¿Eliminar esta área y sus puestos asociados?')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
                 <% } else { %>
                 <span class="text-body-secondary small">-</span>
                 <% } %>

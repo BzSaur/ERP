@@ -19,6 +19,7 @@ export const showLogin = (req, res) => {
   });
 };
 
+
 // POST /auth/login - Procesar login
 export const processLogin = (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
@@ -55,15 +56,17 @@ export const processLogin = (req, res, next) => {
         { userAgent: req.headers['user-agent'] }
       );
       
+      req.flash('auth_success', 'Sesión iniciada correctamente');
+      
       // Redirigir a la URL guardada o al home
       let returnTo = req.session.returnTo || null;
       delete req.session.returnTo;
-
+      
       // Si no hay returnTo, redirigir por rol a la vista principal más relevante
       if (!returnTo) {
         const rol = String(user?.rol?.Nombre_Rol || '').toUpperCase().replace(/\s+/g, '_');
         if (rol === 'SUPERADMIN' || rol === 'SUPER_ADMIN' || rol === 'SUPERADMINISTRADOR') {
-          returnTo = '/configuracion';
+          returnTo = '/';
         } else if (rol === 'ADMIN' || rol === 'ADMINISTRADOR') {
           returnTo = '/usuarios';
         } else if (rol === 'RH' || rol === 'RECURSOS_HUMANOS') {
@@ -90,16 +93,19 @@ export const logout = (req, res, next) => {
       { ip: req.ip, userAgent: req.headers['user-agent'] }
     );
   }
-  
+
   req.logout((err) => {
     if (err) {
       return next(err);
     }
+
     req.session.destroy((err) => {
       if (err) {
         console.error('Error al destruir sesión:', err);
       }
-      res.redirect('/auth/login');
+
+      res.clearCookie('erp_rh_session');
+      return res.redirect('/auth/login?logout=success');
     });
   });
 };

@@ -69,40 +69,43 @@
 </div>
 
 <!-- Estadísticas rápidas -->
-<div class="row mb-4">
+<div class="row g-3 mb-4 auditoria-stats">
   <div class="col-6 col-md-3">
-    <div class="card text-center">
-      <div class="card-body">
-        <h5 class="text-body-secondary">Total Cambios</h5>
-        <h2 class="mb-0"><%= pagination.total %></h2>
+    <div class="card text-center auditoria-stat-card h-100">
+      <div class="card-body auditoria-stat-body">
+        <h5 class="auditoria-stat-title text-body-secondary">Total Cambios</h5>
+        <h2 class="mb-0 auditoria-stat-number"><%= pagination.total %></h2>
       </div>
     </div>
   </div>
+
   <div class="col-6 col-md-3">
-    <div class="card text-center bg-success bg-opacity-10">
-      <div class="card-body">
-        <h5 class="text-success">Creaciones</h5>
-        <h2 class="mb-0 text-success">
+    <div class="card text-center bg-success bg-opacity-10 auditoria-stat-card h-100">
+      <div class="card-body auditoria-stat-body">
+        <h5 class="auditoria-stat-title text-success">Creaciones</h5>
+        <h2 class="mb-0 text-success auditoria-stat-number">
           <%= cambios.filter(c => c.Accion === 'CREATE').length %>
         </h2>
       </div>
     </div>
   </div>
+
   <div class="col-6 col-md-3">
-    <div class="card text-center bg-warning bg-opacity-10">
-      <div class="card-body">
-        <h5 class="text-warning">Actualizaciones</h5>
-        <h2 class="mb-0 text-warning">
+    <div class="card text-center bg-warning bg-opacity-10 auditoria-stat-card h-100">
+      <div class="card-body auditoria-stat-body">
+        <h5 class="auditoria-stat-title text-warning">Actualizaciones</h5>
+        <h2 class="mb-0 text-warning auditoria-stat-number">
           <%= cambios.filter(c => c.Accion === 'UPDATE').length %>
         </h2>
       </div>
     </div>
   </div>
+
   <div class="col-6 col-md-3">
-    <div class="card text-center bg-danger bg-opacity-10">
-      <div class="card-body">
-        <h5 class="text-danger">Eliminaciones</h5>
-        <h2 class="mb-0 text-danger">
+    <div class="card text-center bg-danger bg-opacity-10 auditoria-stat-card h-100">
+      <div class="card-body auditoria-stat-body">
+        <h5 class="auditoria-stat-title text-danger">Eliminaciones</h5>
+        <h2 class="mb-0 text-danger auditoria-stat-number">
           <%= cambios.filter(c => c.Accion === 'DELETE').length %>
         </h2>
       </div>
