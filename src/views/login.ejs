@@ -116,6 +116,9 @@
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
+  <!-- App Sweet Alerts -->
+  <script src="/js/sweet-alerts.js"></script>
+
   <script>
     (function () {
       const logoutSuccess = document.body.dataset.logoutSuccess === 'true';
@@ -136,14 +139,8 @@
         });
       }
 
-      if (logoutSuccess && window.Swal) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Gracias, vuelva pronto',
-          text: 'Sesión cerrada correctamente.',
-          confirmButtonText: 'OK',
-          confirmButtonColor: '#6c5ce7'
-        });
+      if (logoutSuccess && window.AppAlerts) {
+        window.AppAlerts.success('Gracias, vuelva pronto', 'Sesión cerrada correctamente.');
       }
     })();
   </script>
