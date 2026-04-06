@@ -297,16 +297,16 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-    // ============================================================
+  // ============================================================
   // AUTH SWEET ALERTS
   // ============================================================
   if (window.Swal && window.AUTH_ALERTS?.loginSuccess) {
     Swal.fire({
       icon: 'success',
-      title: window.AUTH_ALERTS.loginSuccess,
-      confirmButtonText: 'Aceptar',
-      timer: 1800,
-      timerProgressBar: true
+      title: '¡Bienvenido!',
+      text: window.AUTH_ALERTS.loginSuccess,
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#6c5ce7'
     });
   }
 
@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
 
       if (!window.Swal) {
-        const confirmed = confirm('¿Seguro que quieres salir?');
+        const confirmed = confirm('¿Seguro que desea salir?');
         if (confirmed) {
           window.location.href = this.href;
         }
@@ -323,12 +323,14 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       Swal.fire({
+        title: '¿Seguro que desea salir?',
+        text: 'Se cerrará su sesión actual.',
         icon: 'warning',
-        title: '¿Seguro que quieres salir?',
-        text: 'Se cerrará tu sesión actual.',
         showCancelButton: true,
         confirmButtonText: 'Sí, salir',
         cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
         reverseButtons: true
       }).then((result) => {
         if (result.isConfirmed) {
@@ -337,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   });
-  
+
   // ============================================================
   // CONFIRM DELETE
   // ============================================================

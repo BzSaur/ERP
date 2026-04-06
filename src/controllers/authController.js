@@ -15,6 +15,7 @@ export const showLogin = (req, res) => {
   res.render('login', {
     title: 'Iniciar Sesión',
     error: req.flash ? req.flash('error') : null,
+    logoutSuccess: req.query.logout === '1',
     layout: false  // Desactivar layout para login
   });
 };
@@ -78,7 +79,8 @@ export const processLogin = (req, res, next) => {
         }
       }
 
-      return res.redirect(returnTo);
+      const separator = returnTo.includes('?') ? '&' : '?';
+      return res.redirect(`${returnTo}${separator}welcome=1`);
     });
   })(req, res, next);
 };
@@ -103,9 +105,7 @@ export const logout = (req, res, next) => {
       if (err) {
         console.error('Error al destruir sesión:', err);
       }
-
-      res.clearCookie('erp_rh_session');
-      return res.redirect('/auth/login?logout=success');
+      res.redirect('/auth/login?logout=1');
     });
   });
 };
