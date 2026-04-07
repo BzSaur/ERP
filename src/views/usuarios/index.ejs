@@ -9,13 +9,6 @@
   </a>
 </div>
 
-<% if (typeof success !== 'undefined' && success) { %>
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-  <i class="bi bi-check-circle me-2"></i><%= success %>
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-<% } %>
-
 <% if (typeof error !== 'undefined' && error) { %>
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
   <i class="bi bi-exclamation-triangle me-2"></i><%= error %>
@@ -165,8 +158,15 @@
                       <i class="bi <%= usr.Activo ? 'bi-person-x' : 'bi-person-check' %>"></i>
                     </button>
                   </form>
-                  <form action="/usuarios/<%= usr.ID_Usuario %>/eliminar" method="POST" class="d-inline"
-                        onsubmit="return confirm('¿Estás seguro de eliminar este usuario?')">
+
+                  <form
+                    action="/usuarios/<%= usr.ID_Usuario %>/eliminar"
+                    method="POST"
+                    class="d-inline js-confirm-delete"
+                    data-entity="el usuario <%= usr.Nombre_Completo %>"
+                    data-alert-title="¿Seguro que desea eliminar?"
+                    data-alert-text="Se eliminará el usuario <%= usr.Nombre_Completo %>. Esta acción no se puede deshacer."
+                  >
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                       <i class="bi bi-trash"></i>
                     </button>

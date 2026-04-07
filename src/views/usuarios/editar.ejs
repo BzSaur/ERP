@@ -21,7 +21,14 @@
 </div>
 <% } %>
 
-<form action="/usuarios/<%= usuario.ID_Usuario %>" method="POST">
+<form
+  action="/usuarios/<%= usuario.ID_Usuario %>"
+  method="POST"
+  class="js-confirm-edit"
+  data-entity="el usuario <%= usuario.Nombre_Completo %>"
+  data-alert-title="¿Seguro que desea guardar los cambios?"
+  data-alert-text="Se actualizará el usuario <%= usuario.Nombre_Completo %>."
+>
   <div class="row g-4">
     <!-- Información de la cuenta -->
     <div class="col-lg-6">
@@ -131,24 +138,6 @@
           </div>
         </div>
       </div>
-      
-      <!-- Zona de peligro -->
-      <div class="card border-danger mt-4">
-        <div class="card-header bg-danger text-white">
-          <h5 class="card-title mb-0">
-            <i class="bi bi-exclamation-triangle me-2"></i>Zona de Peligro
-          </h5>
-        </div>
-        <div class="card-body">
-          <p class="mb-3">Eliminar este usuario permanentemente. Esta acción no se puede deshacer.</p>
-          <form action="/usuarios/<%= usuario.ID_Usuario %>/eliminar" method="POST" class="d-inline"
-                onsubmit="return confirm('¿Estás seguro de eliminar este usuario? Esta acción no se puede deshacer.')">
-            <button type="submit" class="btn btn-outline-danger">
-              <i class="bi bi-trash me-1"></i> Eliminar Usuario
-            </button>
-          </form>
-        </div>
-      </div>
     </div>
     
     <!-- Botones -->
@@ -164,6 +153,30 @@
     </div>
   </div>
 </form>
+
+<!-- Zona de peligro -->
+<div class="card border-danger mt-4">
+  <div class="card-header bg-danger text-white">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-exclamation-triangle me-2"></i>Zona de Peligro
+    </h5>
+  </div>
+  <div class="card-body">
+    <p class="mb-3">Eliminar este usuario permanentemente. Esta acción no se puede deshacer.</p>
+    <form
+      action="/usuarios/<%= usuario.ID_Usuario %>/eliminar"
+      method="POST"
+      class="d-inline js-confirm-delete"
+      data-entity="el usuario <%= usuario.Nombre_Completo %>"
+      data-alert-title="¿Seguro que desea eliminar?"
+      data-alert-text="Se eliminará el usuario <%= usuario.Nombre_Completo %>. Esta acción no se puede deshacer."
+    >
+      <button type="submit" class="btn btn-outline-danger">
+        <i class="bi bi-trash me-1"></i> Eliminar Usuario
+      </button>
+    </form>
+  </div>
+</div>
 
 <script>
 function togglePassword() {

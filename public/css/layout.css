@@ -30,7 +30,7 @@
   overscroll-behavior-y: contain;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 6rem 0;
+  padding: 1.5rem 5rem 0;
 }
 
 /* Sidebar collapsed (drawer mode): main-content full width */

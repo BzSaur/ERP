@@ -33,7 +33,6 @@ export const index = async (req, res) => {
       title: 'Usuarios del Sistema',
       usuarios,
       roles,
-      success: req.query.success,
       error: req.query.error
     });
   } catch (error) {
@@ -72,13 +71,13 @@ export const crear = async (req, res) => {
 // POST /usuarios - Crear nuevo usuario
 export const store = async (req, res) => {
   try {
-    const { 
-      Email_Office365, 
-      Nombre_Completo, 
-      Password, 
-      ID_Rol, 
+    const {
+      Email_Office365,
+      Nombre_Completo,
+      Password,
+      ID_Rol,
       ID_Empleado,
-      Activo 
+      Activo
     } = req.body;
 
     // Verificar si el email ya existe
@@ -92,7 +91,7 @@ export const store = async (req, res) => {
         where: { app_usuario: null, ID_Estatus: 1 },
         orderBy: { Nombre: 'asc' }
       });
-      
+
       return res.render('usuarios/crear', {
         title: 'Nuevo Usuario',
         roles,
@@ -149,7 +148,7 @@ export const store = async (req, res) => {
       }
     );
 
-    res.redirect('/usuarios?success=Usuario creado exitosamente');
+    res.redirect('/usuarios?created=1');
   } catch (error) {
     console.error('Error al crear usuario:', error);
     res.redirect('/usuarios?error=Error al crear el usuario');
@@ -160,7 +159,7 @@ export const store = async (req, res) => {
 export const editar = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const usuario = await prisma.app_Usuarios.findUnique({
       where: { ID_Usuario: parseInt(id) },
       include: { rol: true, empleado: true }
@@ -208,18 +207,18 @@ export const editar = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      Email_Office365, 
-      Nombre_Completo, 
-      Password, 
-      ID_Rol, 
+    const {
+      Email_Office365,
+      Nombre_Completo,
+      Password,
+      ID_Rol,
       ID_Empleado,
-      Activo 
+      Activo
     } = req.body;
 
     // Verificar si el email ya existe en otro usuario
     const existeEmail = await prisma.app_Usuarios.findFirst({
-      where: { 
+      where: {
         Email_Office365,
         NOT: { ID_Usuario: parseInt(id) }
       }
@@ -291,7 +290,7 @@ export const update = async (req, res) => {
       ip: obtenerIP(req)
     });
 
-    // Log de acción - actualización de usuario (importante para cambios de rol)
+    // Log de acción - actualización de usuario
     logAccess.action(
       req.user.ID_Usuario,
       'UPDATE_USER',
@@ -305,7 +304,7 @@ export const update = async (req, res) => {
       }
     );
 
-    res.redirect('/usuarios?success=Usuario actualizado exitosamente');
+    res.redirect('/usuarios?updated=1');
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
     res.redirect('/usuarios?error=Error al actualizar el usuario');
@@ -368,7 +367,7 @@ export const eliminar = async (req, res) => {
       }
     );
 
-    res.redirect('/usuarios?success=Usuario eliminado exitosamente');
+    res.redirect('/usuarios?deleted=1');
   } catch (error) {
     console.error('Error al eliminar usuario:', error);
     res.redirect('/usuarios?error=Error al eliminar el usuario');
@@ -415,7 +414,7 @@ export const toggleActivo = async (req, res) => {
       ip: obtenerIP(req)
     });
 
-    res.redirect(`/usuarios?success=Usuario ${estado} exitosamente`);
+    res.redirect('/usuarios?updated=1');
   } catch (error) {
     console.error('Error al cambiar estado:', error);
     res.redirect('/usuarios?error=Error al cambiar estado del usuario');

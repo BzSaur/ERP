@@ -298,59 +298,213 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ============================================================
-  // AUTH SWEET ALERTS
+  // SWEET ALERTS
   // ============================================================
-  if (window.Swal && window.AUTH_ALERTS?.loginSuccess) {
-    Swal.fire({
-      icon: 'success',
-      title: '¡Bienvenido!',
-      text: window.AUTH_ALERTS.loginSuccess,
-      confirmButtonText: 'OK',
-      confirmButtonColor: '#6c5ce7'
-    });
-  }
+  if (window.AppAlerts) {
+    function safeTrim(value) {
+      return (value || '').toString().trim();
+    }
 
-  document.querySelectorAll('a[href="/auth/logout"]').forEach(function (link) {
-    link.addEventListener('click', function (e) {
-      e.preventDefault();
+    function shouldSkipSubmit(form) {
+      return form.dataset.swalSubmitting === 'true';
+    }
 
-      if (!window.Swal) {
-        const confirmed = confirm('¿Seguro que desea salir?');
-        if (confirmed) {
-          window.location.href = this.href;
-        }
-        return;
-      }
+    function markSubmitting(form) {
+      form.dataset.swalSubmitting = 'true';
+    }
 
-      Swal.fire({
-        title: '¿Seguro que desea salir?',
-        text: 'Se cerrará su sesión actual.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, salir',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        reverseButtons: true
-      }).then((result) => {
+    function submitFormNative(form) {
+      markSubmitting(form);
+      HTMLFormElement.prototype.submit.call(form);
+    }
+
+    function getEntityName(element, fallback) {
+      return safeTrim(
+        (element && element.dataset && element.dataset.entity) ||
+          (element && element.getAttribute && element.getAttribute('data-entity')) ||
+          fallback ||
+          'el registro'
+      );
+    }
+
+    function getCustomTitle(element, fallback) {
+      return safeTrim(
+        (element && element.dataset && element.dataset.alertTitle) ||
+          (element && element.getAttribute && element.getAttribute('data-alert-title')) ||
+          fallback ||
+          ''
+      );
+    }
+
+    function getCustomText(element, fallback) {
+      return safeTrim(
+        (element && element.dataset && element.dataset.alertText) ||
+          (element && element.getAttribute && element.getAttribute('data-alert-text')) ||
+          fallback ||
+          ''
+      );
+    }
+
+    function cleanUrlParams(paramsToRemove) {
+      try {
+        const url = new URL(window.location.href);
+        paramsToRemove.forEach((param) => url.searchParams.delete(param));
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+      } catch (_) {}
+    }
+
+    if (window.AUTH_ALERTS?.loginSuccess) {
+      window.AppAlerts.success('¡Bienvenido!', window.AUTH_ALERTS.loginSuccess);
+    }
+
+    document.querySelectorAll('form.js-confirm-create').forEach(function (form) {
+      form.addEventListener('submit', async function (e) {
+        if (shouldSkipSubmit(form)) return;
+
+        e.preventDefault();
+
+        const entity = getEntityName(form, 'el registro');
+        const title = getCustomTitle(form, '¿Desea crear este registro?');
+        const text = getCustomText(form, `Se creará ${entity}.`);
+
+        const result = await window.AppAlerts.confirmCreate(entity, {
+          title,
+          text
+        });
+
         if (result.isConfirmed) {
-          window.location.href = this.href;
+          submitFormNative(form);
         }
       });
     });
-  });
 
-  // ============================================================
-  // CONFIRM DELETE
-  // ============================================================
-  document.querySelectorAll('form[data-confirm]').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      const message = this.dataset.confirm || '¿Estás seguro de realizar esta acción?';
-      if (!confirm(message)) {
+    document.querySelectorAll('form.js-confirm-edit').forEach(function (form) {
+      form.addEventListener('submit', async function (e) {
+        if (shouldSkipSubmit(form)) return;
+
         e.preventDefault();
-      }
+
+        const entity = getEntityName(form, 'el registro');
+        const title = getCustomTitle(form, '¿Seguro que desea guardar los cambios?');
+        const text = getCustomText(form, `Se actualizará ${entity}.`);
+
+        const result = await window.AppAlerts.confirmEdit(entity, {
+          title,
+          text
+        });
+
+        if (result.isConfirmed) {
+          submitFormNative(form);
+        }
+      });
     });
-  });
+
+    document.querySelectorAll('form.js-confirm-delete').forEach(function (form) {
+      form.addEventListener('submit', async function (e) {
+        if (shouldSkipSubmit(form)) return;
+
+        e.preventDefault();
+
+        const entity = getEntityName(form, 'el registro');
+        const title = getCustomTitle(form, '¿Seguro que desea eliminar?');
+        const text = getCustomText(
+          form,
+          `Se eliminará ${entity}. Esta acción no se puede deshacer.`
+        );
+
+        const result = await window.AppAlerts.confirmDelete(entity, {
+          title,
+          text
+        });
+
+        if (result.isConfirmed) {
+          submitFormNative(form);
+        }
+      });
+    });
+
+    document.querySelectorAll('.js-delete-trigger').forEach(function (button) {
+      button.addEventListener('click', async function () {
+        const targetSelector =
+          button.dataset.targetForm || button.getAttribute('data-target-form');
+        if (!targetSelector) return;
+
+        const form = document.querySelector(targetSelector);
+        if (!form) return;
+
+        const entity = getEntityName(button, getEntityName(form, 'el registro'));
+        const title = getCustomTitle(button, '¿Seguro que desea eliminar?');
+        const text = getCustomText(
+          button,
+          `Se eliminará ${entity}. Esta acción no se puede deshacer.`
+        );
+
+        const result = await window.AppAlerts.confirmDelete(entity, {
+          title,
+          text
+        });
+
+        if (result.isConfirmed) {
+          submitFormNative(form);
+        }
+      });
+    });
+
+    document
+      .querySelectorAll('a.js-confirm-logout, a[href="/auth/logout"]')
+      .forEach(function (link) {
+        link.addEventListener('click', async function (e) {
+          e.preventDefault();
+
+          const href = link.getAttribute('href');
+          if (!href) return;
+
+          const title = getCustomTitle(link, '¿Seguro que desea salir?');
+          const text = getCustomText(link, 'Se cerrará su sesión actual.');
+
+          const result = await window.AppAlerts.confirmLogout({
+            title,
+            text
+          });
+
+          if (result.isConfirmed) {
+            window.location.href = href;
+          }
+        });
+      });
+
+    const params = new URLSearchParams(window.location.search);
+    const keysToRemove = [];
+
+    if (params.get('created') === '1') {
+      window.AppAlerts.created('Registro');
+      keysToRemove.push('created');
+    }
+
+    if (params.get('updated') === '1') {
+      window.AppAlerts.updated('Registro');
+      keysToRemove.push('updated');
+    }
+
+    if (params.get('deleted') === '1') {
+      window.AppAlerts.deleted('Registro');
+      keysToRemove.push('deleted');
+    }
+
+    if (params.get('login') === 'success') {
+      window.AppAlerts.toast('success', 'Bienvenido');
+      keysToRemove.push('login');
+    }
+
+    if (params.get('logout') === 'success') {
+      window.AppAlerts.toast('success', 'Sesión cerrada correctamente');
+      keysToRemove.push('logout');
+    }
+
+    if (keysToRemove.length > 0) {
+      cleanUrlParams(keysToRemove);
+    }
+  }
 
   // ============================================================
   // AUTO-HIDE ALERTS

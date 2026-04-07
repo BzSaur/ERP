@@ -21,7 +21,14 @@
 </div>
 <% } %>
 
-<form action="/usuarios" method="POST">
+<form
+  action="/usuarios"
+  method="POST"
+  class="js-confirm-create"
+  data-entity="el usuario"
+  data-alert-title="¿Desea crear este usuario?"
+  data-alert-text="Se creará un nuevo usuario en el sistema."
+>
   <div class="row g-4">
     <!-- Información de la cuenta -->
     <div class="col-lg-6">
@@ -139,7 +146,7 @@ function togglePassword() {
   const icon = document.getElementById('toggleIcon');
   
   if (password.type === 'password') {
-    password.type = 'text';
+    password.type = 'text';a
     icon.classList.remove('bi-eye');
     icon.classList.add('bi-eye-slash');
   } else {
