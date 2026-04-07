@@ -14,7 +14,14 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-body">
-        <form action="/areas/<%= area.ID_Area %>" method="POST">
+        <form
+          action="/areas/<%= area.ID_Area %>"
+          method="POST"
+          class="js-confirm-edit"
+          data-entity="el área"
+          data-alert-title="¿Seguro que desea guardar los cambios?"
+          data-alert-text="Se actualizará el área seleccionada."
+        >
           <div class="mb-3">
             <label class="form-label">Nombre del Área <span class="text-danger">*</span></label>
             <input type="text" class="form-control" name="Nombre_Area" 
@@ -52,4 +59,3 @@
     </div>
   </div>
 </div>
-

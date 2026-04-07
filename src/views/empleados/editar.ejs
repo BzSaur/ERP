@@ -13,7 +13,11 @@
 </div>
 
 <!-- Formulario -->
-<form action="/empleados/<%= empleado.ID_Empleado %>" method="POST">
+<form action="/empleados/<%= empleado.ID_Empleado %>" method="POST"
+      class="js-confirm-edit"
+      data-entity="el empleado <%= empleado.Nombre %> <%= empleado.Apellido_Paterno %>"
+      data-alert-title="¿Seguro que desea guardar los cambios?"
+      data-alert-text="Se actualizará la información de este empleado.">
   <div class="row g-4">
     <!-- Datos Personales -->
     <div class="col-lg-6">
@@ -351,8 +355,10 @@
   
   <!-- Botones -->
   <div class="d-flex justify-content-between mt-4">
-    <form action="/empleados/<%= empleado.ID_Empleado %>/eliminar" method="POST" class="d-inline" 
-          onsubmit="return confirm('¿Estás seguro de eliminar este empleado? Esta acción no se puede deshacer.')">
+    <form action="/empleados/<%= empleado.ID_Empleado %>/eliminar" method="POST" class="d-inline js-confirm-delete"
+          data-entity="el empleado <%= empleado.Nombre %> <%= empleado.Apellido_Paterno %>"
+          data-alert-title="¿Seguro que desea eliminar este empleado?"
+          data-alert-text="Se eliminará este empleado de forma permanente. Esta acción no se puede deshacer.">
       <button type="submit" class="btn btn-outline-danger">
         <i class="bi bi-trash me-1"></i> Eliminar
       </button>
@@ -367,4 +373,3 @@
     </div>
   </div>
 </form>
-

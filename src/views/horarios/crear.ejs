@@ -17,7 +17,11 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/horarios" method="POST">
+    <form action="/horarios" method="POST"
+          class="js-confirm-create"
+          data-entity="el horario"
+          data-alert-title="¿Desea crear este horario?"
+          data-alert-text="Se creará el horario con la información capturada.">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="Nombre_Horario" class="form-label">Nombre del Horario *</label>

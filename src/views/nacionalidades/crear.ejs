@@ -17,7 +17,11 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/nacionalidades" method="POST">
+    <form action="/nacionalidades" method="POST"
+          class="js-confirm-create"
+          data-entity="la nacionalidad"
+          data-alert-title="¿Desea crear esta nacionalidad?"
+          data-alert-text="Se creará la nacionalidad con la información capturada.">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="Nombre_Nacionalidad" class="form-label">Nombre de la Nacionalidad *</label>

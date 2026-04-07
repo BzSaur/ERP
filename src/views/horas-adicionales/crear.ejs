@@ -17,7 +17,14 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/horas-adicionales" method="POST">
+    <form
+      action="/horas-adicionales"
+      method="POST"
+      class="js-confirm-create"
+      data-entity="el registro de horas adicionales"
+      data-alert-title="¿Desea registrar estas horas adicionales?"
+      data-alert-text="Se creará el registro de horas adicionales."
+    >
       <div class="row g-3">
         <div class="col-md-6">
           <label for="ID_Empleado" class="form-label">Empleado *</label>

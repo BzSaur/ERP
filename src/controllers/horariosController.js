@@ -18,8 +18,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener horarios:', error);
-    req.flash('error', 'Error al cargar los horarios');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar los horarios'));
   }
 };
 
@@ -41,8 +40,7 @@ export const store = async (req, res) => {
     });
     
     if (existente) {
-      req.flash('error', 'Ya existe un horario con ese nombre');
-      return res.redirect('/horarios/crear');
+      return res.redirect('/horarios/crear?error=' + encodeURIComponent('Ya existe un horario con ese nombre'));
     }
     
     const horario = await prisma.cat_Tipo_Horario.create({
@@ -69,12 +67,10 @@ export const store = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Horario creado exitosamente');
-    res.redirect('/horarios');
+    res.redirect('/horarios?created=1');
   } catch (error) {
     console.error('Error al crear horario:', error);
-    req.flash('error', 'Error al crear el horario');
-    res.redirect('/horarios/crear');
+    res.redirect('/horarios/crear?error=' + encodeURIComponent('Error al crear el horario'));
   }
 };
 
@@ -88,8 +84,7 @@ export const editar = async (req, res) => {
     });
     
     if (!horario) {
-      req.flash('error', 'Horario no encontrado');
-      return res.redirect('/horarios');
+      return res.redirect('/horarios?error=' + encodeURIComponent('Horario no encontrado'));
     }
     
     res.render('horarios/editar', {
@@ -98,8 +93,7 @@ export const editar = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener horario:', error);
-    req.flash('error', 'Error al cargar el horario');
-    res.redirect('/horarios');
+    res.redirect('/horarios?error=' + encodeURIComponent('Error al cargar el horario'));
   }
 };
 
@@ -150,12 +144,10 @@ export const update = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Horario actualizado exitosamente');
-    res.redirect('/horarios');
+    res.redirect('/horarios?updated=1');
   } catch (error) {
     console.error('Error al actualizar horario:', error);
-    req.flash('error', 'Error al actualizar el horario');
-    res.redirect(`/horarios/${req.params.id}/editar`);
+    res.redirect(`/horarios/${req.params.id}/editar?error=` + encodeURIComponent('Error al actualizar el horario'));
   }
 };
 
@@ -171,8 +163,7 @@ export const eliminar = async (req, res) => {
     });
     
     if (empleadosCount > 0) {
-      req.flash('error', `No se puede eliminar: hay ${empleadosCount} empleado(s) con este horario`);
-      return res.redirect('/horarios');
+      return res.redirect('/horarios?error=' + encodeURIComponent(`No se puede eliminar: hay ${empleadosCount} empleado(s) con este horario`));
     }
     
     // Obtener datos antes de eliminar
@@ -200,11 +191,9 @@ export const eliminar = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Horario eliminado exitosamente');
-    res.redirect('/horarios');
+    res.redirect('/horarios?deleted=1');
   } catch (error) {
     console.error('Error al eliminar horario:', error);
-    req.flash('error', 'Error al eliminar el horario');
-    res.redirect('/horarios');
+    res.redirect('/horarios?error=' + encodeURIComponent('Error al eliminar el horario'));
   }
 };

@@ -13,19 +13,11 @@
   </div>
 </div>
 
-<% if (typeof messages !== 'undefined') { %>
-  <% if (messages.success) { %>
-    <div class="alert alert-success alert-dismissible fade show">
-      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
-  <% if (messages.error) { %>
-    <div class="alert alert-danger alert-dismissible fade show">
-      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
 <% } %>
 
 <!-- Estadísticas -->
@@ -159,7 +151,14 @@
                     <i class="bi bi-eye"></i>
                   </a>
                   <% if (p.Estado !== 'CERRADO') { %>
-                    <form action="/nomina/periodos/<%= p.ID_Periodo %>/calcular" method="POST" class="d-inline">
+                    <form
+                      action="/nomina/periodos/<%= p.ID_Periodo %>/calcular"
+                      method="POST"
+                      class="d-inline js-confirm-edit"
+                      data-entity="el periodo <%= p.Nombre_Periodo %>"
+                      data-alert-title="¿Desea calcular esta nómina?"
+                      data-alert-text="Se calculará la nómina del periodo <%= p.Nombre_Periodo %>."
+                    >
                       <button type="submit" class="btn btn-sm btn-outline-success" title="Calcular nómina">
                         <i class="bi bi-calculator"></i>
                       </button>

@@ -14,7 +14,11 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-body">
-        <form action="/puestos/<%= puesto.ID_Puesto %>" method="POST">
+        <form action="/puestos/<%= puesto.ID_Puesto %>" method="POST"
+              class="js-confirm-edit"
+              data-entity="el puesto <%= puesto.Nombre_Puesto %>"
+              data-alert-title="¿Seguro que desea guardar los cambios?"
+              data-alert-text="Se actualizará la información de este puesto.">
           <div class="mb-3">
             <label class="form-label">Nombre del Puesto <span class="text-danger">*</span></label>
             <input type="text" class="form-control" name="Nombre_Puesto" 
@@ -67,4 +71,3 @@
     </div>
   </div>
 </div>
-

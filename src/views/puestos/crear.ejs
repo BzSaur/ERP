@@ -14,7 +14,11 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-body">
-        <form action="/puestos" method="POST">
+        <form action="/puestos" method="POST"
+              class="js-confirm-create"
+              data-entity="el puesto"
+              data-alert-title="¿Desea crear este puesto?"
+              data-alert-text="Se creará el puesto con la información capturada.">
           <div class="mb-3">
             <label class="form-label">Nombre del Puesto <span class="text-danger">*</span></label>
             <input type="text" class="form-control" name="Nombre_Puesto" required 
@@ -71,4 +75,3 @@
     </div>
   </div>
 </div>
-

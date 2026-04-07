@@ -12,7 +12,11 @@
 </div>
 
 <!-- Formulario -->
-<form action="/empleados" method="POST">
+<form action="/empleados" method="POST"
+      class="js-confirm-create"
+      data-entity="el empleado"
+      data-alert-title="¿Desea registrar este empleado?"
+      data-alert-text="Se creará el empleado con la información capturada.">
   <div class="row g-4">
     <!-- Datos Personales -->
     <div class="col-lg-6">

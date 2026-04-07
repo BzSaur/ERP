@@ -241,8 +241,7 @@ export const store = async (req, res, next) => {
       }
     );
 
-    req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente`);
-    res.redirect(`/empleados/${empleado.ID_Empleado}`);
+    res.redirect(`/empleados/${empleado.ID_Empleado}?created=1`);
   } catch (error) {
     next(error);
   }
@@ -484,7 +483,7 @@ export const update = async (req, res, next) => {
       }
     );
 
-    res.redirect(`/empleados/${id}`);
+    res.redirect(`/empleados/${id}?updated=1`);
   } catch (error) {
     next(error);
   }
@@ -519,8 +518,7 @@ export const destroy = async (req, res, next) => {
     });
 
     if (!empleado) {
-      req.flash('error', 'Empleado no encontrado');
-      return res.redirect('/empleados');
+      return res.redirect('/empleados?error=' + encodeURIComponent('Empleado no encontrado'));
     }
 
     await prisma.empleados.delete({
@@ -549,8 +547,7 @@ export const destroy = async (req, res, next) => {
       }
     );
 
-    req.flash('success', 'Empleado eliminado correctamente');
-    res.redirect('/empleados');
+    res.redirect('/empleados?deleted=1');
   } catch (error) {
     next(error);
   }

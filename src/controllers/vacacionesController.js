@@ -119,8 +119,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener vacaciones:', error);
-    req.flash('error', 'Error al cargar las vacaciones');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar las vacaciones'));
   }
 };
 
@@ -177,12 +176,10 @@ export const generarVacaciones = async (req, res) => {
       generados++;
     }
 
-    req.flash('success', `Vacaciones generadas para ${generados} empleado(s) con proporcionalidad por jornada`);
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?updated=1');
   } catch (error) {
     console.error('Error al generar vacaciones:', error);
-    req.flash('error', 'Error al generar las vacaciones');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?error=' + encodeURIComponent('Error al generar las vacaciones'));
   }
 };
 
@@ -200,8 +197,7 @@ export const crear = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el formulario');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?error=' + encodeURIComponent('Error al cargar el formulario'));
   }
 };
 
@@ -216,8 +212,7 @@ export const store = async (req, res) => {
     });
 
     if (!empleado) {
-      req.flash('error', 'Empleado no encontrado');
-      return res.redirect('/vacaciones/crear');
+      return res.redirect('/vacaciones/crear?error=' + encodeURIComponent('Empleado no encontrado'));
     }
 
     // Calcular antigüedad
@@ -226,8 +221,7 @@ export const store = async (req, res) => {
     const anosAntiguedad = Math.floor((hoy - fechaIngreso) / (365.25 * 24 * 60 * 60 * 1000));
 
     if (anosAntiguedad < 1) {
-      req.flash('error', 'El empleado no cumple 1 año de antigüedad');
-      return res.redirect('/vacaciones/crear');
+      return res.redirect('/vacaciones/crear?error=' + encodeURIComponent('El empleado no cumple 1 año de antigüedad'));
     }
 
     // Calcular días solicitados
@@ -253,8 +247,7 @@ export const store = async (req, res) => {
     if (vacacionExistente) {
       // Verificar días disponibles
       if (diasSolicitados > vacacionExistente.Dias_Pendientes) {
-        req.flash('error', `Solo tiene ${vacacionExistente.Dias_Pendientes} días pendientes`);
-        return res.redirect('/vacaciones/crear');
+        return res.redirect('/vacaciones/crear?error=' + encodeURIComponent(`Solo tiene ${vacacionExistente.Dias_Pendientes} días pendientes`));
       }
 
       // Actualizar vacaciones existentes
@@ -288,12 +281,10 @@ export const store = async (req, res) => {
       });
     }
 
-    req.flash('success', 'Vacaciones registradas exitosamente');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?created=1');
   } catch (error) {
     console.error('Error al guardar vacaciones:', error);
-    req.flash('error', 'Error al registrar las vacaciones');
-    res.redirect('/vacaciones/crear');
+    res.redirect('/vacaciones/crear?error=' + encodeURIComponent('Error al registrar las vacaciones'));
   }
 };
 
@@ -311,12 +302,10 @@ export const aprobar = async (req, res) => {
       }
     });
 
-    req.flash('success', 'Vacaciones aprobadas');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?updated=1');
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al aprobar las vacaciones');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?error=' + encodeURIComponent('Error al aprobar las vacaciones'));
   }
 };
 
@@ -376,7 +365,6 @@ export const elegibilidad = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar la elegibilidad');
-    res.redirect('/vacaciones');
+    res.redirect('/vacaciones?error=' + encodeURIComponent('Error al cargar la elegibilidad'));
   }
 };

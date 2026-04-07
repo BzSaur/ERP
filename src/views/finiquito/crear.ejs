@@ -22,7 +22,15 @@
         <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Datos de Baja</h5>
       </div>
       <div class="card-body">
-        <form action="/finiquito" method="POST" id="formFiniquito">
+        <form
+          action="/finiquito"
+          method="POST"
+          id="formFiniquito"
+          class="js-confirm-create"
+          data-entity="el cálculo de finiquito/liquidación"
+          data-alert-title="¿Desea calcular este finiquito/liquidación?"
+          data-alert-text="Se generará un nuevo cálculo con los datos capturados."
+        >
           <div class="row g-3">
             <!-- Empleado -->
             <div class="col-md-12">

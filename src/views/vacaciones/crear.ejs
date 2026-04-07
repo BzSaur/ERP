@@ -17,7 +17,14 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/vacaciones" method="POST">
+    <form
+      action="/vacaciones"
+      method="POST"
+      class="js-confirm-create"
+      data-entity="las vacaciones"
+      data-alert-title="¿Desea registrar estas vacaciones?"
+      data-alert-text="Se registrará la solicitud de vacaciones para el empleado seleccionado."
+    >
       <div class="row g-3">
         <div class="col-md-12">
           <label for="ID_Empleado" class="form-label">Empleado *</label>

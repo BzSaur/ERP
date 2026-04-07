@@ -17,7 +17,14 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/horas-adicionales/<%= horaAdicional.ID_Horas %>?_method=PUT" method="POST">
+    <form
+      action="/horas-adicionales/<%= horaAdicional.ID_Horas %>?_method=PUT"
+      method="POST"
+      class="js-confirm-edit"
+      data-entity="el registro de horas adicionales"
+      data-alert-title="¿Seguro que desea guardar los cambios?"
+      data-alert-text="Se actualizará el registro de horas adicionales."
+    >
       <div class="row g-3">
         <div class="col-md-6">
           <label for="ID_Empleado" class="form-label">Empleado *</label>

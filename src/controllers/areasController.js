@@ -71,7 +71,8 @@ export const store = async (req, res, next) => {
       { areaId: area.ID_Area, nombre: area.Nombre_Area }
     );
 
-    res.redirect('/areas');
+    res.redirect('/areas?created=1');
+
   } catch (error) {
     next(error);
   }
@@ -143,7 +144,9 @@ export const update = async (req, res, next) => {
       ip: obtenerIP(req)
     });
 
-    res.redirect('/areas');
+    
+    res.redirect('/areas?updated=1');
+
   } catch (error) {
     next(error);
   }
@@ -212,7 +215,9 @@ export const destroy = async (req, res, next) => {
       ip: obtenerIP(req)
     });
 
-    res.redirect('/areas');
+    
+    res.redirect('/areas?deleted=1');
+
   } catch (error) {
     next(error);
   }

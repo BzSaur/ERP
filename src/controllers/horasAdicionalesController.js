@@ -76,8 +76,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener horas adicionales:', error);
-    req.flash('error', 'Error al cargar las horas adicionales');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar las horas adicionales'));
   }
 };
 
@@ -99,8 +98,7 @@ export const crear = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el formulario');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?error=' + encodeURIComponent('Error al cargar el formulario'));
   }
 };
 
@@ -121,12 +119,10 @@ export const store = async (req, res) => {
       }
     });
     
-    req.flash('success', 'Horas adicionales registradas exitosamente');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?created=1');
   } catch (error) {
     console.error('Error al registrar horas:', error);
-    req.flash('error', 'Error al registrar las horas adicionales');
-    res.redirect('/horas-adicionales/crear');
+    res.redirect('/horas-adicionales/crear?error=' + encodeURIComponent('Error al registrar las horas adicionales'));
   }
 };
 
@@ -141,8 +137,7 @@ export const editar = async (req, res) => {
     });
     
     if (!horaAdicional) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/horas-adicionales');
+      return res.redirect('/horas-adicionales?error=' + encodeURIComponent('Registro no encontrado'));
     }
     
     const empleados = await prisma.empleados.findMany({
@@ -157,8 +152,7 @@ export const editar = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el registro');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?error=' + encodeURIComponent('Error al cargar el registro'));
   }
 };
 
@@ -179,12 +173,10 @@ export const update = async (req, res) => {
       }
     });
     
-    req.flash('success', 'Registro actualizado exitosamente');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?updated=1');
   } catch (error) {
     console.error('Error al actualizar:', error);
-    req.flash('error', 'Error al actualizar el registro');
-    res.redirect(`/horas-adicionales/${req.params.id}/editar`);
+    res.redirect(`/horas-adicionales/${req.params.id}/editar?error=` + encodeURIComponent('Error al actualizar el registro'));
   }
 };
 
@@ -202,12 +194,10 @@ export const aprobar = async (req, res) => {
       }
     });
     
-    req.flash('success', 'Horas aprobadas exitosamente');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?updated=1');
   } catch (error) {
     console.error('Error al aprobar:', error);
-    req.flash('error', 'Error al aprobar las horas');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?error=' + encodeURIComponent('Error al aprobar las horas'));
   }
 };
 
@@ -220,11 +210,9 @@ export const eliminar = async (req, res) => {
       where: { ID_Horas: parseInt(id) }
     });
     
-    req.flash('success', 'Registro eliminado exitosamente');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?deleted=1');
   } catch (error) {
     console.error('Error al eliminar:', error);
-    req.flash('error', 'Error al eliminar el registro');
-    res.redirect('/horas-adicionales');
+    res.redirect('/horas-adicionales?error=' + encodeURIComponent('Error al eliminar el registro'));
   }
 };

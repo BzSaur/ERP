@@ -4,20 +4,39 @@
     <p class="text-body-secondary mb-0">Cálculo y pago de aguinaldo según LFT</p>
   </div>
   <div class="d-flex gap-2">
-    <form action="/aguinaldo/calcular" method="POST" class="d-inline">
+    <form
+      action="/aguinaldo/calcular"
+      method="POST"
+      class="d-inline js-confirm-create"
+      data-entity="los aguinaldos del año <%= filtros.anio %>"
+      data-alert-title="¿Calcular aguinaldo?"
+      data-alert-text="Se calcularán los aguinaldos correspondientes al año seleccionado."
+    >
       <button type="submit" class="btn btn-success">
         <i class="bi bi-calculator me-1"></i> Calcular Aguinaldo
       </button>
     </form>
     <% if (totales.pendientes > 0) { %>
-      <form action="/aguinaldo/pagar-todos" method="POST" class="d-inline"
-            data-confirm="¿Marcar todos los aguinaldos como pagados?">
+      <form
+        action="/aguinaldo/pagar-todos"
+        method="POST"
+        class="d-inline js-confirm-edit"
+        data-entity="todos los aguinaldos pendientes"
+        data-alert-title="¿Marcar todos como pagados?"
+        data-alert-text="Se marcarán como pagados todos los aguinaldos pendientes."
+      >
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-cash-coin me-1"></i> Pagar Todos
         </button>
       </form>
-      <form action="/aguinaldo?_method=DELETE" method="POST" class="d-inline"
-            onsubmit="return confirm('¿Eliminar todos los aguinaldos pendientes?')">
+      <form
+        action="/aguinaldo?_method=DELETE"
+        method="POST"
+        class="d-inline js-confirm-delete"
+        data-entity="todos los aguinaldos pendientes"
+        data-alert-title="¿Eliminar aguinaldos pendientes?"
+        data-alert-text="Se eliminarán todos los aguinaldos pendientes. Esta acción no se puede deshacer."
+      >
         <button type="submit" class="btn btn-outline-danger">
           <i class="bi bi-trash me-1"></i> Eliminar Pendientes
         </button>
@@ -26,19 +45,11 @@
   </div>
 </div>
 
-<% if (typeof messages !== 'undefined') { %>
-  <% if (messages.success) { %>
-    <div class="alert alert-success alert-dismissible fade show">
-      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
-  <% if (messages.error) { %>
-    <div class="alert alert-danger alert-dismissible fade show">
-      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
 <% } %>
 
 <!-- Resumen -->
@@ -192,13 +203,26 @@
                     <i class="bi bi-eye"></i>
                   </a>
                   <% if (!a.Pagado) { %>
-                    <form action="/aguinaldo/<%= a.ID_Aguinaldo %>/pagar" method="POST" class="d-inline">
+                    <form
+                      action="/aguinaldo/<%= a.ID_Aguinaldo %>/pagar"
+                      method="POST"
+                      class="d-inline js-confirm-edit"
+                      data-entity="el aguinaldo de <%= a.empleado.Nombre %> <%= a.empleado.Apellido_Paterno %>"
+                      data-alert-title="¿Marcar como pagado?"
+                      data-alert-text="Se marcará como pagado este aguinaldo."
+                    >
                       <button type="submit" class="btn btn-sm btn-outline-success" title="Marcar pagado">
                         <i class="bi bi-check-lg"></i>
                       </button>
                     </form>
-                    <form action="/aguinaldo/<%= a.ID_Aguinaldo %>?_method=DELETE" method="POST" class="d-inline"
-                          onsubmit="return confirm('¿Eliminar?')">
+                    <form
+                      action="/aguinaldo/<%= a.ID_Aguinaldo %>?_method=DELETE"
+                      method="POST"
+                      class="d-inline js-confirm-delete"
+                      data-entity="el aguinaldo de <%= a.empleado.Nombre %> <%= a.empleado.Apellido_Paterno %>"
+                      data-alert-title="¿Eliminar este aguinaldo?"
+                      data-alert-text="Se eliminará este aguinaldo. Esta acción no se puede deshacer."
+                    >
                       <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                         <i class="bi bi-trash"></i>
                       </button>

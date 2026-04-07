@@ -11,12 +11,6 @@
 </div>
 
 <% if (typeof messages !== 'undefined') { %>
-  <% if (messages.success) { %>
-    <div class="alert alert-success alert-dismissible fade show">
-      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
   <% if (messages.error) { %>
     <div class="alert alert-danger alert-dismissible fade show">
       <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
@@ -64,8 +58,10 @@
                     <i class="bi bi-pencil"></i>
                   </a>
                   <form action="/horarios/<%= horario.ID_Tipo_Horario %>?_method=DELETE" 
-                        method="POST" class="d-inline" 
-                        data-confirm="¿Eliminar este horario?">
+                        method="POST" class="d-inline js-confirm-delete"
+                        data-entity="el horario <%= horario.Nombre_Horario %>"
+                        data-alert-title="¿Seguro que desea eliminar este horario?"
+                        data-alert-text="Se eliminará este horario de forma permanente. Esta acción no se puede deshacer.">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                       <i class="bi bi-trash"></i>
                     </button>

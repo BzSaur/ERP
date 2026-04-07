@@ -67,8 +67,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener finiquitos:', error);
-    req.flash('error', 'Error al cargar los finiquitos');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar los finiquitos'));
   }
 };
 
@@ -91,8 +90,7 @@ export const crear = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el formulario');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?error=' + encodeURIComponent('Error al cargar el formulario'));
   }
 };
 
@@ -108,8 +106,7 @@ export const calcular = async (req, res) => {
     });
 
     if (!empleado) {
-      req.flash('error', 'Empleado no encontrado');
-      return res.redirect('/finiquito/crear');
+      return res.redirect('/finiquito/crear?error=' + encodeURIComponent('Empleado no encontrado'));
     }
 
     const fechaIngreso = new Date(empleado.Fecha_Ingreso);
@@ -231,12 +228,10 @@ export const calcular = async (req, res) => {
       }
     });
 
-    req.flash('success', `${Tipo === 'FINIQUITO' ? 'Finiquito' : 'Liquidación'} calculado(a) exitosamente. SDI usado: $${salarioDiarioIntegrado} (factor: ${factorIntegracion.toFixed(4)})`);
-    res.redirect(`/finiquito/${finiquito.ID_Finiquito}`);
+    res.redirect(`/finiquito/${finiquito.ID_Finiquito}?created=1`);
   } catch (error) {
     console.error('Error al calcular finiquito:', error);
-    req.flash('error', 'Error al calcular el finiquito');
-    res.redirect('/finiquito/crear');
+    res.redirect('/finiquito/crear?error=' + encodeURIComponent('Error al calcular el finiquito'));
   }
 };
 
@@ -258,8 +253,7 @@ export const ver = async (req, res) => {
     });
 
     if (!finiquito) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/finiquito');
+      return res.redirect('/finiquito?error=' + encodeURIComponent('Registro no encontrado'));
     }
 
     res.render('finiquito/ver', {
@@ -268,8 +262,7 @@ export const ver = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el detalle');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?error=' + encodeURIComponent('Error al cargar el detalle'));
   }
 };
 
@@ -287,12 +280,10 @@ export const aprobar = async (req, res) => {
       }
     });
 
-    req.flash('success', 'Finiquito aprobado');
-    res.redirect(`/finiquito/${id}`);
+    res.redirect(`/finiquito/${id}?updated=1`);
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al aprobar');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?error=' + encodeURIComponent('Error al aprobar'));
   }
 };
 
@@ -319,12 +310,10 @@ export const pagar = async (req, res) => {
       }
     });
 
-    req.flash('success', 'Finiquito pagado — empleado dado de baja');
-    res.redirect(`/finiquito/${id}`);
+    res.redirect(`/finiquito/${id}?updated=1`);
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al registrar pago');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?error=' + encodeURIComponent('Error al registrar pago'));
   }
 };
 
@@ -338,25 +327,21 @@ export const eliminar = async (req, res) => {
     });
 
     if (!finiquito) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/finiquito');
+      return res.redirect('/finiquito?error=' + encodeURIComponent('Registro no encontrado'));
     }
 
     if (finiquito.Pagado) {
-      req.flash('error', 'No se puede eliminar un finiquito ya pagado');
-      return res.redirect(`/finiquito/${id}`);
+      return res.redirect(`/finiquito/${id}?error=` + encodeURIComponent('No se puede eliminar un finiquito ya pagado'));
     }
 
     await prisma.finiquito_Liquidacion.delete({
       where: { ID_Finiquito: parseInt(id) }
     });
 
-    req.flash('success', 'Registro eliminado');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?deleted=1');
   } catch (error) {
     console.error('Error al eliminar:', error);
-    req.flash('error', 'Error al eliminar el registro');
-    res.redirect('/finiquito');
+    res.redirect('/finiquito?error=' + encodeURIComponent('Error al eliminar el registro'));
   }
 };
 

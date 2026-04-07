@@ -197,7 +197,14 @@
                 </td>
                 <td class="text-end">
                   <% if (!hora.Aprobado) { %>
-                    <form action="/horas-adicionales/<%= hora.ID_Horas %>/aprobar" method="POST" class="d-inline">
+                    <form
+                      action="/horas-adicionales/<%= hora.ID_Horas %>/aprobar"
+                      method="POST"
+                      class="d-inline js-confirm-edit"
+                      data-entity="las horas adicionales"
+                      data-alert-title="¿Seguro que desea aprobar este registro?"
+                      data-alert-text="Se aprobarán las horas adicionales seleccionadas."
+                    >
                       <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar">
                         <i class="bi bi-check-lg"></i>
                       </button>
@@ -207,9 +214,14 @@
                      class="btn btn-sm btn-outline-primary" title="Editar">
                     <i class="bi bi-pencil"></i>
                   </a>
-                  <form action="/horas-adicionales/<%= hora.ID_Horas %>?_method=DELETE" 
-                        method="POST" class="d-inline" 
-                        data-confirm="¿Eliminar este registro?">
+                  <form
+                    action="/horas-adicionales/<%= hora.ID_Horas %>?_method=DELETE"
+                    method="POST"
+                    class="d-inline js-confirm-delete"
+                    data-entity="el registro de horas adicionales"
+                    data-alert-title="¿Seguro que desea eliminar este registro?"
+                    data-alert-text="Se eliminará el registro de horas adicionales. Esta acción no se puede deshacer."
+                  >
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                       <i class="bi bi-trash"></i>
                     </button>

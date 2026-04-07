@@ -14,21 +14,41 @@
   </div>
   <div>
     <% if (finiquito.Estado === 'CALCULADO') { %>
-      <form action="/finiquito/<%= finiquito.ID_Finiquito %>/aprobar" method="POST" class="d-inline">
+      <form
+        action="/finiquito/<%= finiquito.ID_Finiquito %>/aprobar"
+        method="POST"
+        class="d-inline js-confirm-edit"
+        data-entity="el finiquito/liquidación #<%= finiquito.ID_Finiquito %>"
+        data-alert-title="¿Desea aprobar este cálculo?"
+        data-alert-text="Se aprobará este finiquito/liquidación."
+      >
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-check-circle me-1"></i> Aprobar
         </button>
       </form>
     <% } else if (finiquito.Estado === 'APROBADO') { %>
-      <form action="/finiquito/<%= finiquito.ID_Finiquito %>/pagar" method="POST" class="d-inline">
+      <form
+        action="/finiquito/<%= finiquito.ID_Finiquito %>/pagar"
+        method="POST"
+        class="d-inline js-confirm-edit"
+        data-entity="el pago del finiquito/liquidación #<%= finiquito.ID_Finiquito %>"
+        data-alert-title="¿Registrar este pago?"
+        data-alert-text="Se marcará este finiquito/liquidación como pagado."
+      >
         <button type="submit" class="btn btn-success">
           <i class="bi bi-cash me-1"></i> Registrar Pago
         </button>
       </form>
     <% } %>
     <% if (!finiquito.Pagado) { %>
-      <form action="/finiquito/<%= finiquito.ID_Finiquito %>?_method=DELETE" method="POST" class="d-inline"
-            onsubmit="return confirm('¿Eliminar este registro?')">
+      <form
+        action="/finiquito/<%= finiquito.ID_Finiquito %>?_method=DELETE"
+        method="POST"
+        class="d-inline js-confirm-delete"
+        data-entity="el finiquito/liquidación #<%= finiquito.ID_Finiquito %>"
+        data-alert-title="¿Eliminar este registro?"
+        data-alert-text="Se eliminará este registro de finiquito/liquidación. Esta acción no se puede deshacer."
+      >
         <button type="submit" class="btn btn-outline-danger ms-2">
           <i class="bi bi-trash me-1"></i> Eliminar
         </button>

@@ -72,8 +72,10 @@
                   <i class="bi bi-pencil"></i>
                 </a>
                 <% if (puesto._count.empleados === 0) { %>
-                <form action="/puestos/<%= puesto.ID_Puesto %>/eliminar" method="POST" class="d-inline"
-                      onsubmit="return confirm('¿Eliminar este puesto?')">
+                <form action="/puestos/<%= puesto.ID_Puesto %>/eliminar" method="POST" class="d-inline js-confirm-delete"
+                      data-entity="el puesto <%= puesto.Nombre_Puesto %>"
+                      data-alert-title="¿Seguro que desea eliminar este puesto?"
+                      data-alert-text="Se eliminará el puesto de forma permanente. Esta acción no se puede deshacer.">
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                     <i class="bi bi-trash"></i>
                   </button>
@@ -93,4 +95,3 @@
     </div>
   </div>
 </div>
-

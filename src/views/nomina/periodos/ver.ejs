@@ -9,13 +9,27 @@
   </div>
   <div class="d-flex gap-2">
     <% if (periodo.Estado !== 'CERRADO') { %>
-      <form action="/nomina/periodos/<%= periodo.ID_Periodo %>/calcular" method="POST" class="d-inline">
+      <form
+        action="/nomina/periodos/<%= periodo.ID_Periodo %>/calcular"
+        method="POST"
+        class="d-inline js-confirm-edit"
+        data-entity="el periodo <%= periodo.Nombre_Periodo %>"
+        data-alert-title="¿Desea calcular esta nómina?"
+        data-alert-text="Se calculará la nómina del periodo <%= periodo.Nombre_Periodo %>."
+      >
         <button type="submit" class="btn btn-success">
           <i class="bi bi-calculator me-1"></i> Calcular Nómina
         </button>
       </form>
-      <form action="/nomina/periodos/<%= periodo.ID_Periodo %>/cerrar" method="POST" class="d-inline"
-            data-confirm="¿Cerrar este periodo? Esta acción no se puede deshacer.">
+
+      <form
+        action="/nomina/periodos/<%= periodo.ID_Periodo %>/cerrar"
+        method="POST"
+        class="d-inline js-confirm-delete"
+        data-entity="el periodo <%= periodo.Nombre_Periodo %>"
+        data-alert-title="¿Cerrar este periodo?"
+        data-alert-text="Se cerrará el periodo <%= periodo.Nombre_Periodo %>. Esta acción no se puede deshacer."
+      >
         <button type="submit" class="btn btn-warning">
           <i class="bi bi-lock me-1"></i> Cerrar Periodo
         </button>

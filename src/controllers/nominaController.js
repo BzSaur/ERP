@@ -50,8 +50,7 @@ export const periodos = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener periodos:', error);
-    req.flash('error', 'Error al cargar los periodos de nómina');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar los periodos de nómina'));
   }
 };
 
@@ -85,16 +84,14 @@ export const storePeriodo = async (req, res) => {
       }
     });
     
-    req.flash('success', 'Periodo de nómina creado exitosamente');
-    res.redirect('/nomina/periodos');
+    res.redirect('/nomina/periodos?created=1');
   } catch (error) {
     console.error('Error al crear periodo:', error);
     if (error.code === 'P2002') {
-      req.flash('error', 'Ya existe un periodo con esas fechas de inicio y fin. Usa fechas diferentes.');
+      res.redirect('/nomina/periodos/crear?error=' + encodeURIComponent('Ya existe un periodo con esas fechas de inicio y fin. Usa fechas diferentes.'));
     } else {
-      req.flash('error', 'Error al crear el periodo de nómina');
+      res.redirect('/nomina/periodos/crear?error=' + encodeURIComponent('Error al crear el periodo de nómina'));
     }
-    res.redirect('/nomina/periodos/crear');
   }
 };
 
@@ -129,8 +126,7 @@ export const verPeriodo = async (req, res) => {
     });
     
     if (!periodo) {
-      req.flash('error', 'Periodo no encontrado');
-      return res.redirect('/nomina/periodos');
+      return res.redirect('/nomina/periodos?error=' + encodeURIComponent('Periodo no encontrado'));
     }
     
     // Calcular totales del periodo
@@ -149,8 +145,7 @@ export const verPeriodo = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al ver periodo:', error);
-    req.flash('error', 'Error al cargar el periodo');
-    res.redirect('/nomina/periodos');
+    res.redirect('/nomina/periodos?error=' + encodeURIComponent('Error al cargar el periodo'));
   }
 };
 
@@ -164,13 +159,11 @@ export const calcularNomina = async (req, res) => {
     });
     
     if (!periodo) {
-      req.flash('error', 'Periodo no encontrado');
-      return res.redirect('/nomina/periodos');
+      return res.redirect('/nomina/periodos?error=' + encodeURIComponent('Periodo no encontrado'));
     }
     
     if (periodo.Estado === 'CERRADO') {
-      req.flash('error', 'No se puede calcular un periodo cerrado');
-      return res.redirect(`/nomina/periodos/${id}`);
+      return res.redirect(`/nomina/periodos/${id}?error=` + encodeURIComponent('No se puede calcular un periodo cerrado'));
     }
     
     // Obtener configuración de deducciones desde SuperAdmin
@@ -401,12 +394,10 @@ export const calcularNomina = async (req, res) => {
       nominasCreadas++;
     }
     
-    req.flash('success', `Nómina calculada para ${nominasCreadas} empleado(s)`);
-    res.redirect(`/nomina/periodos/${id}`);
+    res.redirect(`/nomina/periodos/${id}?updated=1`);
   } catch (error) {
     console.error('Error al calcular nómina:', error);
-    req.flash('error', 'Error al calcular la nómina');
-    res.redirect('/nomina/periodos');
+    res.redirect('/nomina/periodos?error=' + encodeURIComponent('Error al calcular la nómina'));
   }
 };
 
@@ -441,12 +432,10 @@ export const cerrarPeriodo = async (req, res) => {
       }
     });
     
-    req.flash('success', 'Periodo cerrado exitosamente');
-    res.redirect(`/nomina/periodos/${id}`);
+    res.redirect(`/nomina/periodos/${id}?updated=1`);
   } catch (error) {
     console.error('Error al cerrar periodo:', error);
-    req.flash('error', 'Error al cerrar el periodo');
-    res.redirect('/nomina/periodos');
+    res.redirect('/nomina/periodos?error=' + encodeURIComponent('Error al cerrar el periodo'));
   }
 };
 
@@ -474,8 +463,7 @@ export const verNominaEmpleado = async (req, res) => {
     });
     
     if (!nomina) {
-      req.flash('error', 'Nómina no encontrada');
-      return res.redirect('/nomina/periodos');
+      return res.redirect('/nomina/periodos?error=' + encodeURIComponent('Nómina no encontrada'));
     }
     
     res.render('nomina/recibo', {
@@ -484,8 +472,7 @@ export const verNominaEmpleado = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al ver nómina:', error);
-    req.flash('error', 'Error al cargar la nómina');
-    res.redirect('/nomina/periodos');
+    res.redirect('/nomina/periodos?error=' + encodeURIComponent('Error al cargar la nómina'));
   }
 };
 
@@ -539,7 +526,6 @@ export const dashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en dashboard nómina:', error);
-    req.flash('error', 'Error al cargar el dashboard');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar el dashboard'));
   }
 };

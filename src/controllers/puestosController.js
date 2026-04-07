@@ -108,7 +108,7 @@ export const store = async (req, res, next) => {
       }
     );
 
-    res.redirect('/puestos');
+    res.redirect('/puestos?created=1');
   } catch (error) {
     next(error);
   }
@@ -250,7 +250,7 @@ export const update = async (req, res, next) => {
       }
     );
 
-    res.redirect('/puestos');
+    res.redirect('/puestos?updated=1');
   } catch (error) {
     next(error);
   }
@@ -301,7 +301,7 @@ export const destroy = async (req, res, next) => {
       ip: obtenerIP(req)
     });
 
-    res.redirect('/puestos');
+    res.redirect('/puestos?deleted=1');
   } catch (error) {
     next(error);
   }

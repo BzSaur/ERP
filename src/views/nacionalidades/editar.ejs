@@ -17,7 +17,11 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/nacionalidades/<%= nacionalidad.ID_Nacionalidad %>?_method=PUT" method="POST">
+    <form action="/nacionalidades/<%= nacionalidad.ID_Nacionalidad %>?_method=PUT" method="POST"
+          class="js-confirm-edit"
+          data-entity="la nacionalidad <%= nacionalidad.Nombre_Nacionalidad %>"
+          data-alert-title="¿Seguro que desea guardar los cambios?"
+          data-alert-text="Se actualizará la información de esta nacionalidad.">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="Nombre_Nacionalidad" class="form-label">Nombre de la Nacionalidad *</label>

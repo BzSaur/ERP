@@ -18,8 +18,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener nacionalidades:', error);
-    req.flash('error', 'Error al cargar las nacionalidades');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar las nacionalidades'));
   }
 };
 
@@ -41,8 +40,7 @@ export const store = async (req, res) => {
     });
     
     if (existente) {
-      req.flash('error', 'Ya existe una nacionalidad con ese nombre');
-      return res.redirect('/nacionalidades/crear');
+      return res.redirect('/nacionalidades/crear?error=' + encodeURIComponent('Ya existe una nacionalidad con ese nombre'));
     }
     
     const nacionalidad = await prisma.cat_Nacionalidades.create({
@@ -69,12 +67,10 @@ export const store = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Nacionalidad creada exitosamente');
-    res.redirect('/nacionalidades');
+    res.redirect('/nacionalidades?created=1');
   } catch (error) {
     console.error('Error al crear nacionalidad:', error);
-    req.flash('error', 'Error al crear la nacionalidad');
-    res.redirect('/nacionalidades/crear');
+    res.redirect('/nacionalidades/crear?error=' + encodeURIComponent('Error al crear la nacionalidad'));
   }
 };
 
@@ -88,8 +84,7 @@ export const editar = async (req, res) => {
     });
     
     if (!nacionalidad) {
-      req.flash('error', 'Nacionalidad no encontrada');
-      return res.redirect('/nacionalidades');
+      return res.redirect('/nacionalidades?error=' + encodeURIComponent('Nacionalidad no encontrada'));
     }
     
     res.render('nacionalidades/editar', {
@@ -98,8 +93,7 @@ export const editar = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener nacionalidad:', error);
-    req.flash('error', 'Error al cargar la nacionalidad');
-    res.redirect('/nacionalidades');
+    res.redirect('/nacionalidades?error=' + encodeURIComponent('Error al cargar la nacionalidad'));
   }
 };
 
@@ -144,12 +138,10 @@ export const update = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Nacionalidad actualizada exitosamente');
-    res.redirect('/nacionalidades');
+    res.redirect('/nacionalidades?updated=1');
   } catch (error) {
     console.error('Error al actualizar nacionalidad:', error);
-    req.flash('error', 'Error al actualizar la nacionalidad');
-    res.redirect(`/nacionalidades/${req.params.id}/editar`);
+    res.redirect(`/nacionalidades/${req.params.id}/editar?error=` + encodeURIComponent('Error al actualizar la nacionalidad'));
   }
 };
 
@@ -165,8 +157,7 @@ export const eliminar = async (req, res) => {
     });
     
     if (empleadosCount > 0) {
-      req.flash('error', `No se puede eliminar: hay ${empleadosCount} empleado(s) con esta nacionalidad`);
-      return res.redirect('/nacionalidades');
+      return res.redirect('/nacionalidades?error=' + encodeURIComponent(`No se puede eliminar: hay ${empleadosCount} empleado(s) con esta nacionalidad`));
     }
     
     // Obtener datos antes de eliminar
@@ -194,11 +185,9 @@ export const eliminar = async (req, res) => {
       ip: obtenerIP(req)
     });
     
-    req.flash('success', 'Nacionalidad eliminada exitosamente');
-    res.redirect('/nacionalidades');
+    res.redirect('/nacionalidades?deleted=1');
   } catch (error) {
     console.error('Error al eliminar nacionalidad:', error);
-    req.flash('error', 'Error al eliminar la nacionalidad');
-    res.redirect('/nacionalidades');
+    res.redirect('/nacionalidades?error=' + encodeURIComponent('Error al eliminar la nacionalidad'));
   }
 };

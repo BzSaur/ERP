@@ -70,8 +70,7 @@ export const index = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener aguinaldos:', error);
-    req.flash('error', 'Error al cargar los aguinaldos');
-    res.redirect('/');
+    res.redirect('/?error=' + encodeURIComponent('Error al cargar los aguinaldos'));
   }
 };
 
@@ -254,12 +253,10 @@ export const calcular = async (req, res) => {
       calculados++;
     }
 
-    req.flash('success', `Aguinaldo calculado para ${calculados} empleado(s) con proporcionalidad aplicada`);
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?updated=1');
   } catch (error) {
     console.error('Error al calcular aguinaldo:', error);
-    req.flash('error', 'Error al calcular el aguinaldo');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al calcular el aguinaldo'));
   }
 };
 
@@ -276,12 +273,10 @@ export const pagar = async (req, res) => {
       }
     });
 
-    req.flash('success', 'Aguinaldo marcado como pagado');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?updated=1');
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al registrar el pago');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al registrar el pago'));
   }
 };
 
@@ -301,12 +296,10 @@ export const pagarTodos = async (req, res) => {
       }
     });
 
-    req.flash('success', 'Todos los aguinaldos marcados como pagados');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?updated=1');
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al registrar los pagos');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al registrar los pagos'));
   }
 };
 
@@ -328,8 +321,7 @@ export const ver = async (req, res) => {
     });
 
     if (!aguinaldo) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/aguinaldo');
+      return res.redirect('/aguinaldo?error=' + encodeURIComponent('Registro no encontrado'));
     }
 
     res.render('aguinaldo/ver', {
@@ -338,8 +330,7 @@ export const ver = async (req, res) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    req.flash('error', 'Error al cargar el detalle');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al cargar el detalle'));
   }
 };
 
@@ -353,25 +344,21 @@ export const eliminar = async (req, res) => {
     });
 
     if (!aguinaldo) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/aguinaldo');
+      return res.redirect('/aguinaldo?error=' + encodeURIComponent('Registro no encontrado'));
     }
 
     if (aguinaldo.Pagado) {
-      req.flash('error', 'No se puede eliminar un aguinaldo ya pagado');
-      return res.redirect(`/aguinaldo/${id}`);
+      return res.redirect(`/aguinaldo/${id}?error=` + encodeURIComponent('No se puede eliminar un aguinaldo ya pagado'));
     }
 
     await prisma.aguinaldo.delete({
       where: { ID_Aguinaldo: parseInt(id) }
     });
 
-    req.flash('success', 'Aguinaldo eliminado');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?deleted=1');
   } catch (error) {
     console.error('Error al eliminar:', error);
-    req.flash('error', 'Error al eliminar');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al eliminar'));
   }
 };
 
@@ -387,12 +374,10 @@ export const eliminarTodos = async (req, res) => {
       }
     });
 
-    req.flash('success', `${result.count} aguinaldo(s) pendientes eliminados`);
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?deleted=1');
   } catch (error) {
     console.error('Error al eliminar:', error);
-    req.flash('error', 'Error al eliminar');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al eliminar'));
   }
 };
 
@@ -407,8 +392,7 @@ export const editarFaltas = async (req, res) => {
     });
 
     if (!aguinaldo) {
-      req.flash('error', 'Registro no encontrado');
-      return res.redirect('/aguinaldo');
+      return res.redirect('/aguinaldo?error=' + encodeURIComponent('Registro no encontrado'));
     }
 
     const diasAguinaldoConfig = await getConfig('DIAS_AGUINALDO', 15);
@@ -441,12 +425,10 @@ export const editarFaltas = async (req, res) => {
       }
     });
 
-    req.flash('success', `Aguinaldo recalculado con ${diasFaltas} falta(s)`);
-    res.redirect(`/aguinaldo/${id}`);
+    res.redirect(`/aguinaldo/${id}?updated=1`);
   } catch (error) {
     console.error('Error al editar faltas:', error);
-    req.flash('error', 'Error al recalcular');
-    res.redirect('/aguinaldo');
+    res.redirect('/aguinaldo?error=' + encodeURIComponent('Error al recalcular'));
   }
 };
 

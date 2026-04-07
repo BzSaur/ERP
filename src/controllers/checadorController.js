@@ -57,8 +57,7 @@ export const procesarArchivos = async (req, res, next) => {
     const archivoRAM2 = req.files?.ram2?.[0] || null;
 
     if (!archivoRAM1 && !archivoRAM2) {
-      req.flash('error', 'Debes subir al menos un archivo de checador (RAM1 o RAM2)');
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent('Debes subir al menos un archivo de checador (RAM1 o RAM2)'));
     }
 
     let datosRAM1 = null;
@@ -90,8 +89,7 @@ export const procesarArchivos = async (req, res, next) => {
     }
 
     if (!datosRAM1 && !datosRAM2) {
-      req.flash('error', errores.join('. '));
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent(errores.join('. ')));
     }
 
     // Combinar datos si hay ambos checadores
@@ -140,8 +138,7 @@ export const procesarArchivos = async (req, res, next) => {
 
   } catch (error) {
     console.error('Error procesando checador:', error);
-    req.flash('error', `Error al procesar archivos: ${error.message}`);
-    return res.redirect('/checador');
+    return res.redirect('/checador?error=' + encodeURIComponent(`Error al procesar archivos: ${error.message}`));
   }
 };
 
@@ -154,8 +151,7 @@ export const detalleEmpleado = async (req, res, next) => {
     const resultado = req.session.checadorResultado;
 
     if (!resultado) {
-      req.flash('error', 'No hay datos de checador cargados. Por favor importe los archivos primero.');
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent('No hay datos de checador cargados. Por favor importe los archivos primero.'));
     }
 
     const empleado = resultado.empleados.find(
@@ -163,8 +159,7 @@ export const detalleEmpleado = async (req, res, next) => {
     );
 
     if (!empleado) {
-      req.flash('error', `Empleado con ID de checador ${idChecador} no encontrado`);
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent(`Empleado con ID de checador ${idChecador} no encontrado`));
     }
 
     res.render('checador/detalle-empleado', {
@@ -189,13 +184,11 @@ export const guardarResultados = async (req, res, next) => {
     const matchingData = req.session.checadorMatching;
 
     if (!resultado || !matchingData) {
-      req.flash('error', 'No hay datos de checador para guardar. Importe los archivos primero.');
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent('No hay datos de checador para guardar. Importe los archivos primero.'));
     }
 
     if (matchingData.matching.length === 0) {
-      req.flash('error', 'No se encontraron empleados vinculados con el sistema. No hay datos para guardar.');
-      return res.redirect('/checador');
+      return res.redirect('/checador?error=' + encodeURIComponent('No se encontraron empleados vinculados con el sistema. No hay datos para guardar.'));
     }
 
     const resumen = await guardarEnBaseDatos(resultado, matchingData, req.user.ID_Usuario);
@@ -212,17 +205,14 @@ export const guardarResultados = async (req, res, next) => {
       mensaje += ` ${resumen.noMatcheados} empleados no se pudieron vincular.`;
     }
     if (resumen.errores.length > 0) {
-      mensaje += ` ${resumen.errores.length} errores durante el guardado.`;
-      req.flash('warning', resumen.errores.map(e => `${e.empleado}: ${e.error}`).join('; '));
+      mensaje += ` ${resumen.errores.length} errores durante el guardado: ${resumen.errores.map(e => `${e.empleado}: ${e.error}`).join('; ')}`;
     }
 
-    req.flash('success', mensaje);
-    return res.redirect('/checador');
+    return res.redirect('/checador?success=' + encodeURIComponent(mensaje));
 
   } catch (error) {
     console.error('Error guardando checador:', error);
-    req.flash('error', `Error al guardar en base de datos: ${error.message}`);
-    return res.redirect('/checador');
+    return res.redirect('/checador?error=' + encodeURIComponent(`Error al guardar en base de datos: ${error.message}`));
   }
 };
 

@@ -9,13 +9,26 @@
   </div>
   <div>
     <% if (!aguinaldo.Pagado) { %>
-      <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar" method="POST" class="d-inline">
+      <form
+        action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar"
+        method="POST"
+        class="d-inline js-confirm-edit"
+        data-entity="el aguinaldo de <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %>"
+        data-alert-title="¿Aprobar y pagar este aguinaldo?"
+        data-alert-text="Se aprobará y marcará como pagado este aguinaldo."
+      >
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-check-circle me-1"></i> Aprobar y Pagar
         </button>
       </form>
-      <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>?_method=DELETE" method="POST" class="d-inline"
-            onsubmit="return confirm('¿Eliminar este aguinaldo?')">
+      <form
+        action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>?_method=DELETE"
+        method="POST"
+        class="d-inline js-confirm-delete"
+        data-entity="el aguinaldo de <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %>"
+        data-alert-title="¿Eliminar este aguinaldo?"
+        data-alert-text="Se eliminará este aguinaldo. Esta acción no se puede deshacer."
+      >
         <button type="submit" class="btn btn-outline-danger ms-2">
           <i class="bi bi-trash me-1"></i> Eliminar
         </button>
@@ -31,19 +44,11 @@
   </div>
 </div>
 
-<% if (typeof messages !== 'undefined') { %>
-  <% if (messages.success) { %>
-    <div class="alert alert-success alert-dismissible fade show">
-      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
-  <% if (messages.error) { %>
-    <div class="alert alert-danger alert-dismissible fade show">
-      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
 <% } %>
 
 <div class="row g-4">
@@ -105,7 +110,14 @@
           <div class="col-12 border-top pt-3">
             <h6 class="text-body-secondary mb-2"><i class="bi bi-pie-chart me-1"></i> Proporcionalidad</h6>
             <% if (!aguinaldo.Pagado) { %>
-            <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/editar-faltas" method="POST" class="row g-2 align-items-end mb-2">
+            <form
+              action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/editar-faltas"
+              method="POST"
+              class="row g-2 align-items-end mb-2 js-confirm-edit"
+              data-entity="el aguinaldo de <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %>"
+              data-alert-title="¿Recalcular aguinaldo?"
+              data-alert-text="Se recalculará el aguinaldo con las faltas capturadas."
+            >
               <div class="col-auto">
                 <label for="Dias_Faltas" class="form-label small mb-0">Días faltados</label>
                 <input type="number" class="form-control form-control-sm" id="Dias_Faltas" name="Dias_Faltas"
@@ -229,7 +241,14 @@
     <i class="bi bi-arrow-left me-1"></i> Regresar a Lista
   </a>
   <% if (!aguinaldo.Pagado) { %>
-    <form action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar" method="POST" class="d-inline">
+    <form
+      action="/aguinaldo/<%= aguinaldo.ID_Aguinaldo %>/aprobar"
+      method="POST"
+      class="d-inline js-confirm-edit"
+      data-entity="el aguinaldo de <%= aguinaldo.empleado?.Nombre %> <%= aguinaldo.empleado?.Apellido_Paterno %>"
+      data-alert-title="¿Aprobar y pagar este aguinaldo?"
+      data-alert-text="Se aprobará y marcará como pagado este aguinaldo."
+    >
       <button type="submit" class="btn btn-primary">
         <i class="bi bi-check-circle me-1"></i> Aprobar y Pagar
       </button>

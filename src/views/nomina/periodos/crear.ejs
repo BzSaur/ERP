@@ -17,7 +17,14 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/nomina/periodos" method="POST">
+    <form
+      action="/nomina/periodos"
+      method="POST"
+      class="js-confirm-create"
+      data-entity="el periodo de nómina"
+      data-alert-title="¿Desea crear este periodo?"
+      data-alert-text="Se creará un nuevo periodo de nómina."
+    >
       <div class="row g-3">
         <div class="col-md-6">
           <label for="Nombre_Periodo" class="form-label">Nombre del Periodo *</label>

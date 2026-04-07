@@ -4,7 +4,14 @@
     <p class="text-body-secondary mb-0">Gestión de vacaciones de empleados</p>
   </div>
   <div class="d-flex gap-2">
-    <form action="/vacaciones/generar" method="POST" class="d-inline">
+    <form
+      action="/vacaciones/generar"
+      method="POST"
+      class="d-inline js-confirm-edit"
+      data-entity="las vacaciones"
+      data-alert-title="¿Desea generar las vacaciones?"
+      data-alert-text="Se generarán los registros de vacaciones correspondientes."
+    >
       <button type="submit" class="btn btn-success">
         <i class="bi bi-arrow-repeat me-1"></i> Generar Vacaciones
       </button>
@@ -18,19 +25,11 @@
   </div>
 </div>
 
-<% if (typeof messages !== 'undefined') { %>
-  <% if (messages.success) { %>
-    <div class="alert alert-success alert-dismissible fade show">
-      <i class="bi bi-check-circle me-2"></i><%= messages.success %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
-  <% if (messages.error) { %>
-    <div class="alert alert-danger alert-dismissible fade show">
-      <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  <% } %>
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
 <% } %>
 
 <!-- Estadísticas -->
@@ -181,7 +180,14 @@
                 </td>
                 <td class="text-end">
                   <% if (v.Estado === 'EN_CURSO') { %>
-                    <form action="/vacaciones/<%= v.ID_Vacacion %>/aprobar" method="POST" class="d-inline">
+                    <form
+                      action="/vacaciones/<%= v.ID_Vacacion %>/aprobar"
+                      method="POST"
+                      class="d-inline js-confirm-edit"
+                      data-entity="las vacaciones de <%= v.empleado.Nombre %> <%= v.empleado.Apellido_Paterno %>"
+                      data-alert-title="¿Desea aprobar estas vacaciones?"
+                      data-alert-text="Se marcarán como aprobadas las vacaciones seleccionadas."
+                    >
                       <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar">
                         <i class="bi bi-check-lg"></i>
                       </button>

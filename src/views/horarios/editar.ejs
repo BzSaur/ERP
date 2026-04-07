@@ -17,7 +17,11 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="/horarios/<%= horario.ID_Tipo_Horario %>?_method=PUT" method="POST">
+    <form action="/horarios/<%= horario.ID_Tipo_Horario %>?_method=PUT" method="POST"
+          class="js-confirm-edit"
+          data-entity="el horario <%= horario.Nombre_Horario %>"
+          data-alert-title="¿Seguro que desea guardar los cambios?"
+          data-alert-text="Se actualizará la información de este horario.">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="Nombre_Horario" class="form-label">Nombre del Horario *</label>

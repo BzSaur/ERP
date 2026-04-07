@@ -78,8 +78,7 @@ export const reporteEmpleado = async (req, res, next) => {
     });
 
     if (!empleado) {
-      req.flash('error', 'Empleado no encontrado');
-      return res.redirect('/asistencia');
+      return res.redirect('/asistencia?error=' + encodeURIComponent('Empleado no encontrado'));
     }
 
     const resumen = await asistenciaService.obtenerResumenAsistencia({
@@ -177,11 +176,9 @@ export const registrarChecadaManual = async (req, res, next) => {
       dispositivo: 'MANUAL'
     });
 
-    req.flash('success', `Checada registrada: ${resultado.empleado.nombre} - ${tipoChecada}`);
-    res.redirect('/asistencia');
+    res.redirect('/asistencia?created=1');
   } catch (error) {
-    req.flash('error', error.message);
-    res.redirect('/asistencia/checada-manual');
+    res.redirect('/asistencia/checada-manual?error=' + encodeURIComponent(error.message));
   }
 };
 
