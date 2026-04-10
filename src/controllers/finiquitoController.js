@@ -74,6 +74,8 @@ export const index = async (req, res) => {
 // Formulario para calcular finiquito
 export const crear = async (req, res) => {
   try {
+    const empleadoSeleccionado = parseInt(req.query.empleado, 10) || null;
+
     // Empleados activos (para calcular su baja)
     const empleados = await prisma.empleados.findMany({
       where: { ID_Estatus: 1 },
@@ -86,7 +88,8 @@ export const crear = async (req, res) => {
 
     res.render('finiquito/crear', {
       title: 'Calcular Finiquito/Liquidación',
-      empleados
+      empleados,
+      empleadoSeleccionado
     });
   } catch (error) {
     console.error('Error:', error);

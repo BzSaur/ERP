@@ -39,6 +39,7 @@
                 <option value="">-- Seleccione un empleado --</option>
                 <% empleados.forEach(e => { %>
                   <option value="<%= e.ID_Empleado %>"
+                          <%= Number(empleadoSeleccionado || 0) === Number(e.ID_Empleado) ? 'selected' : '' %>
                           data-fecha-ingreso="<%= e.Fecha_Ingreso.toISOString().split('T')[0] %>"
                           data-sueldo="<%= Number(e.Salario_Diario || 0) * 30 %>">
                     <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %>
@@ -261,5 +262,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   empleadoSelect.addEventListener('change', updateEmpleadoInfo);
   fechaBajaInput.addEventListener('change', updateEmpleadoInfo);
+
+  if (empleadoSelect.value) {
+    updateEmpleadoInfo();
+  }
 });
 </script>

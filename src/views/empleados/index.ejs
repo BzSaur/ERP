@@ -115,14 +115,26 @@
                   <% } %>
                 </td>
                 <td class="text-end">
-                  <a href="/empleados/<%= emp.ID_Empleado %>" class="btn btn-sm btn-outline-info" title="Ver">
-                    <i class="bi bi-eye"></i>
-                  </a>
-                  <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador', 'SUPER_ADMIN')) { %>
-                  <a href="/empleados/<%= emp.ID_Empleado %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
-                    <i class="bi bi-pencil"></i>
-                  </a>
-                  <% } %>
+                  <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                    <a href="/empleados/<%= emp.ID_Empleado %>" class="btn btn-sm btn-outline-info" title="Ver">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                    <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador', 'SUPER_ADMIN')) { %>
+                    <a href="/empleados/<%= emp.ID_Empleado %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <button
+                      type="button"
+                      class="btn btn-sm <%= emp.estatus && emp.estatus.Nombre_Estatus === 'ACTIVO' ? 'btn-outline-warning' : 'btn-outline-secondary' %> js-employee-status-action"
+                      title="Gestionar estatus"
+                      data-employee-id="<%= emp.ID_Empleado %>"
+                      data-employee-name="<%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>"
+                      data-employee-status="<%= emp.estatus ? emp.estatus.Nombre_Estatus : '' %>"
+                      data-finiquito-url="/finiquito/crear?empleado=<%= emp.ID_Empleado %>">
+                      <i class="bi bi-person-dash"></i>
+                    </button>
+                    <% } %>
+                  </div>
                 </td>
               </tr>
             <% }); %>
@@ -163,3 +175,49 @@
     </div>
     <% } %>
   </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const statusButtons = document.querySelectorAll('.js-employee-status-action');
+
+  statusButtons.forEach(function (button) {
+    button.addEventListener('click', async function () {
+      const nombre = (button.dataset.employeeName || 'este usuario').trim();
+      const estatus = (button.dataset.employeeStatus || '').trim().toUpperCase();
+      const finiquitoUrl = button.dataset.finiquitoUrl || '/finiquito';
+
+      if (estatus === 'BAJA') {
+        if (window.AppAlerts) {
+          await window.AppAlerts.warning(
+            'Usuario no reactivable',
+            'Este usuario ya no se puede volver a activar.'
+          );
+        } else {
+          alert('Este usuario ya no se puede volver a activar.');
+        }
+        return;
+      }
+
+      if (window.AppAlerts) {
+        const result = await window.AppAlerts.confirm({
+          icon: 'warning',
+          title: 'Proceso de baja',
+          text: `Antes de dar de baja a ${nombre}, tiene que pasar por el proceso de finiquitado. ¿Desea continuar?`,
+          confirmButtonText: 'Sí, ir a finiquito',
+          cancelButtonText: 'No, cancelar',
+          confirmButtonColor: '#d33'
+        });
+
+        if (result.isConfirmed) {
+          window.location.href = finiquitoUrl;
+        }
+        return;
+      }
+
+      const continuar = window.confirm(`Antes de dar de baja a ${nombre}, tiene que pasar por el proceso de finiquitado. ¿Desea continuar?`);
+      if (continuar) {
+        window.location.href = finiquitoUrl;
+      }
+    });
+  });
+});
+</script>
