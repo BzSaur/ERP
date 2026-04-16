@@ -70,7 +70,8 @@ async function main() {
       { Nombre_Area: 'LABORATORIO - RETEST', Descripcion: 'Verificación post-reparación', Tipo_Area: 'PRODUCCION' },
       { Nombre_Area: 'EMPAQUE', Descripcion: 'Ensamble, etiquetado y empaquetado final', Tipo_Area: 'PRODUCCION' },
       { Nombre_Area: 'PINTURA', Descripcion: 'Pintura de componentes', Tipo_Area: 'PRODUCCION' },
-      { Nombre_Area: 'SERIGRAFÍA', Descripcion: 'Serigrafía de componentes', Tipo_Area: 'PRODUCCION' }
+      { Nombre_Area: 'SERIGRAFÍA', Descripcion: 'Serigrafía de componentes', Tipo_Area: 'PRODUCCION' },
+      { Nombre_Area: 'MANTENIMIENTO', Descripcion: 'Mantenimiento de equipos e instalaciones', Tipo_Area: 'OPERACIONES' }
     ],
     skipDuplicates: true
   });
@@ -106,19 +107,20 @@ async function main() {
 
   await prisma.cat_Puestos.createMany({
     data: [
-      { Nombre_Puesto: 'Empleado Test Inicial',  ID_Area: areaMap['Laboratorio - Test Inicial'], Descripcion: 'Pruebas iniciales y desensamble',    Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Reparación',    ID_Area: areaMap['Laboratorio - Reparación'],   Descripcion: 'Reparación de equipos por nivel',   Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Lavado',         ID_Area: areaMap['Lavado'],                     Descripcion: 'Lavado de componentes',             Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Retest',         ID_Area: areaMap['Laboratorio - Retest'],       Descripcion: 'Verificación post-reparación',      Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Empaque',        ID_Area: areaMap['Empaque'],                    Descripcion: 'Ensamble, etiquetado y empaque',    Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Cosmética',      ID_Area: areaMap['Cosmética'],                  Descripcion: 'Lijado y liberación de componentes',Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Pintura',        ID_Area: areaMap['Pintura'],                    Descripcion: 'Pintura de componentes',            Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Serigrafía',     ID_Area: areaMap['Serigrafía'],                 Descripcion: 'Serigrafía de componentes',         Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado IT',             ID_Area: areaMap['IT Sistemas'],                Descripcion: 'Soporte y desarrollo de sistemas',  Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado RH',             ID_Area: areaMap['Recursos Humanos'],           Descripcion: 'Gestión de recursos humanos',       Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Mantenimiento',  ID_Area: areaMap['Mantenimiento'],              Descripcion: 'Mantenimiento de equipos',          Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
-      { Nombre_Puesto: 'Empleado Almacén',        ID_Area: areaMap['Almacén'],                    Descripcion: 'Control de inventario y almacén',   Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Test Inicial',  ID_Area: areaMap['LABORATORIO - TEST INICIAL'], Descripcion: 'Pruebas iniciales y desensamble',    Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Reparación',    ID_Area: areaMap['LABORATORIO - REPARACIÓN'],   Descripcion: 'Reparación de equipos por nivel',   Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Lavado',        ID_Area: areaMap['LAVADO'],                     Descripcion: 'Lavado de componentes',             Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Retest',        ID_Area: areaMap['LABORATORIO - RETEST'],       Descripcion: 'Verificación post-reparación',      Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Empaque',       ID_Area: areaMap['EMPAQUE'],                    Descripcion: 'Ensamble, etiquetado y empaque',    Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Cosmética',     ID_Area: areaMap['COSMETICA'],                  Descripcion: 'Lijado y liberación de componentes',Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Pintura',       ID_Area: areaMap['PINTURA'],                    Descripcion: 'Pintura de componentes',            Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Serigrafía',    ID_Area: areaMap['SERIGRAFÍA'],                 Descripcion: 'Serigrafía de componentes',         Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado IT',            ID_Area: areaMap['SISTEMAS'],                   Descripcion: 'Soporte y desarrollo de sistemas',  Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado RH',            ID_Area: areaMap['RECURSOS HUMANOS'],           Descripcion: 'Gestión de recursos humanos',       Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Mantenimiento', ID_Area: areaMap['MANTENIMIENTO'],              Descripcion: 'Mantenimiento de equipos',          Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
+      { Nombre_Puesto: 'Empleado Almacén',       ID_Area: areaMap['ALMACÉN'],                    Descripcion: 'Control de inventario y almacén',   Salario_Base_Referencia: S, Salario_Hora_Referencia: H },
     ],
+    skipDuplicates: true,
   });
   console.log('✅ Puestos creados');
 
