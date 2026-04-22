@@ -37,6 +37,13 @@
           <p>Ingresa tus credenciales corporativas</p>
         </div>
 
+        <% if (typeof inactivity !== 'undefined' && inactivity) { %>
+        <div class="alert-error">
+          <i class="bi bi-clock-fill"></i>
+          <span>Sesión cerrada por inactividad. Vuelve a iniciar sesión.</span>
+        </div>
+        <% } %>
+
         <% if (error && error.trim && error.trim().length > 0) { %>
         <div class="alert-error">
           <i class="bi bi-exclamation-circle-fill"></i>

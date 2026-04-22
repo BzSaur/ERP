@@ -139,6 +139,7 @@
               <label class="form-label">Parentesco</label>
               <select class="form-select" name="Parentesco_Emergencia">
                 <option value="">Seleccionar...</option>
+                <option value="Esposo/Esposa" <%= empleado.Parentesco_Emergencia === 'Esposo/Esposa' ? 'selected' : '' %>>Esposo/Esposa</option>
                 <option value="Cónyuge" <%= empleado.Parentesco_Emergencia === 'Cónyuge' ? 'selected' : '' %>>Cónyuge</option>
                 <option value="Padre/Madre" <%= empleado.Parentesco_Emergencia === 'Padre/Madre' ? 'selected' : '' %>>Padre/Madre</option>
                 <option value="Hijo/Hija" <%= empleado.Parentesco_Emergencia === 'Hijo/Hija' ? 'selected' : '' %>>Hijo/Hija</option>

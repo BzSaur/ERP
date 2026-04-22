@@ -15,7 +15,8 @@ export const showLogin = (req, res) => {
   res.render('login', {
     title: 'Iniciar Sesión',
     error: req.flash ? req.flash('error') : null,
-    layout: false  // Desactivar layout para login
+    inactivity: req.query.msg === 'inactivity',
+    layout: false
   });
 };
 
@@ -91,6 +92,7 @@ export const logout = (req, res, next) => {
     );
   }
   
+  const reason = req.query.reason;
   req.logout((err) => {
     if (err) {
       return next(err);
@@ -99,7 +101,10 @@ export const logout = (req, res, next) => {
       if (err) {
         console.error('Error al destruir sesión:', err);
       }
-      res.redirect('/auth/login');
+      const redirect = reason === 'inactivity'
+        ? '/auth/login?msg=inactivity'
+        : '/auth/login';
+      res.redirect(redirect);
     });
   });
 };

@@ -13,7 +13,19 @@
     "seed": "node prisma/seed.js",
     "seed:catalogos": "node prisma/seed-catalogos.js",
     "seed:config": "node prisma/seed-configuracion.js",
-    "seed:all": "npm run seed && npm run seed:catalogos && npm run seed:config"
+    "seed:all": "npm run seed && npm run seed:catalogos && npm run seed:config",
+
+    "vita:up": "docker compose up -d",
+    "vita:up:seed": "cross-env RUN_SEED=true docker compose up -d",
+    "vita:down": "docker compose down",
+    "vita:restart": "docker compose restart",
+    "vita:logs": "docker compose logs -f",
+    "vita:logs:app": "docker logs -f erp_rh_app",
+    "vita:rebuild": "docker compose up -d --build --no-deps app",
+    "vita:deploy": "git pull origin main && npm run vita:rebuild",
+    "vita:migrate": "docker exec erp_rh_app npx prisma migrate deploy",
+    "vita:seed": "docker exec erp_rh_app node prisma/seed.js",
+    "vita:backup": "docker exec erp_rh_postgres pg_dump -U erp_user erp_rh | gzip > backups/erp_rh_backup.sql.gz"
   },
   "keywords": [
     "ERP",

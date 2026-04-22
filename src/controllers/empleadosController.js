@@ -141,6 +141,28 @@ export const store = async (req, res, next) => {
       Fecha_Ingreso
     } = req.body;
 
+    // Validar longitudes antes de intentar insertar
+    const lengthErrors = [];
+    const limits = {
+      Nombre: [Nombre, 50], Apellido_Paterno: [Apellido_Paterno, 50],
+      Apellido_Materno: [Apellido_Materno, 50], Documento_Identidad: [Documento_Identidad, 50],
+      Tipo_Documento: [Tipo_Documento, 20], RFC: [RFC, 13], NSS: [NSS, 20],
+      Email_Personal: [Email_Personal, 100], Email_Corporativo: [Email_Corporativo, 100],
+      Telefono_Celular: [Telefono_Celular, 20], Telefono_Emergencia: [Telefono_Emergencia, 20],
+      Nombre_Emergencia: [Nombre_Emergencia, 100], Parentesco_Emergencia: [Parentesco_Emergencia, 50],
+      Calle: [Calle, 100], Colonia: [Colonia, 50], Ciudad: [Ciudad, 50],
+      Entidad_Federativa: [Entidad_Federativa, 50], Codigo_Postal: [Codigo_Postal, 10]
+    };
+    for (const [field, [value, max]] of Object.entries(limits)) {
+      if (value && value.length > max) {
+        lengthErrors.push(`${field} (máx ${max} caracteres, ingresaste ${value.length})`);
+      }
+    }
+    if (lengthErrors.length > 0) {
+      req.flash('error', `Los siguientes campos exceden el límite: ${lengthErrors.join(' | ')}`);
+      return res.redirect('back');
+    }
+
     // Calcular salarios si se proporciona el mensual
     let salarioMensual = Salario_Mensual ? parseFloat(Salario_Mensual) : null;
     let salarioDiario = Salario_Diario ? parseFloat(Salario_Diario) : null;

@@ -68,16 +68,18 @@ export const apiLimiter = rateLimit({
 // ============================================================
 // CONFIGURACIÓN DE SESIÓN SEGURA
 // ============================================================
+export const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
+
 export const getSessionConfig = (secret) => ({
   secret: secret || 'default_secret_change_in_production',
   resave: false,
   saveUninitialized: false,
+  rolling: true, // Renueva cookie en cada request activo
   cookie: {
-    // secure:auto evita bloquear login en HTTP y mantiene cookies seguras bajo HTTPS/proxy
     secure: forceSecureCookie ?? (isProduction ? 'auto' : false),
-    httpOnly: true, // Protege contra XSS
-    sameSite: 'strict', // Protege contra CSRF
-    maxAge: 1000 * 60 * 60 * 8 // 8 horas
+    httpOnly: true,
+    sameSite: 'strict',
+    maxAge: INACTIVITY_TIMEOUT_MS
   },
   name: 'erp_rh_session'
 });

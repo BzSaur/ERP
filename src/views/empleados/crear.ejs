@@ -11,6 +11,20 @@
   </div>
 </div>
 
+<!-- Flash messages -->
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+<% if (typeof messages !== 'undefined' && messages.success) { %>
+  <div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
 <!-- Formulario -->
 <form action="/empleados" method="POST">
   <div class="row g-4">
@@ -140,6 +154,7 @@
               <label class="form-label">Parentesco</label>
               <select class="form-select" name="Parentesco_Emergencia">
                 <option value="">Seleccionar...</option>
+                <option value="Esposo/Esposa">Esposo/Esposa</option>
                 <option value="Cónyuge">Cónyuge</option>
                 <option value="Padre/Madre">Padre/Madre</option>
                 <option value="Hijo/Hija">Hijo/Hija</option>
