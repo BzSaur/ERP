@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import passport from './middleware/auth.js';
 import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
-import { helmetConfig, apiLimiter, getSessionConfig } from './config/security.js';
+import { helmetConfig, getHelmetConfig, cspNonce, apiLimiter, getSessionConfig } from './config/security.js';
 import config from './config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,7 +24,8 @@ if (config.isProduction) {
 // ============================================================
 // SEGURIDAD - Headers y Rate Limiting
 // ============================================================
-app.use(helmetConfig);
+app.use(cspNonce); // genera el nonce primero
+app.use((req, res, next) => getHelmetConfig(res.locals.cspNonce)(req, res, next)); // helmet usa el nonce
 app.use('/api', apiLimiter); // Rate limiting para endpoints API
 
 // ============================================================

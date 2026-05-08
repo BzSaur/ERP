@@ -4,7 +4,8 @@
  */
 
 import { Router } from 'express';
-import { isAuthenticated, isAdminOrRH } from '../middleware/auth.js';
+import { isAuthenticated, isAdmin, isAdminOrRH } from '../middleware/auth.js';
+
 
 // Importar controllers existentes (no se mueven de lugar)
 import * as areasController from '../controllers/areasController.js';

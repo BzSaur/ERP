@@ -35,7 +35,7 @@ services:
       PORT: ${PORT:-3001}
       HOST: ${HOST:-0.0.0.0}
       NODE_ENV: ${NODE_ENV:-production}
-      SESSION_SECRET: ${SESSION_SECRET:-change_me_in_production_min_32_chars}
+      SESSION_SECRET: ${SESSION_SECRET}
     ports:
       - "${PORT:-3001}:3001"
     depends_on:
@@ -58,8 +58,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: erp_rh_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: alnmiguelgmzjrz@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+        PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+        ADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
       - "5050:80"
     networks:

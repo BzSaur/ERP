@@ -105,7 +105,7 @@ export const config = {
   appName: process.env.APP_NAME || 'ERP - Recursos Humanos',
   
   // Seguridad
-  sessionSecret: process.env.SESSION_SECRET || 'insecure-dev-secret-change-in-production',
+  sessionSecret: process.env.SESSION_SECRET,
   logEncryptionKey: process.env.LOG_ENCRYPTION_KEY,
   
   // Helpers

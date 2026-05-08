@@ -3,6 +3,14 @@ import { Strategy as LocalStrategy } from 'passport-local';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database.js';
 import { logAccess } from '../config/logger.js';
+import { PASSWORD_POLICY } from '../config/security.js';
+import {
+  loginLimiter,
+  forgotPasswordLimiter,
+  generateCsrfToken,
+  csrfProtection
+} from '../config/security.js';
+
 
 // ============================================================
 // NORMALIZAR NOMBRE DE ROL PARA COMPARACIÓN
@@ -46,6 +54,17 @@ passport.use(new LocalStrategy(
       if (!isValidPassword) {
         return done(null, false, { message: 'Usuario o contraseña incorrectos' });
       }
+      // ============================================================
+      // DETECTAR CONTRASEÑA LEGACY / CAMBIO REQUERIDO
+      // ============================================================
+      if (
+        usuario.PasswordPolicyVersion === undefined ||
+        usuario.PasswordPolicyVersion === null ||
+        usuario.PasswordPolicyVersion < PASSWORD_POLICY.VERSION ||
+        usuario.RequirePasswordChange === true
+      ) {
+        usuario.requirePasswordChange = true;
+      }
 
       // Actualizar último acceso
       await prisma.app_Usuarios.update({
@@ -66,20 +85,32 @@ passport.serializeUser((user, done) => {
 });
 
 // Deserializar usuario de sesión
-passport.deserializeUser(async (id, done) => {
-  try {
-    const usuario = await prisma.app_Usuarios.findUnique({
-      where: { ID_Usuario: id },
-      include: {
-        rol: true,
-        empleado: true
-      }
-    });
+  passport.deserializeUser(async (id, done) => {
+    try {
+      const usuario = await prisma.app_Usuarios.findUnique({
+        where: { ID_Usuario: id },
+        include: {
+          rol: true,
+          empleado: true
+        }
+      });
+            if (
+      usuario &&
+      (
+        usuario.PasswordPolicyVersion === undefined ||
+        usuario.PasswordPolicyVersion === null ||
+        usuario.PasswordPolicyVersion < PASSWORD_POLICY.VERSION ||
+        usuario.RequirePasswordChange === true
+      )
+    ) {
+      usuario.requirePasswordChange = true;
+    }
+
     done(null, usuario);
-  } catch (error) {
-    done(error, null);
-  }
-});
+    } catch (error) {
+      done(error, null);
+    }
+  });
 
 // ============================================================
 // MIDDLEWARES DE AUTENTICACIÓN
@@ -169,9 +200,29 @@ export const isAdminOrRH = (req, res, next) => {
   return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS')(req, res, next);
 };
 
-// Verificar si puede gestionar empleados (ADMIN, RH, CONSULTA)
-export const canManageEmployees = (req, res, next) => {
-  return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'CONSULTA')(req, res, next);
+// ============================================================
+// FORZAR CAMBIO DE CONTRASEÑA SI ES LEGACY
+// ============================================================
+export const requirePasswordPolicyUpdate = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect('/auth/login');
+  }
+
+  const allowedPaths = [
+    '/auth/logout',
+    '/auth/change-password',
+    '/auth/update-password'
+  ];
+
+  if (allowedPaths.includes(req.path)) {
+    return next();
+  }
+
+  if (req.user?.requirePasswordChange === true) {
+    return res.redirect('/auth/change-password');
+  }
+
+  return next();
 };
 
 export default passport;

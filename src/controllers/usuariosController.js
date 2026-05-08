@@ -2,6 +2,8 @@ import prisma from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { logAccess } from '../config/logger.js';
+import { enforcePasswordPolicy, PASSWORD_POLICY } from '../config/security.js';
+import { hashPassword } from '../config/security.js'; 
 
 // ============================================================
 // CONTROLADOR DE USUARIOS DEL SISTEMA
@@ -81,6 +83,25 @@ export const store = async (req, res) => {
       Activo 
     } = req.body;
 
+    // ================================
+    // 🔐 VALIDAR PASSWORD VACÍO
+    // ================================
+    if (!Password || Password.trim() === '') {
+      const roles = await prisma.cat_Roles.findMany({ orderBy: { Nombre_Rol: 'asc' } });
+      const empleados = await prisma.empleados.findMany({
+        where: { app_usuario: null, ID_Estatus: 1 },
+        orderBy: { Nombre: 'asc' }
+      });
+
+      return res.render('usuarios/crear', {
+        title: 'Nuevo Usuario',
+        roles,
+        empleados,
+        error: 'La contraseña es obligatoria',
+        datos: req.body
+      });
+    }
+
     // Verificar si el email ya existe
     const existeEmail = await prisma.app_Usuarios.findUnique({
       where: { Email_Office365 }
@@ -102,7 +123,30 @@ export const store = async (req, res) => {
       });
     }
 
-    // Encriptar contraseña
+    // ================================
+    // 🔐 VALIDAR POLÍTICA
+    // ================================
+    const errorPassword = await enforcePasswordPolicy(Password);
+
+    if (errorPassword) {
+      const roles = await prisma.cat_Roles.findMany({ orderBy: { Nombre_Rol: 'asc' } });
+      const empleados = await prisma.empleados.findMany({
+        where: { app_usuario: null, ID_Estatus: 1 },
+        orderBy: { Nombre: 'asc' }
+      });
+
+      return res.render('usuarios/crear', {
+        title: 'Nuevo Usuario',
+        roles,
+        empleados,
+        error: errorPassword,
+        datos: req.body
+      });
+    }
+
+    // ================================
+    // 🔐 HASH (SIN CAMBIAR TU LÓGICA)
+    // ================================
     const hashedPassword = await bcrypt.hash(Password, 12);
 
     // Crear usuario
@@ -113,12 +157,31 @@ export const store = async (req, res) => {
         Password: hashedPassword,
         ID_Rol: parseInt(ID_Rol),
         ID_Empleado: ID_Empleado ? parseInt(ID_Empleado) : null,
-        Activo: Activo === 'on' || Activo === true
+        Activo: Activo === 'on' || Activo === true,
+
+        // 🧠 NUEVO (NO rompe nada)
+        PasswordPolicyVersion: PASSWORD_POLICY.VERSION,
+        PasswordUpdatedAt: new Date(),
+        RequirePasswordChange: false
       },
       include: { rol: true }
     });
 
-    // Registrar en auditoría
+    // ================================
+    // 🧠 GUARDAR HISTORIAL
+    // ================================
+    try {
+      await prisma.app_PasswordHistory.create({
+        data: {
+          ID_Usuario: usuario.ID_Usuario,
+          PasswordHash: hashedPassword
+        }
+      });
+    } catch (e) {
+      console.warn('PasswordHistory no disponible aún');
+    }
+
+    // Auditoría
     await registrarCambio({
       usuario: req.user,
       accion: 'CREATE',
@@ -137,7 +200,6 @@ export const store = async (req, res) => {
       ip: obtenerIP(req)
     });
 
-    // Log de acción - creación de usuario
     logAccess.action(
       req.user.ID_Usuario,
       'CREATE_USER',
@@ -150,6 +212,7 @@ export const store = async (req, res) => {
     );
 
     res.redirect('/usuarios?success=Usuario creado exitosamente');
+
   } catch (error) {
     console.error('Error al crear usuario:', error);
     res.redirect('/usuarios?error=Error al crear el usuario');
@@ -217,7 +280,6 @@ export const update = async (req, res) => {
       Activo 
     } = req.body;
 
-    // Verificar si el email ya existe en otro usuario
     const existeEmail = await prisma.app_Usuarios.findFirst({
       where: { 
         Email_Office365,
@@ -229,7 +291,6 @@ export const update = async (req, res) => {
       return res.redirect(`/usuarios/${id}/editar?error=El correo ya está en uso`);
     }
 
-    // Preparar datos de actualización
     const updateData = {
       Email_Office365,
       Nombre_Completo,
@@ -238,12 +299,39 @@ export const update = async (req, res) => {
       Activo: Activo === 'on' || Activo === true
     };
 
-    // Solo actualizar contraseña si se proporciona una nueva
+    // ================================
+    // 🔐 PASSWORD (SI VIENE NUEVO)
+    // ================================
     if (Password && Password.trim() !== '') {
-      updateData.Password = await bcrypt.hash(Password, 12);
+
+      let history = [];
+
+      try {
+        history = await prisma.app_PasswordHistory.findMany({
+          where: { ID_Usuario: parseInt(id) },
+          orderBy: { CreatedAt: 'desc' },
+          take: PASSWORD_POLICY.HISTORY_LIMIT
+        });
+      } catch (e) {
+        console.warn('PasswordHistory no disponible aún');
+      }
+
+      const errorPassword = await enforcePasswordPolicy(Password, history);
+
+      if (errorPassword) {
+        return res.redirect(`/usuarios/${id}/editar?error=${encodeURIComponent(errorPassword)}`);
+      }
+
+      const hashedPassword = await bcrypt.hash(Password, 12);
+
+      updateData.Password = hashedPassword;
+
+      // 🧠 NUEVO
+      updateData.PasswordPolicyVersion = PASSWORD_POLICY.VERSION;
+      updateData.PasswordUpdatedAt = new Date();
+      updateData.RequirePasswordChange = false;
     }
 
-    // Obtener datos previos
     const usuarioPrevio = await prisma.app_Usuarios.findUnique({
       where: { ID_Usuario: parseInt(id) },
       include: { rol: true }
@@ -255,7 +343,36 @@ export const update = async (req, res) => {
       include: { rol: true }
     });
 
-    // Descripción con cambios de rol resaltados
+    // ================================
+    // 🧠 HISTORIAL
+    // ================================
+    if (Password && Password.trim() !== '') {
+      try {
+        await prisma.app_PasswordHistory.create({
+          data: {
+            ID_Usuario: usuario.ID_Usuario,
+            PasswordHash: usuario.Password
+          }
+        });
+
+        const old = await prisma.app_PasswordHistory.findMany({
+          where: { ID_Usuario: usuario.ID_Usuario },
+          orderBy: { CreatedAt: 'desc' },
+          skip: PASSWORD_POLICY.HISTORY_LIMIT
+        });
+
+        if (old.length > 0) {
+          await prisma.app_PasswordHistory.deleteMany({
+            where: {
+              ID_History: { in: old.map(h => h.ID_History) }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Historial no disponible');
+      }
+    }
+
     let descripcion = `Actualización de usuario: ${usuario.Email_Office365}`;
     if (usuarioPrevio.ID_Rol !== usuario.ID_Rol) {
       descripcion += ` - Rol cambiado: ${usuarioPrevio.rol.Nombre_Rol} → ${usuario.rol.Nombre_Rol}`;
@@ -264,7 +381,6 @@ export const update = async (req, res) => {
       descripcion += ' - Contraseña actualizada';
     }
 
-    // Registrar en auditoría
     await registrarCambio({
       usuario: req.user,
       accion: 'UPDATE',
@@ -291,7 +407,6 @@ export const update = async (req, res) => {
       ip: obtenerIP(req)
     });
 
-    // Log de acción - actualización de usuario (importante para cambios de rol)
     logAccess.action(
       req.user.ID_Usuario,
       'UPDATE_USER',
@@ -306,6 +421,7 @@ export const update = async (req, res) => {
     );
 
     res.redirect('/usuarios?success=Usuario actualizado exitosamente');
+
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
     res.redirect('/usuarios?error=Error al actualizar el usuario');

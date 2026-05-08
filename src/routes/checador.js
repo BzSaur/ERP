@@ -4,21 +4,17 @@
 
 import express from 'express';
 import * as checadorController from '../controllers/checadorController.js';
-import { isAuthenticated, hasRole } from '../middleware/auth.js';
+import { isAuthenticated, isRH } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Formulario de importación
-router.get('/',
-  isAuthenticated,
-  hasRole('Recursos Humanos', 'Administrador', 'SuperAdministrador'),
-  checadorController.index
-);
+// Todos los roles RH y superiores pueden usar el checador
+router.use(isAuthenticated);
+router.use(isRH);
 
-// Procesar archivos subidos
+router.get('/', checadorController.index);
+
 router.post('/procesar',
-  isAuthenticated,
-  hasRole('Recursos Humanos', 'Administrador', 'SuperAdministrador'),
   checadorController.upload.fields([
     { name: 'ram1', maxCount: 1 },
     { name: 'ram2', maxCount: 1 }
@@ -26,18 +22,7 @@ router.post('/procesar',
   checadorController.procesarArchivos
 );
 
-// Guardar resultados en base de datos
-router.post('/guardar',
-  isAuthenticated,
-  hasRole('Recursos Humanos', 'Administrador', 'SuperAdministrador'),
-  checadorController.guardarResultados
-);
-
-// Detalle de empleado
-router.get('/empleado/:idChecador',
-  isAuthenticated,
-  hasRole('Recursos Humanos', 'Administrador', 'SuperAdministrador'),
-  checadorController.detalleEmpleado
-);
+router.post('/guardar', checadorController.guardarResultados);
+router.get('/empleado/:idChecador', checadorController.detalleEmpleado);
 
 export default router;

@@ -219,6 +219,10 @@ model App_Usuarios {
   Password        String    @db.VarChar(255)
   CreatedAt       DateTime  @default(now())
   UpdatedAt       DateTime  @updatedAt
+  PasswordPolicyVersion Int       @default(1)
+  PasswordUpdatedAt     DateTime?
+  RequirePasswordChange Boolean   @default(false)
+
 
   // Relaciones
   rol                    Cat_Roles                     @relation(fields: [ID_Rol], references: [ID_Rol])
@@ -233,6 +237,7 @@ model App_Usuarios {
   finiquitos_aprobados   Finiquito_Liquidacion[]       @relation("FiniquitoAprobado")
   incidencias_aprobadas  Empleados_Incidencias[]       @relation("IncidenciaAprobada")
   prestamos_aprobados    Empleados_Prestamos[]         @relation("PrestamoAprobado")
+  passwordHistory App_PasswordHistory[]
 
   @@index([Email_Office365])
   @@index([ID_Rol])
@@ -666,6 +671,17 @@ model Empleados_Prestamos {
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Empleados_Prestamos")
+}
+
+model App_PasswordHistory {
+  ID_History   Int      @id @default(autoincrement())
+  ID_Usuario   Int
+  PasswordHash String   @db.VarChar(255)
+  CreatedAt    DateTime @default(now())
+
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+
+  @@index([ID_Usuario, CreatedAt])
 }
 
 

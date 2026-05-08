@@ -132,7 +132,7 @@ async function main() {
   });
 
   if (superAdminRole) {
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    const hashedPassword = await bcrypt.hash('password123', 12);
 
     await prisma.app_Usuarios.upsert({
       where: { Email_Office365: 'agomezj2101@alumno.ipn.mx' },
@@ -145,7 +145,7 @@ async function main() {
         Activo: true
       }
     });
-    console.log('✅ Usuario Super Admin creado');
+    console.log(' Usuario Super Admin creado');
   }
 
   console.log('');

@@ -24,8 +24,9 @@
   <link href="/css/responsive.css" rel="stylesheet">
 
   <% if (typeof style !== 'undefined') { %>
-    <%- style %>
+    <style nonce="<%= cspNonce %>"><%- style %></style>
   <% } %>
+
 </head>
 <body>
   <div class="wrapper">
@@ -54,7 +55,7 @@
   <script src="/js/main.js"></script>
 
   <% if (typeof script !== 'undefined') { %>
-    <%- script %>
+    <script nonce="<%= cspNonce %>"><%- script %></script>
   <% } %>
 
   <!-- Inactividad: aviso al minuto 9, logout al minuto 10 -->
@@ -67,7 +68,7 @@
       </div>
     </div>
   </div>
-  <script>
+  <script nonce="<%= cspNonce %>">
     const TIMEOUT_MS = 10 * 60 * 1000;
     const WARN_MS = 9 * 60 * 1000;
     let warnTimer, logoutTimer, countdownInterval;
