@@ -1,10 +1,87 @@
 import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
-import { logAccess } from '../config/logger.js';
+import logger, { logAccess } from '../config/logger.js';
 
 // ============================================================
 // CONTROLADOR DE EMPLEADOS
 // ============================================================
+
+// Helper: localiza empleado duplicado tras P2002 y arma mensaje para flash.
+// idExcluir: en update evita match consigo mismo.
+const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
+  const fields = Array.isArray(error.meta?.target)
+    ? error.meta.target
+    : [error.meta?.target].filter(Boolean);
+
+  const fieldLabels = {
+    Documento_Identidad: 'Documento de Identidad',
+    RFC: 'RFC',
+    NSS: 'NSS',
+    Email_Personal: 'Email personal',
+    Email_Corporativo: 'Email corporativo'
+  };
+
+  const lookups = {
+    Documento_Identidad: body.Documento_Identidad,
+    RFC: body.RFC,
+    NSS: body.NSS,
+    Email_Personal: body.Email_Personal,
+    Email_Corporativo: body.Email_Corporativo
+  };
+
+  const selectEmpleado = {
+    ID_Empleado: true,
+    Nombre: true,
+    Apellido_Paterno: true,
+    Apellido_Materno: true,
+    Documento_Identidad: true,
+    ID_Estatus: true,
+    estatus: { select: { Nombre_Estatus: true } }
+  };
+
+  const baseWhere = idExcluir ? { NOT: { ID_Empleado: idExcluir } } : {};
+
+  let existente = null;
+  let campoConflicto = null;
+  let estrategia = null;
+
+  for (const f of fields) {
+    const valorRaw = lookups[f];
+    if (!valorRaw) continue;
+    const valor = String(valorRaw).trim();
+
+    existente = await prisma.empleados.findFirst({
+      where: { ...baseWhere, [f]: valor },
+      select: selectEmpleado
+    });
+    if (existente) { campoConflicto = f; estrategia = 'exacto'; break; }
+
+    existente = await prisma.empleados.findFirst({
+      where: { ...baseWhere, [f]: { equals: valor, mode: 'insensitive' } },
+      select: selectEmpleado
+    });
+    if (existente) { campoConflicto = f; estrategia = 'case-insensitive'; break; }
+
+    existente = await prisma.empleados.findFirst({
+      where: { ...baseWhere, [f]: { contains: valor, mode: 'insensitive' } },
+      select: selectEmpleado
+    });
+    if (existente) { campoConflicto = f; estrategia = 'parcial (posible espacio/caracter extra en DB)'; break; }
+  }
+
+  const labelCampo = fieldLabels[campoConflicto] || campoConflicto || 'un dato único';
+
+  if (existente) {
+    const nombreCompleto = `${existente.Nombre} ${existente.Apellido_Paterno} ${existente.Apellido_Materno || ''}`.trim();
+    const docDB = existente.Documento_Identidad ? ` [valor en DB: "${existente.Documento_Identidad}"]` : '';
+    const prefijo = idExcluir
+      ? `No se puede actualizar: otro empleado ya usa ese ${labelCampo}`
+      : `Ya existe empleado con ese ${labelCampo}`;
+    return `${prefijo} (match ${estrategia}): ${nombreCompleto} — ID ${existente.ID_Empleado}, estatus: ${existente.estatus?.Nombre_Estatus || 'desconocido'}${docDB}. Ver: /empleados/${existente.ID_Empleado}`;
+  }
+
+  return `DB rechaza por duplicado en ${labelCampo} pero no se encuentra registro visible. Posible registro huérfano o problema de permisos de lectura. Contactar admin.`;
+};
 
 // GET /empleados - Listar todos los empleados
 export const index = async (req, res, next) => {
@@ -266,6 +343,14 @@ export const store = async (req, res, next) => {
     req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente`);
     res.redirect(`/empleados/${empleado.ID_Empleado}`);
   } catch (error) {
+    if (error.code === 'P2002') {
+      const mensaje = await buscarDuplicadoP2002(error, req.body);
+      logger.warn(`P2002 al crear empleado por ${req.user?.Email_Office365 || 'desconocido'}: ${mensaje}`, {
+        target: error.meta?.target
+      });
+      req.flash('error', mensaje);
+      return res.redirect('back');
+    }
     next(error);
   }
 };
@@ -508,6 +593,15 @@ export const update = async (req, res, next) => {
 
     res.redirect(`/empleados/${id}`);
   } catch (error) {
+    if (error.code === 'P2002') {
+      const idActual = parseInt(req.params.id);
+      const mensaje = await buscarDuplicadoP2002(error, req.body, idActual);
+      logger.warn(`P2002 al actualizar empleado ${idActual} por ${req.user?.Email_Office365 || 'desconocido'}: ${mensaje}`, {
+        target: error.meta?.target
+      });
+      req.flash('error', mensaje);
+      return res.redirect('back');
+    }
     next(error);
   }
 };
