@@ -6,6 +6,24 @@ import logger, { logAccess } from '../config/logger.js';
 // CONTROLADOR DE EMPLEADOS
 // ============================================================
 
+// Helper: limpia string de caracteres invisibles (zero-width, BOM, NBSP) y normaliza Unicode.
+// Necesario para CURP/RFC copy-pasted desde PDF/Word que arrastran chars no visibles.
+const limpiarTexto = (valor) => {
+  if (valor === null || valor === undefined) return valor;
+  return String(valor)
+    .normalize('NFC')
+    .replace(/[​-‍﻿ ]/g, '')
+    .trim();
+};
+
+// Helper: devuelve bytes hex de string para debug (detecta chars invisibles).
+const toHexBytes = (str) => {
+  if (!str) return '';
+  return Array.from(String(str))
+    .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
+    .join(' ');
+};
+
 // Helper: localiza empleado duplicado tras P2002 y arma mensaje para flash.
 // idExcluir: en update evita match consigo mismo.
 const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
@@ -80,7 +98,9 @@ const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
     return `${prefijo} (match ${estrategia}): ${nombreCompleto} — ID ${existente.ID_Empleado}, estatus: ${existente.estatus?.Nombre_Estatus || 'desconocido'}${docDB}. Ver: /empleados/${existente.ID_Empleado}`;
   }
 
-  return `DB rechaza por duplicado en ${labelCampo} pero no se encuentra registro visible. Posible registro huérfano o problema de permisos de lectura. Contactar admin.`;
+  const valorIngresado = lookups[fields[0]] || '';
+  const hex = toHexBytes(valorIngresado);
+  return `DB rechaza por duplicado en ${labelCampo} ("${valorIngresado}", bytes: ${hex}) pero no se localiza el registro. Posibles causas: caracteres invisibles en valor existente, o registro creado fuera del sistema. Contactar admin con este mensaje.`;
 };
 
 // GET /empleados - Listar todos los empleados
@@ -181,6 +201,16 @@ export const crear = async (req, res, next) => {
 // POST /empleados - Guardar nuevo empleado
 export const store = async (req, res, next) => {
   try {
+    // Sanitizar campos unique antes de cualquier validación/insert.
+    // Previene duplicados falsos por caracteres invisibles copy-pasted.
+    // CURP/RFC/NSS no deben llevar espacios — quitar todos.
+    for (const f of ['Documento_Identidad', 'RFC', 'NSS']) {
+      if (req.body[f]) req.body[f] = limpiarTexto(req.body[f]).replace(/\s+/g, '').toUpperCase();
+    }
+    for (const f of ['Email_Personal', 'Email_Corporativo']) {
+      if (req.body[f]) req.body[f] = limpiarTexto(req.body[f]).toLowerCase();
+    }
+
     const {
       Nombre,
       Apellido_Paterno,
@@ -349,7 +379,7 @@ export const store = async (req, res, next) => {
         target: error.meta?.target
       });
       req.flash('error', mensaje);
-      return res.redirect('back');
+      return res.redirect('/empleados/crear');
     }
     next(error);
   }
@@ -446,7 +476,7 @@ export const editar = async (req, res, next) => {
 export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // Validar ID numérico
     const idNum = parseInt(id);
     if (isNaN(idNum)) {
@@ -455,7 +485,15 @@ export const update = async (req, res, next) => {
         message: 'ID de empleado inválido'
       });
     }
-    
+
+    // Sanitizar campos unique antes de update.
+    for (const f of ['Documento_Identidad', 'RFC', 'NSS']) {
+      if (req.body[f]) req.body[f] = limpiarTexto(req.body[f]).replace(/\s+/g, '').toUpperCase();
+    }
+    for (const f of ['Email_Personal', 'Email_Corporativo']) {
+      if (req.body[f]) req.body[f] = limpiarTexto(req.body[f]).toLowerCase();
+    }
+
     const {
       Nombre,
       Apellido_Paterno,
@@ -600,7 +638,7 @@ export const update = async (req, res, next) => {
         target: error.meta?.target
       });
       req.flash('error', mensaje);
-      return res.redirect('back');
+      return res.redirect(`/empleados/${idActual}/editar`);
     }
     next(error);
   }
