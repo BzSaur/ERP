@@ -64,10 +64,10 @@ async function main() {
   // Construir filas como objetos con claves = nombres de columna de la plantilla.
   const rows = empleados.map((e) => ({
     'ID del Empleado': e.ID_Empleado,
-    'Nombre': e.Nombre,
-    'Apellido': e.Apellido_Materno
+    'Nombre': e.Nombre.toUpperCase(),
+    'Apellido': (e.Apellido_Materno
       ? `${e.Apellido_Paterno} ${e.Apellido_Materno}`
-      : e.Apellido_Paterno,
+      : e.Apellido_Paterno).toUpperCase(),
     'Código departamento': e.ID_Area,
     'Nombre del departamento': e.area?.Nombre_Area ?? '',
     'Código de cargo': e.ID_Puesto,
