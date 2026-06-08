@@ -106,21 +106,24 @@ const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
 // GET /empleados - Listar todos los empleados
 export const index = async (req, res, next) => {
   try {
-    const { buscar, area, estatus, page = 1 } = req.query;
+    const { buscar, area, estatus, id, fecha_nacimiento, fecha_ingreso, telefono, page = 1 } = req.query;
     const perPage = 10;
     const skip = (page - 1) * perPage;
 
     // Construir filtros
     const where = {};
-    
+    const and = [];
+
     if (buscar) {
-      where.OR = [
-        { Nombre: { contains: buscar, mode: 'insensitive' } },
-        { Apellido_Paterno: { contains: buscar, mode: 'insensitive' } },
-        { Apellido_Materno: { contains: buscar, mode: 'insensitive' } },
-        { Documento_Identidad: { contains: buscar, mode: 'insensitive' } },
-        { RFC: { contains: buscar, mode: 'insensitive' } }
-      ];
+      and.push({
+        OR: [
+          { Nombre: { contains: buscar, mode: 'insensitive' } },
+          { Apellido_Paterno: { contains: buscar, mode: 'insensitive' } },
+          { Apellido_Materno: { contains: buscar, mode: 'insensitive' } },
+          { Documento_Identidad: { contains: buscar, mode: 'insensitive' } },
+          { RFC: { contains: buscar, mode: 'insensitive' } }
+        ]
+      });
     }
 
     if (area) {
@@ -129,6 +132,43 @@ export const index = async (req, res, next) => {
 
     if (estatus) {
       where.ID_Estatus = parseInt(estatus);
+    }
+
+    if (id) {
+      const idNum = parseInt(id);
+      if (!isNaN(idNum)) where.ID_Empleado = idNum;
+    }
+
+    // Filtro por día completo (rango [día, día+1))
+    const rangoDia = (valor) => {
+      const inicio = new Date(`${valor}T00:00:00`);
+      if (isNaN(inicio.getTime())) return null;
+      const fin = new Date(inicio);
+      fin.setDate(fin.getDate() + 1);
+      return { gte: inicio, lt: fin };
+    };
+
+    if (fecha_nacimiento) {
+      const r = rangoDia(fecha_nacimiento);
+      if (r) where.Fecha_Nacimiento = r;
+    }
+
+    if (fecha_ingreso) {
+      const r = rangoDia(fecha_ingreso);
+      if (r) where.Fecha_Ingreso = r;
+    }
+
+    if (telefono) {
+      and.push({
+        OR: [
+          { Telefono_Celular: { contains: telefono, mode: 'insensitive' } },
+          { Telefono_Emergencia: { contains: telefono, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (and.length) {
+      where.AND = and;
     }
 
     // Obtener empleados con relaciones
@@ -162,7 +202,7 @@ export const index = async (req, res, next) => {
       empleados,
       areas,
       estatuses,
-      filtros: { buscar, area, estatus },
+      filtros: { buscar, area, estatus, id, fecha_nacimiento, fecha_ingreso, telefono },
       pagination: {
         page: parseInt(page),
         totalPages,

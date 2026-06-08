@@ -53,6 +53,7 @@
             <% } %>
           </select>
         </div>
+        <% const filtrosAvanzados = filtros.id || filtros.fecha_nacimiento || filtros.fecha_ingreso || filtros.telefono; %>
         <div class="col-md-3 d-flex align-items-end gap-2">
           <button type="submit" class="btn btn-outline-primary">
             <i class="bi bi-search me-1"></i> Filtrar
@@ -60,6 +61,30 @@
           <a href="/empleados" class="btn btn-outline-secondary">
             <i class="bi bi-x-lg me-1"></i> Limpiar
           </a>
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#masFiltros" aria-expanded="<%= filtrosAvanzados ? 'true' : 'false' %>">
+            <i class="bi bi-sliders me-1"></i> Más filtros
+          </button>
+        </div>
+
+        <div class="collapse <%= filtrosAvanzados ? 'show' : '' %>" id="masFiltros">
+          <div class="row g-3 mt-0">
+            <div class="col-6 col-md-3">
+              <label class="form-label">ID Empleado</label>
+              <input type="number" name="id" class="form-control" placeholder="ID" value="<%= filtros.id || '' %>">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Fecha de nacimiento</label>
+              <input type="date" name="fecha_nacimiento" class="form-control" value="<%= filtros.fecha_nacimiento || '' %>">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Fecha de ingreso</label>
+              <input type="date" name="fecha_ingreso" class="form-control" value="<%= filtros.fecha_ingreso || '' %>">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Teléfono</label>
+              <input type="text" name="telefono" class="form-control" placeholder="Celular o emergencia" value="<%= filtros.telefono || '' %>">
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -137,21 +162,22 @@
 
     <% if (pagination.totalPages > 1) { %>
     <!-- Paginación -->
+    <% const qs = `buscar=${encodeURIComponent(filtros.buscar || '')}&area=${filtros.area || ''}&estatus=${filtros.estatus || ''}&id=${filtros.id || ''}&fecha_nacimiento=${filtros.fecha_nacimiento || ''}&fecha_ingreso=${filtros.fecha_ingreso || ''}&telefono=${encodeURIComponent(filtros.telefono || '')}`; %>
     <div class="card-footer">
       <nav>
         <ul class="pagination pagination-sm mb-0 justify-content-center">
           <li class="page-item <%= pagination.page <= 1 ? 'disabled' : '' %>">
-            <a class="page-link" href="?page=<%= pagination.page - 1 %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>">
+            <a class="page-link" href="?page=<%= pagination.page - 1 %>&<%= qs %>">
               <i class="bi bi-chevron-left"></i>
             </a>
           </li>
           <% for (let p = 1; p <= pagination.totalPages; p++) { %>
             <li class="page-item <%= p === pagination.page ? 'active' : '' %>">
-              <a class="page-link" href="?page=<%= p %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>"><%= p %></a>
+              <a class="page-link" href="?page=<%= p %>&<%= qs %>"><%= p %></a>
             </li>
           <% } %>
           <li class="page-item <%= pagination.page >= pagination.totalPages ? 'disabled' : '' %>">
-            <a class="page-link" href="?page=<%= pagination.page + 1 %>&buscar=<%= filtros.buscar || '' %>&area=<%= filtros.area || '' %>&estatus=<%= filtros.estatus || '' %>">
+            <a class="page-link" href="?page=<%= pagination.page + 1 %>&<%= qs %>">
               <i class="bi bi-chevron-right"></i>
             </a>
           </li>
