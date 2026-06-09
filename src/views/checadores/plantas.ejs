@@ -1,0 +1,56 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/checadores">Checadores</a></li>
+        <li class="breadcrumb-item active">Plantas</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Plantas</h4>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>Nombre</th><th>Dirección</th><th class="text-center">Checadores</th></tr>
+          </thead>
+          <tbody>
+            <% if (plantas && plantas.length > 0) { %>
+              <% plantas.forEach(function(p) { %>
+              <tr>
+                <td><i class="bi bi-building text-primary me-2"></i><strong><%= p.Nombre %></strong></td>
+                <td class="small"><%= p.Direccion || '-' %></td>
+                <td class="text-center"><span class="badge bg-info"><%= p._count.checadores %></span></td>
+              </tr>
+              <% }); %>
+            <% } else { %>
+              <tr><td colspan="3" class="text-center text-body-secondary py-4">No hay plantas</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="mb-3">Nueva Planta</h6>
+        <form action="/checadores/plantas" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Nombre <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre" required placeholder="Ej: RAM 3">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Dirección</label>
+            <input type="text" class="form-control" name="Direccion" placeholder="Opcional">
+          </div>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Agregar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

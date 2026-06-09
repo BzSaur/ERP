@@ -94,10 +94,17 @@
             </a>
           </li>
           <li>
-            <a href="/checador" class="<%= currentPath.startsWith('/checador') ? 'active' : '' %>">
+            <a href="/checador" class="<%= currentPath === '/checador' || currentPath.startsWith('/checador/') ? 'active' : '' %>">
               <i class="bi bi-file-earmark-spreadsheet"></i> Importar Checador
             </a>
           </li>
+          <% if (hasRole('ADMIN', 'Administrador', 'SuperAdministrador')) { %>
+          <li>
+            <a href="/checadores" class="<%= currentPath.startsWith('/checadores') ? 'active' : '' %>">
+              <i class="bi bi-fingerprint"></i> Checadores (ADMS)
+            </a>
+          </li>
+          <% } %>
         </ul>
       </li>
       <% } %>

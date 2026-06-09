@@ -1,0 +1,55 @@
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/checadores">Checadores</a></li>
+      <li class="breadcrumb-item active">Pendientes</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Checadores Pendientes de Aprobación</h4>
+  <p class="text-body-secondary mb-0">Devices auto-descubiertos que enviaron datos con un SN no registrado.</p>
+</div>
+
+<% if (pendientes && pendientes.length > 0) { %>
+  <% pendientes.forEach(function(c) { %>
+  <div class="card mb-3">
+    <div class="card-body">
+      <form action="/checadores/<%= c.ID_Checador %>/aprobar" method="POST">
+        <div class="row align-items-end g-3">
+          <div class="col-md-3">
+            <label class="form-label small">Serial detectado</label>
+            <div><code><%= c.Serial_Number %></code></div>
+            <div class="small text-body-secondary">
+              IP: <%= c.Ultima_IP_Origen || '-' %><br>
+              Visto: <%= c.Ultima_Conexion ? new Date(c.Ultima_Conexion).toLocaleString('es-MX') : '-' %>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Nombre</label>
+            <input type="text" class="form-control form-control-sm" name="Nombre" required placeholder="Ej: RAM 2 Salida">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Planta</label>
+            <select class="form-select form-select-sm" name="ID_Planta" required>
+              <option value="">...</option>
+              <% plantas.forEach(function(p) { %><option value="<%= p.ID_Planta %>"><%= p.Nombre %></option><% }); %>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Cód. Ubicación</label>
+            <input type="text" class="form-control form-control-sm" name="Ubicacion_Codigo" placeholder="RAM2">
+          </div>
+          <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Aprobar</button>
+          </div>
+        </div>
+      </form>
+      <form action="/checadores/<%= c.ID_Checador %>/rechazar" method="POST" class="mt-2"
+            onsubmit="return confirm('¿Rechazar y eliminar este device?')">
+        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Rechazar</button>
+      </form>
+    </div>
+  </div>
+  <% }); %>
+<% } else { %>
+  <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>No hay checadores pendientes.</div>
+<% } %>

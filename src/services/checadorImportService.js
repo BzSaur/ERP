@@ -172,7 +172,7 @@ export function combinarChecadores(datosRAM1, datosRAM2) {
  * @param {number} totalMinutos - Hora de entrada en minutos desde medianoche
  * @returns {number} Hora de pago en minutos desde medianoche
  */
-function redondearEntrada(totalMinutos) {
+export function redondearEntrada(totalMinutos) {
   const minutosPasados = totalMinutos % 60;
   if (minutosPasados <= TOLERANCIA_MINUTOS) {
     return Math.floor(totalMinutos / 60) * 60;
@@ -355,7 +355,7 @@ function parsearChecadasDia(checadasStr) {
  * - Mixto: sin marca de retardo (solo ajuste pago)
  * - Tiempo completo: retardo + ajuste pago
  */
-function calcularHorasDia(checadas, opciones = {}) {
+export function calcularHorasDia(checadas, opciones = {}) {
   const {
     comidaInicio = COMIDA_INICIO_DEFAULT,
     comidaFin = COMIDA_FIN_DEFAULT,
@@ -853,7 +853,8 @@ export async function guardarEnBaseDatos(resultado, matchingData, userId) {
                   Tipo_Checada: tipoChecada,
                   Fecha_Hora: fechaHora,
                   Ubicacion: dia.ubicacion || null,
-                  Estado: 'REGISTRADO'
+                  Estado: 'REGISTRADO',
+                  Origen_Sincronizacion: 'XLSX'
                 }
               });
             }
@@ -942,7 +943,7 @@ export function normalizarNombre(nombre) {
     .trim();
 }
 
-function minutosAHora(totalMinutos) {
+export function minutosAHora(totalMinutos) {
   const h = Math.floor(totalMinutos / 60);
   const m = totalMinutos % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -963,5 +964,8 @@ export default {
   guardarEnBaseDatos,
   calcularExtrasMixtos,
   formatearHoras,
-  normalizarNombre
+  normalizarNombre,
+  redondearEntrada,
+  calcularHorasDia,
+  minutosAHora
 };

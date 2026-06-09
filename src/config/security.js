@@ -65,6 +65,18 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Rate limit dedicado para /iclock (push de checadores). Más alto que apiLimiter
+// porque los devices hacen polling frecuente (getrequest cada pocos segundos).
+// Protege contra flood/abuso si el reverse proxy queda expuesto.
+export const admsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 120,            // ~2 req/s por IP de origen
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Los devices no entienden JSON ni HTML: responder texto plano simple
+  handler: (req, res) => res.status(429).type('text/plain').send('ERROR: rate limit')
+});
+
 // ============================================================
 // CONFIGURACIÓN DE SESIÓN SEGURA
 // ============================================================

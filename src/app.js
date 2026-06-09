@@ -7,8 +7,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import passport from './middleware/auth.js';
 import routes from './routes/index.js';
+import admsRoutes from './routes/adms.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
-import { helmetConfig, apiLimiter, getSessionConfig } from './config/security.js';
+import { helmetConfig, apiLimiter, admsLimiter, getSessionConfig } from './config/security.js';
 import config from './config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,6 +21,20 @@ if (config.isProduction) {
   // Permite detectar HTTPS correctamente cuando hay reverse proxy (Nginx/Traefik)
   app.set('trust proxy', 1);
 }
+
+// ============================================================
+// ADMS - ENDPOINTS DE CHECADORES (/iclock/*)
+// ⚠️ ORDEN CRÍTICO: debe ir ANTES de helmet, session, passport y del
+//    express.json() global. Los devices ZK envían text/plain u octet-stream
+//    y NO manejan cookies. Si express.json() consume el body primero, el
+//    parser de ATTLOG recibe vacío. NO mover debajo de los parsers globales.
+// ============================================================
+app.use('/iclock',
+  admsLimiter,                                       // rate-limit dedicado (no el de /api)
+  (req, res, next) => { res.removeHeader('X-Powered-By'); next(); },
+  express.text({ type: '*/*', limit: '5mb' }),       // captura cualquier content-type como texto
+  admsRoutes
+);
 
 // ============================================================
 // SEGURIDAD - Headers y Rate Limiting

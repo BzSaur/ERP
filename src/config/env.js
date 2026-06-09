@@ -18,7 +18,13 @@ const optionalEnvVars = {
   'PORT': '3001',
   'HOST': 'localhost',
   'APP_NAME': 'ERP - Recursos Humanos',
-  'LOG_ENCRYPTION_KEY': null // Se generará si no existe
+  'LOG_ENCRYPTION_KEY': null, // Se generará si no existe
+  // ADMS (push de checadores)
+  'ADMS_ENABLED': 'true',
+  'ADMS_TIME_DRIFT_MAX_MIN': '5',
+  'ADMS_DEDUP_WINDOW_SEC': '0',
+  'ADMS_PENDIENTES_MAX': '10',
+  'ADMS_TIMEZONE': '-6'
 };
 
 // ============================================================
@@ -108,6 +114,15 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET || 'insecure-dev-secret-change-in-production',
   logEncryptionKey: process.env.LOG_ENCRYPTION_KEY,
   
+  // ADMS (push de checadores CLK-980)
+  adms: {
+    enabled: process.env.ADMS_ENABLED !== 'false',
+    timeDriftMaxMin: parseInt(process.env.ADMS_TIME_DRIFT_MAX_MIN || '5', 10),
+    dedupWindowSec: parseInt(process.env.ADMS_DEDUP_WINDOW_SEC || '0', 10),
+    pendientesMax: parseInt(process.env.ADMS_PENDIENTES_MAX || '10', 10),
+    timezone: process.env.ADMS_TIMEZONE || '-6'
+  },
+
   // Helpers
   isDevelopment: process.env.NODE_ENV !== 'production',
   isProduction: process.env.NODE_ENV === 'production'

@@ -1,6 +1,7 @@
 import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import logger, { logAccess } from '../config/logger.js';
+import { encolarAltaEmpleado, encolarBajaEmpleado } from '../services/checadorComandosService.js';
 
 // ============================================================
 // CONTROLADOR DE EMPLEADOS
@@ -410,7 +411,21 @@ export const store = async (req, res, next) => {
       }
     );
 
-    req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente`);
+    // ADMS: encolar alta en checadores (no rompe el flujo si falla)
+    let mensajeAdms = '';
+    if ((parseInt(ID_Estatus) || 1) === 1) {
+      try {
+        const n = await encolarAltaEmpleado(empleado, 'CREATE_USER');
+        mensajeAdms = n > 0
+          ? ` Sincronizado a ${n} checador(es) (registra huella/rostro en el dispositivo).`
+          : ' ⚠️ No hay checadores activos: no se sincronizó a ningún dispositivo.';
+      } catch (err) {
+        logger.warn(`ADMS encolarAlta empleado ${empleado.ID_Empleado}: ${err.message}`);
+        mensajeAdms = ' ⚠️ No se pudo encolar en los checadores (revisar logs).';
+      }
+    }
+
+    req.flash('success', `Empleado ${Nombre} ${Apellido_Paterno} registrado correctamente.${mensajeAdms}`);
     res.redirect(`/empleados/${empleado.ID_Empleado}`);
   } catch (error) {
     if (error.code === 'P2002') {
@@ -656,6 +671,37 @@ export const update = async (req, res, next) => {
       },
       ip: obtenerIP(req)
     });
+
+    // ADMS: sincronizar cambios a los checadores (no rompe el flujo si falla)
+    {
+      const estatusNuevo = parseInt(ID_Estatus);
+      const estatusPrevio = empleadoPrevio?.ID_Estatus;
+      const empData = { ID_Empleado: idNum, Nombre, Apellido_Paterno, Apellido_Materno };
+      const nombreCambio =
+        empleadoPrevio &&
+        (empleadoPrevio.Nombre !== Nombre ||
+          empleadoPrevio.Apellido_Paterno !== Apellido_Paterno ||
+          (empleadoPrevio.Apellido_Materno || null) !== (Apellido_Materno || null));
+
+      try {
+        let n = null, accion = null;
+        if (estatusNuevo === 1 && estatusPrevio !== 1) {
+          n = await encolarAltaEmpleado(empData, 'CREATE_USER'); accion = 'alta';     // reactivación
+        } else if (estatusNuevo !== 1 && estatusPrevio === 1) {
+          n = await encolarBajaEmpleado(idNum); accion = 'baja';                       // baja
+        } else if (estatusNuevo === 1 && nombreCambio) {
+          n = await encolarAltaEmpleado(empData, 'UPDATE_USER'); accion = 'actualización'; // cambio de nombre
+        }
+        if (accion) {
+          req.flash('info', n > 0
+            ? `Sincronización (${accion}) encolada a ${n} checador(es).`
+            : `⚠️ No hay checadores activos: la ${accion} no se sincronizó a ningún dispositivo.`);
+        }
+      } catch (err) {
+        logger.warn(`ADMS sync update empleado ${idNum}: ${err.message}`);
+        req.flash('warning', 'No se pudo sincronizar el cambio a los checadores (revisar logs).');
+      }
+    }
 
     // Log de acción
     logAccess.action(

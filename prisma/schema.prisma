@@ -310,9 +310,16 @@ model Empleados_Asistencia {
   CreatedBy           String?   @db.VarChar(100)
   UpdatedAt           DateTime? @updatedAt
 
+  // ADMS Multi-Planta (aditivo, nullable). Ubicacion_Entrada/Salida (String) se siguen llenando para compat.
+  ID_Checador_Entrada Int?
+  ID_Checador_Salida  Int?
+  Multi_Planta        Boolean   @default(false)  // true si entrada y salida en plantas distintas
+
   // Relaciones
   empleado           Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
   historial_checadas Historial_Checadas[]
+  checador_entrada   Checadores?          @relation("AsistenciaEntrada", fields: [ID_Checador_Entrada], references: [ID_Checador])
+  checador_salida    Checadores?          @relation("AsistenciaSalida", fields: [ID_Checador_Salida], references: [ID_Checador])
 
   @@unique([ID_Empleado, Fecha])
   @@index([ID_Empleado])
@@ -333,13 +340,21 @@ model Historial_Checadas {
   IP_Dispositivo String?  @db.VarChar(45)
   CreatedAt      DateTime @default(now())
 
+  // ADMS Multi-Planta (aditivo, nullable para no romper legacy XLSX)
+  ID_Checador           Int?      // null para registros legacy (XLSX)
+  Tipo_Verificacion     Int?      // 1=huella, 15=rostro, 4=tarjeta (códigos ADMS)
+  Origen_Sincronizacion String   @default("ADMS_PUSH") @db.VarChar(20) // ADMS_PUSH | XLSX | MANUAL
+  Hash_Checada          String?  @unique @db.VarChar(64)  // sha256(SN \t PIN \t timestamp_crudo) para idempotencia; null en legacy
+
   // Relaciones
   asistencia Empleados_Asistencia @relation(fields: [ID_Asistencia], references: [ID_Asistencia], onDelete: Cascade)
+  checador   Checadores?          @relation(fields: [ID_Checador], references: [ID_Checador])
 
   @@index([ID_Asistencia])
   @@index([Tipo_Checada])
   @@index([Ubicacion])
   @@index([Fecha_Hora])
+  @@index([ID_Checador])
   @@map("Historial_Checadas")
 }
 
@@ -666,6 +681,100 @@ model Empleados_Prestamos {
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Empleados_Prestamos")
+}
+
+// ============================================================
+// ADMS - CHECADORES MULTI-PLANTA (Push directo CLK-980)
+// ============================================================
+
+model Cat_Plantas {
+  ID_Planta  Int          @id @default(autoincrement())
+  Nombre     String       @unique @db.VarChar(50)   // "RAM 1", "RAM 2", "Insurgentes"
+  Direccion  String?      @db.VarChar(200)
+  Activo     Boolean      @default(true)
+  CreatedAt  DateTime     @default(now())
+
+  // Relaciones
+  checadores Checadores[]
+
+  @@map("Cat_Plantas")
+}
+
+model Checadores {
+  ID_Checador       Int       @id @default(autoincrement())
+  Serial_Number     String    @unique @db.VarChar(50)   // SN que envía el device en /iclock; se carga después (CRUD/auto-discovery)
+  Nombre            String    @db.VarChar(50)           // "RAM 1 Entrada"
+  ID_Planta         Int
+  Ubicacion_Codigo  String?   @db.VarChar(20)           // mapea al String legacy de Asistencia/Historial ("RAM1")
+  Ubicacion_Detalle String?   @db.VarChar(100)
+  IP_Local          String?   @db.VarChar(45)
+  Modelo            String    @default("CLK-980") @db.VarChar(30)
+  Firmware          String?   @db.VarChar(50)
+  Ultima_Conexion   DateTime?
+  Ultima_IP_Origen  String?   @db.VarChar(45)
+  Offset_Tiempo_Min Int       @default(0)               // drift detectado reloj device vs servidor
+  Estado_Registro   String    @default("aprobado") @db.VarChar(20) // aprobado | pendiente_aprobacion
+  Activo            Boolean   @default(true)
+  CreatedAt         DateTime  @default(now())
+
+  // Relaciones
+  planta              Cat_Plantas            @relation(fields: [ID_Planta], references: [ID_Planta])
+  comandos            Checadores_Comandos[]
+  historial_checadas  Historial_Checadas[]
+  asistencias_entrada Empleados_Asistencia[] @relation("AsistenciaEntrada")
+  asistencias_salida  Empleados_Asistencia[] @relation("AsistenciaSalida")
+
+  @@index([Serial_Number])
+  @@index([ID_Planta])
+  @@map("Checadores")
+}
+
+model Checadores_Comandos {
+  ID_Comando     Int       @id @default(autoincrement())
+  ID_Checador    Int
+  Comando        String    @db.Text     // "DATA UPDATE USERINFO PIN=1\tName=Juan\t..."
+  Tipo_Comando   String    @db.VarChar(30) // CREATE_USER | DELETE_USER | UPDATE_USER | INFO | SET_TIME
+  ID_Empleado    Int?
+  Estatus        String    @default("pendiente") @db.VarChar(20) // pendiente | enviado | confirmado | fallido
+  Intentos       Int       @default(0)
+  Fecha_Creacion DateTime  @default(now())
+  Fecha_Enviado  DateTime?
+  Respuesta      String?   @db.Text
+
+  // Relaciones
+  checador Checadores @relation(fields: [ID_Checador], references: [ID_Checador], onDelete: Cascade)
+
+  @@index([Estatus, ID_Checador])
+  @@map("Checadores_Comandos")
+}
+
+model ADMS_Logs {
+  ID_Log        Int      @id @default(autoincrement())
+  SN            String?  @db.VarChar(50)
+  Endpoint      String   @db.VarChar(50)
+  Body_Size     Int?
+  Response_Code Int
+  Processing_Ms Int?
+  Error         String?  @db.Text
+  Fecha         DateTime @default(now())
+
+  @@index([SN, Fecha])
+  @@index([Fecha])
+  @@map("ADMS_Logs")
+}
+
+model Checadas_Huerfanas {
+  ID_Huerfana          Int      @id @default(autoincrement())
+  PIN_Reportado        String   @db.VarChar(50)  // PIN que mandó el device
+  ID_Checador          Int
+  Fecha_Hora           DateTime
+  Tipo_Verificacion    Int?
+  Resuelto             Boolean  @default(false)
+  ID_Empleado_Resuelto Int?     // tras reconciliación manual
+  Fecha_Creacion       DateTime @default(now())
+
+  @@index([Resuelto])
+  @@map("Checadas_Huerfanas")
 }
 
 

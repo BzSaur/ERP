@@ -198,6 +198,18 @@ async function seedCatalogos() {
   }
   console.log(`   ✅ ${tiposIncidencia.length} tipos de incidencia insertados`);
 
+  // Seed Plantas (ADMS). Los checadores (SN+IP) se cargan después vía CRUD/auto-discovery.
+  console.log('🏭 Insertando plantas...');
+  const plantas = ['RAM 1', 'RAM 2', 'Insurgentes'];
+  for (const nombre of plantas) {
+    await prisma.cat_Plantas.upsert({
+      where: { Nombre: nombre },
+      update: {},
+      create: { Nombre: nombre, Activo: true }
+    });
+  }
+  console.log(`   ✅ ${plantas.length} plantas insertadas`);
+
   console.log('\n✅ Seed de catálogos completado exitosamente!\n');
 }
 

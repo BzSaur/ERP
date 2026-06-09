@@ -1,0 +1,77 @@
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/checadores">Checadores</a></li>
+      <li class="breadcrumb-item active">Diagnóstico</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Diagnóstico: <%= checador.Nombre %></h4>
+  <p class="text-body-secondary mb-0"><code><%= checador.Serial_Number %></code> · <%= checador.planta ? checador.planta.Nombre : '-' %></p>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Última conexión</div>
+      <div class="fw-semibold"><%= checador.Ultima_Conexion ? new Date(checador.Ultima_Conexion).toLocaleString('es-MX') : 'Nunca' %></div>
+      <div class="small text-body-secondary">IP: <%= checador.Ultima_IP_Origen || '-' %></div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Última checada</div>
+      <div class="fw-semibold">
+        <%= ultimaChecada ? new Date(ultimaChecada.Fecha_Hora).toLocaleString('es-MX') : 'Sin registros' %>
+      </div>
+      <% if (ultimaChecada && ultimaChecada.asistencia) { %>
+        <div class="small text-body-secondary">Empleado #<%= ultimaChecada.asistencia.ID_Empleado %></div>
+      <% } %>
+    </div></div>
+  </div>
+  <div class="col-md-2">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Comandos pend.</div>
+      <div class="fs-4 fw-bold"><%= comandosPendientes %></div>
+    </div></div>
+  </div>
+  <div class="col-md-2">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Requests 24h</div>
+      <div class="fs-4 fw-bold"><%= logs24h %></div>
+    </div></div>
+  </div>
+  <div class="col-md-2">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Latencia prom.</div>
+      <div class="fs-4 fw-bold"><%= latenciaPromedio !== null ? latenciaPromedio + ' ms' : '-' %></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h6>Estado del reloj</h6>
+    <p class="mb-1">Offset detectado: <strong><%= checador.Offset_Tiempo_Min %> min</strong></p>
+    <% if (Math.abs(checador.Offset_Tiempo_Min) > 5) { %>
+      <div class="alert alert-warning mb-0"><i class="bi bi-clock-history me-2"></i>El reloj del device está desfasado. Se encoló un comando SET_TIME (si no había uno pendiente).</div>
+    <% } else { %>
+      <div class="text-success"><i class="bi bi-check-circle me-1"></i>Reloj sincronizado.</div>
+    <% } %>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-body">
+    <h6>Sincronizar empleados</h6>
+    <p class="text-body-secondary small mb-2">Encola todos los empleados activos hacia este checador (PIN = ID de empleado en Vita). El device los crea en su próximo polling; luego solo registras huella/rostro físicamente.</p>
+    <form action="/checadores/<%= checador.ID_Checador %>/sincronizar" method="POST"
+          onsubmit="return confirm('¿Encolar todos los empleados activos hacia este checador?')">
+      <button type="submit" class="btn btn-success"><i class="bi bi-arrow-repeat me-1"></i>Sincronizar empleados</button>
+    </form>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="/checadores/<%= checador.ID_Checador %>/editar" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar</a>
+  <a href="/checadores" class="btn btn-outline-secondary">Volver</a>
+</div>
