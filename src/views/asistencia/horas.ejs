@@ -1,0 +1,154 @@
+<%
+function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.round((n-h)*60); if(h===0&&m===0) return '0'; if(h===0) return m+'m'; if(m===0) return h+'h'; return h+'h '+m+'m'; }
+function fmtHora(d){ if(!d) return '-'; const dt=new Date(d); return String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
+function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0'); }
+%>
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/asistencia">Asistencia</a></li>
+      <li class="breadcrumb-item"><a href="/asistencia/empleado/<%= empleado.ID_Empleado %>"><%= empleado.Nombre %> <%= empleado.Apellido_Paterno %></a></li>
+      <li class="breadcrumb-item active">Horas</li>
+    </ol>
+  </nav>
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+    <div>
+      <h4 class="mb-0">Desglose de Horas — <%= empleado.Nombre %> <%= empleado.Apellido_Paterno %> <%= empleado.Apellido_Materno || '' %></h4>
+      <p class="text-body-secondary mb-0">
+        <%= empleado.puesto?.Nombre_Puesto || '' %> · <%= empleado.area?.Nombre_Area || '' %>
+        · Jornada: <%= empleado.tipo_horario?.Horas_Jornada || 8 %>h/día
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Filtro de fechas -->
+<form method="GET" class="card mb-4">
+  <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+    <div>
+      <label class="form-label small mb-1">Desde</label>
+      <input type="date" name="fechaInicio" value="<%= fechaInicio %>" class="form-control form-control-sm">
+    </div>
+    <div>
+      <label class="form-label small mb-1">Hasta</label>
+      <input type="date" name="fechaFin" value="<%= fechaFin %>" class="form-control form-control-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+  </div>
+</form>
+
+<!-- Totales -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Total semana</div>
+      <div class="fs-4 fw-bold"><%= fmtH(desglose.totales.horas) %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Normales</div>
+      <div class="fs-4 fw-bold text-primary"><%= fmtH(desglose.totales.normales) %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Extras</div>
+      <div class="fs-4 fw-bold text-warning"><%= fmtH(desglose.totales.extras) %></div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body">
+      <div class="text-body-secondary small">Días trabajados</div>
+      <div class="fs-4 fw-bold"><%= desglose.totales.diasTrabajados %></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- Tabla por día -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Día</th>
+            <th>Periodos (entrada → salida)</th>
+            <th class="text-center">Comida</th>
+            <th class="text-end">Normales</th>
+            <th class="text-end">Extras</th>
+            <th class="text-end">Total</th>
+            <th>Ubicación</th>
+            <th>Notas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (desglose.dias && desglose.dias.length > 0) { %>
+            <% desglose.dias.forEach(function(d) { %>
+            <tr class="<%= !d.presente ? 'table-light text-body-secondary' : '' %>">
+              <td><strong><%= d.nombreDia %></strong> <span class="small text-body-secondary"><%= fmtFecha(d.fecha) %></span></td>
+              <td>
+                <% if (d.pares && d.pares.length > 0) { %>
+                  <% d.pares.forEach(function(p, i){ %>
+                    <span class="badge bg-light text-dark border me-1 mb-1">
+                      <i class="bi bi-box-arrow-in-right text-success"></i> <%= p.entrada %>
+                      <i class="bi bi-arrow-right mx-1"></i>
+                      <i class="bi bi-box-arrow-right text-danger"></i> <%= p.salida %>
+                    </span>
+                  <% }); %>
+                  <% if (d.incompleta) { %><span class="badge bg-warning text-dark" title="Falta marcar salida">⚠ sin salida</span><% } %>
+                  <% if (d.retardo) { %><span class="badge bg-danger ms-1" title="Retardo <%= d.minutosRetardo %> min">Retardo</span><% } %>
+                <% } else if (d.presente) { %>
+                  <span class="badge bg-warning text-dark">Checada incompleta</span>
+                <% } else { %>
+                  <span class="text-body-secondary">Ausente</span>
+                <% } %>
+              </td>
+              <td class="text-center">
+                <% if (d.minutosComida > 0) { %><span class="badge bg-secondary"><%= d.minutosComida %>m</span><% } else { %>-<% } %>
+              </td>
+              <td class="text-end"><%= fmtH(d.normales) %></td>
+              <td class="text-end"><%= d.extras > 0 ? fmtH(d.extras) : '-' %></td>
+              <td class="text-end fw-semibold"><%= fmtH(d.horas) %></td>
+              <td>
+                <% if (d.multiPlanta) { %>
+                  <span class="badge bg-info" title="Entrada y salida en plantas distintas">
+                    <%= d.ubicacionEntrada %> → <%= d.ubicacionSalida %>
+                  </span>
+                <% } else if (d.ubicacionEntrada) { %>
+                  <span class="badge bg-light text-dark border"><%= d.ubicacionEntrada %></span>
+                <% } else { %>-<% } %>
+              </td>
+              <td class="small text-body-secondary"><%= d.notas || '' %></td>
+            </tr>
+            <% if (d.totalChecadas > 2) { %>
+            <tr class="table-light">
+              <td></td>
+              <td colspan="7" class="small text-body-secondary">
+                <i class="bi bi-clock-history me-1"></i>Checadas crudas:
+                <% d.checadas.forEach(function(c, i){ %><%= i>0?' · ':'' %><%= fmtHora(c.hora) %> <span class="text-muted">(<%= c.planta %>)</span><% }); %>
+              </td>
+            </tr>
+            <% } %>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="8" class="text-center text-body-secondary py-4">Sin registros en el período</td></tr>
+          <% } %>
+        </tbody>
+        <tfoot class="table-light">
+          <tr class="fw-bold">
+            <td colspan="3" class="text-end">TOTALES</td>
+            <td class="text-end"><%= fmtH(desglose.totales.normales) %></td>
+            <td class="text-end"><%= fmtH(desglose.totales.extras) %></td>
+            <td class="text-end"><%= fmtH(desglose.totales.horas) %></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="/asistencia/empleado/<%= empleado.ID_Empleado %>" class="btn btn-outline-secondary">Volver</a>
+</div>

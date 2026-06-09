@@ -102,6 +102,68 @@ export const reporteEmpleado = async (req, res, next) => {
 };
 
 /**
+ * Tabla global de horas semanales de todos los empleados.
+ * GET /asistencia/horas
+ */
+export const horasTodos = async (req, res, next) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    const semana = nominaService.getSemanaActual();
+    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
+    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+
+    const datos = await asistenciaService.obtenerHorasSemanalTodos(inicio, fin);
+
+    res.render('asistencia/horas-todos', {
+      title: 'Consultar Horas',
+      datos,
+      fechaInicio: inicio.toISOString().split('T')[0],
+      fechaFin: fin.toISOString().split('T')[0],
+      user: req.user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Desglose de horas por día y semana de un empleado (desde checadas reales BD).
+ * GET /asistencia/horas/:id
+ */
+export const desgloseHoras = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { fechaInicio, fechaFin } = req.query;
+
+    const semana = nominaService.getSemanaActual();
+    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
+    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+
+    const empleado = await prisma.empleados.findUnique({
+      where: { ID_Empleado: parseInt(id) },
+      include: { puesto: true, area: true, tipo_horario: true }
+    });
+    if (!empleado) {
+      req.flash('error', 'Empleado no encontrado');
+      return res.redirect('/asistencia');
+    }
+
+    const desglose = await asistenciaService.obtenerDesgloseHoras(parseInt(id), inicio, fin);
+
+    res.render('asistencia/horas', {
+      title: `Horas - ${empleado.Nombre} ${empleado.Apellido_Paterno}`,
+      empleado,
+      desglose,
+      fechaInicio: inicio.toISOString().split('T')[0],
+      fechaFin: fin.toISOString().split('T')[0],
+      user: req.user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Reporte por ubicación (RAM1/RAM2)
  */
 export const reporteUbicacion = async (req, res, next) => {

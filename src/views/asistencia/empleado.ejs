@@ -9,9 +9,14 @@
                 </nav>
                 <h1 class="h3 mb-0">Asistencia de <%= empleado.Nombre %> <%= empleado.Apellido_Paterno %></h1>
             </div>
-            <a href="/asistencia" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Volver
-            </a>
+            <div class="d-flex gap-2">
+                <a href="/asistencia/horas/<%= empleado.ID_Empleado %>" class="btn btn-primary">
+                    <i class="bi bi-table me-2"></i>Desglose de horas
+                </a>
+                <a href="/asistencia" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Volver
+                </a>
+            </div>
         </div>
 
         <!-- Info del empleado -->

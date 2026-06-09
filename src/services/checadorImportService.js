@@ -500,6 +500,111 @@ export function calcularHorasDia(checadas, opciones = {}) {
   };
 }
 
+/**
+ * Calcula horas trabajadas sumando PARES entrada-salida (modelo presencial real).
+ *
+ * Útil cuando hay 4+ checadas en el día (ej. sale a clases y regresa):
+ *   08:00 entra, 12:00 sale, 15:00 regresa, 18:00 sale -> (12-08)+(18-15)=7h.
+ * Los huecos entre pares (clases, salidas) NO cuentan. La comida 14-15 se
+ * descuenta SOLO del tramo en que el empleado estuvo presente (si un par cruza
+ * 14-15); si se fue a comer, el hueco ya lo cubre (sin doble descuento).
+ *
+ * Reglas compartidas con calcularHorasDia:
+ * - Entrada de pago: el PRIMER par redondea su entrada con tolerancia 15min/hora.
+ * - Extras: minutos de cada par después de las 18:00.
+ * - Sábado: todo es extra.
+ * - Retardo: según la entrada de pago del primer par.
+ *
+ * @param {Array} checadas - [{hora, minuto, totalMinutos, horaStr}], se ordenan
+ * @param {object} opciones - {comidaInicio, comidaFin, esSabado, esMixto}
+ */
+export function calcularHorasPorPares(checadas, opciones = {}) {
+  const {
+    comidaInicio = COMIDA_INICIO_DEFAULT,
+    comidaFin = COMIDA_FIN_DEFAULT,
+    esSabado = false,
+    esMixto = false
+  } = opciones;
+
+  const orden = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
+
+  if (orden.length === 0) {
+    return { presente: false, entrada: null, salida: null, horasTrabajadas: 0,
+      horasNormales: 0, horasExtras: 0, minutosComidaDescontados: 0, minutosRetardo: 0,
+      retardo: false, jornadaCompleta: false, incompleta: false, esSabado,
+      totalChecadas: 0, pares: [], notas: 'Sin checada' };
+  }
+
+  // Una sola checada: incompleta (delegar a la lógica existente para consistencia)
+  if (orden.length === 1) {
+    return calcularHorasDia(orden, opciones);
+  }
+
+  const entradaPagoMin = redondearEntrada(orden[0].totalMinutos);
+  let minutosNormales = 0;
+  let minutosExtras = 0;
+  let minutosComida = 0;
+  const pares = [];
+  let incompleta = false;
+
+  for (let i = 0; i < orden.length; i += 2) {
+    const ent = orden[i];
+    const sal = orden[i + 1];
+    if (!sal) { incompleta = true; break; } // checada de entrada sin salida
+
+    // El primer par usa la entrada redondeada (pago); los demás, la real
+    const entMin = (i === 0) ? entradaPagoMin : ent.totalMinutos;
+    const salMin = sal.totalMinutos;
+    if (salMin <= entMin) continue;
+
+    // Comida: overlap del par presente con 14-15 (si estuvo, se descuenta)
+    let comidaPar = 0;
+    if (entMin < comidaFin && salMin > comidaInicio) {
+      comidaPar = Math.max(0, Math.min(salMin, comidaFin) - Math.max(entMin, comidaInicio));
+    }
+
+    if (esSabado) {
+      minutosExtras += Math.max(0, (salMin - entMin) - comidaPar);
+    } else {
+      // Normal hasta 18:00, extra después
+      const finNormal = Math.min(salMin, HORA_EXTRAS_INICIO);
+      let normalPar = Math.max(0, finNormal - entMin);
+      // comida cae dentro de la parte normal (14-15 < 18)
+      normalPar = Math.max(0, normalPar - comidaPar);
+      minutosNormales += normalPar;
+      if (salMin > HORA_EXTRAS_INICIO) {
+        minutosExtras += salMin - Math.max(entMin, HORA_EXTRAS_INICIO);
+      }
+    }
+    minutosComida += comidaPar;
+    pares.push({ entrada: ent.horaStr, salida: sal.horaStr });
+  }
+
+  const horasNormales = Math.round((minutosNormales / 60) * 100) / 100;
+  const horasExtras = Math.round((minutosExtras / 60) * 100) / 100;
+  const horasTrabajadas = Math.round((horasNormales + horasExtras) * 100) / 100;
+  const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
+  const retardo = !esMixto && minutosRetardo > 0;
+
+  return {
+    presente: true,
+    entrada: orden[0].horaStr,
+    salida: orden[orden.length - 1].horaStr,
+    horasTrabajadas,
+    horasNormales,
+    horasExtras,
+    minutosComidaDescontados: minutosComida,
+    minutosRetardo: minutosRetardo > 0 ? minutosRetardo : 0,
+    retardo,
+    jornadaCompleta: horasNormales >= JORNADA_COMPLETA_HORAS,
+    incompleta,
+    esSabado,
+    totalChecadas: orden.length,
+    pares,
+    notas: `${pares.length} periodo(s)${incompleta ? ' · falta salida' : ''}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
+  };
+}
+
 function generarNotasDia(entrada, salida, checadas, horasNormales, horasExtras, retardo, minutosRetardo, esSabado, esMixto) {
   const notas = [];
 
@@ -967,5 +1072,6 @@ export default {
   normalizarNombre,
   redondearEntrada,
   calcularHorasDia,
+  calcularHorasPorPares,
   minutosAHora
 };

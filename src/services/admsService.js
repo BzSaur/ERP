@@ -21,7 +21,7 @@
 import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
-import { calcularHorasDia, minutosAHora } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -283,7 +283,8 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
   });
 
   const esSabado = fechaDia.getDay() === 6;
-  const calc = calcularHorasDia(checadasCalc, { esSabado });
+  // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
+  const calc = calcularHorasPorPares(checadasCalc, { esSabado });
 
   // Ubicaciones (String legacy) y plantas
   const ubicEntrada = primera.checador?.Ubicacion_Codigo || primera.checador?.planta?.Nombre || primera.Ubicacion;

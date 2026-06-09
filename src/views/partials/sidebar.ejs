@@ -94,8 +94,8 @@
             </a>
           </li>
           <li>
-            <a href="/checador" class="<%= currentPath === '/checador' || currentPath.startsWith('/checador/') ? 'active' : '' %>">
-              <i class="bi bi-file-earmark-spreadsheet"></i> Importar Checador
+            <a href="/asistencia/horas" class="<%= currentPath.startsWith('/asistencia/horas') ? 'active' : '' %>">
+              <i class="bi bi-table"></i> Consultar Horas
             </a>
           </li>
           <% if (hasRole('ADMIN', 'Administrador', 'SuperAdministrador')) { %>

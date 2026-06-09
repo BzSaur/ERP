@@ -78,6 +78,10 @@ router.get('/', asistenciaController.index);
 // Reporte de empleado específico
 router.get('/empleado/:id', asistenciaController.reporteEmpleado);
 
+// Consultar horas: tabla global (todos) + desglose por empleado
+router.get('/horas', asistenciaController.horasTodos);
+router.get('/horas/:id', asistenciaController.desgloseHoras);
+
 // Reporte por ubicación (RAM1/RAM2)
 router.get('/por-ubicacion', asistenciaController.reporteUbicacion);
 

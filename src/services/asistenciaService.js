@@ -11,6 +11,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
+import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -204,6 +205,32 @@ function evaluarEstadoChecada(tipoChecada, fechaHora, config) {
 // ============================================================
 
 /**
+ * Calcula las horas de un día a partir de las checadas reales de Historial_Checadas,
+ * usando la MISMA lógica que el import de checador y el push ADMS
+ * (calcularHorasDia: comida condicional 14-15, tolerancia 15min, extras >18:00,
+ * sábados, RAM1+RAM2 consolidado por ser todas las checadas del día).
+ *
+ * Fuente única de verdad para el cálculo de horas en todo el sistema.
+ *
+ * @param {Array} checadasHistorial - filas de Historial_Checadas del día (con Fecha_Hora)
+ * @param {Date} fecha - fecha del día (para detectar sábado)
+ * @returns resultado de calcularHorasDia
+ */
+export function calcularHorasDesdeChecadas(checadasHistorial, fecha) {
+  const checadas = (checadasHistorial || [])
+    .map(c => {
+      const d = new Date(c.Fecha_Hora);
+      const h = d.getHours();
+      const m = d.getMinutes();
+      return { hora: h, minuto: m, totalMinutos: h * 60 + m, horaStr: minutosAHora(h * 60 + m) };
+    })
+    .sort((a, b) => a.totalMinutos - b.totalMinutos);
+
+  const esSabado = new Date(fecha).getDay() === 6;
+  return calcularHorasPorPares(checadas, { esSabado });
+}
+
+/**
  * Obtiene el resumen de asistencia de un empleado para un período
  */
 export async function obtenerResumenAsistencia({
@@ -250,15 +277,11 @@ export async function obtenerResumenAsistencia({
       // Verificar checada completa
       if (asistencia.Hora_Entrada && asistencia.Hora_Salida) {
         resumen.checadasCompletas++;
-        
-        // Calcular horas trabajadas
-        const entrada = new Date(asistencia.Hora_Entrada);
-        const salida = new Date(asistencia.Hora_Salida);
-        const diffMs = salida - entrada;
-        const horasTrabajadas = diffMs / (1000 * 60 * 60);
-        // Restar 1 hora de comida
-        resumen.horasTrabajadas += Math.max(0, horasTrabajadas - 1);
       }
+
+      // Horas trabajadas: usar el campo ya calculado (import XLSX / ADMS usan
+      // calcularHorasDia: comida condicional, no -1h fija). Fuente única de verdad.
+      resumen.horasTrabajadas += Number(asistencia.Horas_Trabajadas) || 0;
       
       // Contar por ubicación
       if (asistencia.Ubicacion_Entrada) {
@@ -290,6 +313,156 @@ export async function obtenerResumenAsistencia({
   resumen.horasTrabajadas = Math.round(resumen.horasTrabajadas * 100) / 100;
 
   return resumen;
+}
+
+/**
+ * Desglose de horas por día y total semanal de un empleado, con detalle de
+ * checadas (entrada/salida, ubicación por planta, multi-planta). Mismo cálculo
+ * que el import de checador, pero leyendo de la BD (checadas reales ADMS/XLSX).
+ *
+ * @param {number} empleadoId
+ * @param {Date} fechaInicio - lunes de la semana (o inicio de rango)
+ * @param {Date} fechaFin - sábado/domingo (o fin de rango)
+ */
+export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
+  const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
+
+  const asistencias = await prisma.empleados_Asistencia.findMany({
+    where: { ID_Empleado: empleadoId, Fecha: { gte: inicio, lte: fin } },
+    orderBy: { Fecha: 'asc' },
+    include: {
+      historial_checadas: {
+        orderBy: { Fecha_Hora: 'asc' },
+        include: { checador: { select: { Nombre: true, planta: { select: { Nombre: true } } } } }
+      }
+    }
+  });
+
+  const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const dias = [];
+  let totalHoras = 0, totalNormales = 0, totalExtras = 0;
+  let diasTrabajados = 0, diasRetardo = 0, diasMultiPlanta = 0;
+
+  for (const a of asistencias) {
+    const fecha = new Date(a.Fecha);
+    const checadas = a.historial_checadas || [];
+    const calc = calcularHorasDesdeChecadas(checadas, fecha);
+
+    const horas = Number(a.Horas_Trabajadas) || 0;
+    const extras = Number(a.Horas_Extras) || 0;
+    if (a.Presente && horas > 0) diasTrabajados++;
+    if (a.Retardo) diasRetardo++;
+    if (a.Multi_Planta) diasMultiPlanta++;
+    totalHoras += horas;
+    totalExtras += extras;
+    totalNormales += Math.max(0, horas - extras);
+
+    dias.push({
+      fecha,
+      nombreDia: NOMBRES_DIA[fecha.getDay()],
+      presente: a.Presente,
+      entrada: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
+      salida: a.Hora_Salida ? new Date(a.Hora_Salida) : null,
+      horas, extras,
+      normales: Math.max(0, horas - extras),
+      retardo: a.Retardo,
+      minutosRetardo: a.Minutos_Retardo || 0,
+      multiPlanta: a.Multi_Planta,
+      ubicacionEntrada: a.Ubicacion_Entrada,
+      ubicacionSalida: a.Ubicacion_Salida,
+      minutosComida: calc.minutosComidaDescontados || 0,
+      totalChecadas: checadas.length,
+      incompleta: calc.incompleta || false,
+      // Pares entrada-salida (uno por periodo presente). Si sale a clases y regresa,
+      // hay >1 par. Cada checada con su planta.
+      pares: (calc.pares || []).map(p => ({ entrada: p.entrada, salida: p.salida })),
+      checadas: checadas.map(c => ({
+        hora: new Date(c.Fecha_Hora),
+        tipo: c.Tipo_Checada,
+        planta: c.checador?.planta?.Nombre || c.Ubicacion,
+        origen: c.Origen_Sincronizacion
+      })),
+      notas: calc.notas || (a.Notas || '')
+    });
+  }
+
+  return {
+    periodo: { fechaInicio: inicio, fechaFin: fin },
+    dias,
+    totales: {
+      horas: Math.round(totalHoras * 100) / 100,
+      normales: Math.round(totalNormales * 100) / 100,
+      extras: Math.round(totalExtras * 100) / 100,
+      diasTrabajados, diasRetardo, diasMultiPlanta
+    }
+  };
+}
+
+/**
+ * Tabla global: horas de la semana de TODOS los empleados activos.
+ * Una fila por empleado con totales (normales, extras, total, días, retardos).
+ *
+ * @param {Date} fechaInicio
+ * @param {Date} fechaFin
+ */
+export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
+  const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
+
+  const empleados = await prisma.empleados.findMany({
+    where: { ID_Estatus: 1 },
+    select: {
+      ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
+      area: { select: { Nombre_Area: true } },
+      puesto: { select: { Nombre_Puesto: true } },
+      tipo_horario: { select: { Horas_Jornada: true, Dias_Semana: true } }
+    },
+    orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
+  });
+
+  // Todas las asistencias del rango, agrupadas en memoria por empleado
+  const asistencias = await prisma.empleados_Asistencia.findMany({
+    where: { Fecha: { gte: inicio, lte: fin } },
+    select: {
+      ID_Empleado: true, Presente: true, Retardo: true, Multi_Planta: true,
+      Horas_Trabajadas: true, Horas_Extras: true
+    }
+  });
+
+  const porEmpleado = new Map();
+  for (const a of asistencias) {
+    const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
+    const h = Number(a.Horas_Trabajadas) || 0;
+    if (a.Presente && h > 0) acc.dias++;
+    if (a.Retardo) acc.retardos++;
+    if (a.Multi_Planta) acc.multi++;
+    acc.horas += h;
+    acc.extras += Number(a.Horas_Extras) || 0;
+    porEmpleado.set(a.ID_Empleado, acc);
+  }
+
+  const filas = empleados.map(e => {
+    const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
+    const horas = Math.round(acc.horas * 100) / 100;
+    const extras = Math.round(acc.extras * 100) / 100;
+    const jornada = e.tipo_horario?.Horas_Jornada || 8;
+    const diasSemana = e.tipo_horario?.Dias_Semana || 6;
+    const esperadas = jornada * diasSemana;
+    return {
+      ID_Empleado: e.ID_Empleado,
+      nombre: [e.Nombre, e.Apellido_Paterno, e.Apellido_Materno].filter(Boolean).join(' '),
+      area: e.area?.Nombre_Area || '',
+      puesto: e.puesto?.Nombre_Puesto || '',
+      horas, extras,
+      normales: Math.round((horas - extras) * 100) / 100,
+      dias: acc.dias, retardos: acc.retardos, multi: acc.multi,
+      esperadas,
+      faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100)
+    };
+  });
+
+  return { periodo: { fechaInicio: inicio, fechaFin: fin }, filas };
 }
 
 /**
@@ -572,5 +745,8 @@ export default {
   obtenerReportePorUbicacion,
   obtenerResumenDiario,
   marcarFaltasAutomaticas,
+  calcularHorasDesdeChecadas,
+  obtenerDesgloseHoras,
+  obtenerHorasSemanalTodos,
   UBICACIONES
 };
