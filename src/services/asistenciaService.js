@@ -49,7 +49,8 @@ export async function registrarChecada({
   const empleado = await prisma.empleados.findUnique({
     where: { ID_Empleado: empleadoId },
     include: {
-      estatus: true
+      estatus: true,
+      area: true
     }
   });
 
@@ -91,8 +92,13 @@ export async function registrarChecada({
       datosActualizacion.Presente = true;
       datosActualizacion.Ubicacion_Entrada = ubicacion;
       if (estadoChecada.retardo) {
-        datosActualizacion.Retardo = true;
-        datosActualizacion.Minutos_Retardo = estadoChecada.minutosRetardo;
+        const esSistemas = /sistemas/i.test(empleado.area?.Nombre_Area || '');
+        const minutos = estadoChecada.minutosRetardo;
+        if (esSistemas && minutos >= 15 && minutos <= 25) {
+        } else {
+          datosActualizacion.Retardo = true;
+          datosActualizacion.Minutos_Retardo = minutos;
+        }
       }
       break;
       
