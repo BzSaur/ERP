@@ -328,21 +328,29 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
-  const asistencias = await prisma.empleados_Asistencia.findMany({
-    where: { ID_Empleado: empleadoId, Fecha: { gte: inicio, lte: fin } },
-    orderBy: { Fecha: 'asc' },
-    include: {
-      historial_checadas: {
-        orderBy: { Fecha_Hora: 'asc' },
-        include: { checador: { select: { Nombre: true, planta: { select: { Nombre: true } } } } }
+  const [asistencias, empleado] = await Promise.all([
+    prisma.empleados_Asistencia.findMany({
+      where: { ID_Empleado: empleadoId, Fecha: { gte: inicio, lte: fin } },
+      orderBy: { Fecha: 'asc' },
+      include: {
+        historial_checadas: {
+          orderBy: { Fecha_Hora: 'asc' },
+          include: { checador: { select: { Nombre: true, planta: { select: { Nombre: true } } } } }
+        }
       }
-    }
-  });
+    }),
+    prisma.empleados.findUnique({
+      where: { ID_Empleado: empleadoId },
+      select: { tipo_horario: { select: { Horas_Jornada: true, Dias_Semana: true, Horas_Semana: true } } }
+    })
+  ]);
 
   const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const dias = [];
   let totalHoras = 0, totalNormales = 0, totalExtras = 0;
   let diasTrabajados = 0, diasRetardo = 0, diasMultiPlanta = 0;
+  let minutosRetardoTotal = 0;
+  const horasPorPlanta = new Map(); // planta -> horas
 
   for (const a of asistencias) {
     const fecha = new Date(a.Fecha);
@@ -352,11 +360,17 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const horas = Number(a.Horas_Trabajadas) || 0;
     const extras = Number(a.Horas_Extras) || 0;
     if (a.Presente && horas > 0) diasTrabajados++;
-    if (a.Retardo) diasRetardo++;
+    if (a.Retardo) { diasRetardo++; minutosRetardoTotal += a.Minutos_Retardo || 0; }
     if (a.Multi_Planta) diasMultiPlanta++;
     totalHoras += horas;
     totalExtras += extras;
     totalNormales += Math.max(0, horas - extras);
+
+    // Horas por planta (ubicación de entrada como planta del día)
+    const plantaDia = a.Ubicacion_Entrada || a.Ubicacion_Salida;
+    if (plantaDia && horas > 0) {
+      horasPorPlanta.set(plantaDia, (horasPorPlanta.get(plantaDia) || 0) + horas);
+    }
 
     dias.push({
       fecha,
@@ -387,15 +401,48 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     });
   }
 
+  // ---- KPIs ----
+  const limiteSemana = empleado?.tipo_horario?.Horas_Semana
+    || (empleado?.tipo_horario?.Horas_Jornada || 8) * (empleado?.tipo_horario?.Dias_Semana || 6);
+  const horasRedondeadas = Math.round(totalHoras * 100) / 100;
+  // Horas extra reales = lo que excede el límite semanal del horario (ej. >45)
+  const extrasSobreLimite = Math.max(0, Math.round((horasRedondeadas - limiteSemana) * 100) / 100);
+  // Días laborables del rango (L-S, sin domingos)
+  let diasLaborables = 0;
+  for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() !== 0) diasLaborables++;
+  }
+  const frecuenciaAsistencia = diasLaborables > 0
+    ? Math.round((diasTrabajados / diasLaborables) * 100) : 0;
+  const promedioHorasDia = diasTrabajados > 0
+    ? Math.round((horasRedondeadas / diasTrabajados) * 100) / 100 : 0;
+
+  const plantas = Array.from(horasPorPlanta.entries())
+    .map(([nombre, h]) => ({ nombre, horas: Math.round(h * 100) / 100 }))
+    .sort((a, b) => b.horas - a.horas);
+
   return {
     periodo: { fechaInicio: inicio, fechaFin: fin },
     dias,
     totales: {
-      horas: Math.round(totalHoras * 100) / 100,
+      horas: horasRedondeadas,
       normales: Math.round(totalNormales * 100) / 100,
       extras: Math.round(totalExtras * 100) / 100,
       diasTrabajados, diasRetardo, diasMultiPlanta
-    }
+    },
+    kpis: {
+      limiteSemana,
+      extrasSobreLimite,
+      minutosRetardoTotal,
+      diasRetardo,
+      diasLaborables,
+      frecuenciaAsistencia,   // % de días laborables con asistencia
+      promedioHorasDia,
+      diasMultiPlanta,
+      cumpleHoras: horasRedondeadas >= limiteSemana,
+      faltantes: Math.max(0, Math.round((limiteSemana - horasRedondeadas) * 100) / 100)
+    },
+    plantas
   };
 }
 
@@ -425,12 +472,23 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
   const asistencias = await prisma.empleados_Asistencia.findMany({
     where: { Fecha: { gte: inicio, lte: fin } },
     select: {
-      ID_Empleado: true, Presente: true, Retardo: true, Multi_Planta: true,
-      Horas_Trabajadas: true, Horas_Extras: true
+      ID_Empleado: true, Fecha: true, Presente: true, Retardo: true, Multi_Planta: true,
+      Hora_Entrada: true, Hora_Salida: true, Minutos_Retardo: true,
+      Horas_Trabajadas: true, Horas_Extras: true,
+      Ubicacion_Entrada: true, Ubicacion_Salida: true
     }
   });
 
+  // Lista de fechas del rango (para la matriz)
+  const fechas = [];
+  for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+    const f = new Date(d); f.setHours(0, 0, 0, 0);
+    fechas.push(f);
+  }
+
   const porEmpleado = new Map();
+  const porPlanta = new Map();   // planta -> { horas, dias }
+  const diasEmp = new Map();     // ID_Empleado -> (yyyy-mm-dd -> celda)
   for (const a of asistencias) {
     const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const h = Number(a.Horas_Trabajadas) || 0;
@@ -440,6 +498,33 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     acc.horas += h;
     acc.extras += Number(a.Horas_Extras) || 0;
     porEmpleado.set(a.ID_Empleado, acc);
+
+    const planta = a.Ubicacion_Entrada || a.Ubicacion_Salida;
+    if (planta && h > 0) {
+      const p = porPlanta.get(planta) || { horas: 0, dias: 0 };
+      p.horas += h;
+      p.dias++;
+      porPlanta.set(planta, p);
+    }
+
+    // Celda de matriz
+    const key = new Date(a.Fecha).toISOString().slice(0, 10);
+    if (!diasEmp.has(a.ID_Empleado)) diasEmp.set(a.ID_Empleado, new Map());
+    const entrada = a.Hora_Entrada ? new Date(a.Hora_Entrada) : null;
+    const salida = a.Hora_Salida ? new Date(a.Hora_Salida) : null;
+    const fmt = d => d ? String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : null;
+    diasEmp.get(a.ID_Empleado).set(key, {
+      presente: a.Presente,
+      horas: h,
+      extras: Number(a.Horas_Extras) || 0,
+      entrada: fmt(entrada),
+      salida: fmt(salida),
+      incompleta: a.Presente && (!entrada || !salida),
+      retardo: a.Retardo,
+      minutosRetardo: a.Minutos_Retardo || 0,
+      multiPlanta: a.Multi_Planta,
+      planta: planta || null
+    });
   }
 
   const filas = empleados.map(e => {
@@ -449,6 +534,17 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
     const diasSemana = e.tipo_horario?.Dias_Semana || 6;
     const esperadas = jornada * diasSemana;
+
+    // Matriz: una celda por cada fecha del rango
+    const empDias = diasEmp.get(e.ID_Empleado);
+    const celdas = fechas.map(f => {
+      const key = f.toISOString().slice(0, 10);
+      const c = empDias?.get(key);
+      const esDomingo = f.getDay() === 0;
+      if (!c) return { presente: false, vacio: !esDomingo, esDomingo };
+      return { ...c, esDomingo, jornadaCompleta: c.horas >= (jornada - 0.5) };
+    });
+
     return {
       ID_Empleado: e.ID_Empleado,
       nombre: [e.Nombre, e.Apellido_Paterno, e.Apellido_Materno].filter(Boolean).join(' '),
@@ -458,11 +554,16 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
       normales: Math.round((horas - extras) * 100) / 100,
       dias: acc.dias, retardos: acc.retardos, multi: acc.multi,
       esperadas,
-      faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100)
+      faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100),
+      celdas
     };
   });
 
-  return { periodo: { fechaInicio: inicio, fechaFin: fin }, filas };
+  const plantas = Array.from(porPlanta.entries())
+    .map(([nombre, v]) => ({ nombre, horas: Math.round(v.horas * 100) / 100, dias: v.dias }))
+    .sort((a, b) => b.horas - a.horas);
+
+  return { periodo: { fechaInicio: inicio, fechaFin: fin }, filas, plantas, fechas };
 }
 
 /**

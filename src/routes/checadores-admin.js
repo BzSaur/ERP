@@ -32,6 +32,7 @@ router.post('/plantas', ctrl.plantaStore);
 router.get('/crear', ctrl.crear);
 router.post('/', ctrl.store);
 router.get('/:id/diagnostico', ctrl.diagnostico);
+router.get('/:id/logs', ctrl.logsJson);
 router.post('/:id/sincronizar', ctrl.sincronizar);
 router.get('/:id/editar', ctrl.editar);
 router.put('/:id', ctrl.update);

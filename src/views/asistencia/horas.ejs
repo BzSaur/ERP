@@ -65,6 +65,57 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
   </div>
 </div>
 
+<!-- KPIs de asistencia/tiempo -->
+<% const k = desglose.kpis; %>
+<div class="card mb-4">
+  <div class="card-header bg-light"><i class="bi bi-graph-up me-2"></i>Indicadores</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Cumplimiento</div>
+        <div class="fs-5 fw-bold <%= k.frecuenciaAsistencia >= 90 ? 'text-success' : (k.frecuenciaAsistencia >= 70 ? 'text-warning' : 'text-danger') %>">
+          <%= k.frecuenciaAsistencia %>%
+        </div>
+        <div class="small text-body-secondary"><%= desglose.totales.diasTrabajados %>/<%= k.diasLaborables %> días</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Horas vs límite</div>
+        <div class="fs-5 fw-bold <%= k.cumpleHoras ? 'text-success' : 'text-danger' %>">
+          <%= fmtH(desglose.totales.horas) %> / <%= k.limiteSemana %>h
+        </div>
+        <% if (k.faltantes > 0) { %><div class="small text-danger">Faltan <%= fmtH(k.faltantes) %></div><% } %>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Extra (sobre <%= k.limiteSemana %>h)</div>
+        <div class="fs-5 fw-bold text-warning"><%= fmtH(k.extrasSobreLimite) %></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Retardos</div>
+        <div class="fs-5 fw-bold <%= k.diasRetardo > 0 ? 'text-danger' : 'text-success' %>"><%= k.diasRetardo %></div>
+        <% if (k.minutosRetardoTotal > 0) { %><div class="small text-body-secondary"><%= k.minutosRetardoTotal %> min total</div><% } %>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Promedio/día</div>
+        <div class="fs-5 fw-bold"><%= fmtH(k.promedioHorasDia) %></div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="text-body-secondary small">Multi-planta</div>
+        <div class="fs-5 fw-bold"><%= k.diasMultiPlanta %> <span class="small text-body-secondary">días</span></div>
+      </div>
+    </div>
+
+    <% if (desglose.plantas && desglose.plantas.length > 0) { %>
+    <hr>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="text-body-secondary small me-1">Horas por planta:</span>
+      <% desglose.plantas.forEach(function(p){ %>
+        <span class="badge bg-primary"><i class="bi bi-building me-1"></i><%= p.nombre %>: <%= fmtH(p.horas) %></span>
+      <% }); %>
+    </div>
+    <% } %>
+  </div>
+</div>
+
 <!-- Tabla por día -->
 <div class="card">
   <div class="card-body p-0">

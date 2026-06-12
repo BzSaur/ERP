@@ -62,6 +62,70 @@
 
 <div class="card mt-3">
   <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center">
+      <h6 class="mb-0">Logs del checador (ADMS)</h6>
+      <button type="button" id="btnLogs" class="btn btn-sm btn-outline-info" onclick="toggleLogs(<%= checador.ID_Checador %>)">
+        <i class="bi bi-list-ul me-1"></i><span id="btnLogsTxt">Ver logs</span>
+      </button>
+    </div>
+    <div id="logsBox" class="mt-3" style="display:none">
+      <div class="table-responsive" style="max-height:360px; overflow-y:auto">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light" style="position:sticky; top:0">
+            <tr><th>Fecha</th><th>Endpoint</th><th class="text-center">Código</th><th class="text-end">ms</th><th>Error</th></tr>
+          </thead>
+          <tbody id="logsBody">
+            <tr><td colspan="5" class="text-center text-body-secondary py-3">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let logsCargados = false;
+async function toggleLogs(id) {
+  const box = document.getElementById('logsBox');
+  const txt = document.getElementById('btnLogsTxt');
+  if (box.style.display === 'none') {
+    box.style.display = 'block';
+    txt.textContent = 'Ocultar logs';
+    if (!logsCargados) await cargarLogs(id);
+  } else {
+    box.style.display = 'none';
+    txt.textContent = 'Ver logs';
+  }
+}
+async function cargarLogs(id) {
+  const body = document.getElementById('logsBody');
+  try {
+    const r = await fetch(`/checadores/${id}/logs?limit=100`);
+    const data = await r.json();
+    if (!data.logs || data.logs.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="text-center text-body-secondary py-3">Sin logs registrados</td></tr>';
+      return;
+    }
+    body.innerHTML = data.logs.map(l => {
+      const fecha = new Date(l.fecha).toLocaleString('es-MX');
+      const codeClass = l.code >= 200 && l.code < 300 ? 'success' : (l.code >= 400 ? 'danger' : 'secondary');
+      return `<tr>
+        <td class="small">${fecha}</td>
+        <td><code>${l.endpoint}</code></td>
+        <td class="text-center"><span class="badge bg-${codeClass}">${l.code}</span></td>
+        <td class="text-end">${l.ms ?? '-'}</td>
+        <td class="small text-danger">${l.error ? l.error.substring(0,120) : ''}</td>
+      </tr>`;
+    }).join('');
+    logsCargados = true;
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-3">Error al cargar: ${e.message}</td></tr>`;
+  }
+}
+</script>
+
+<div class="card mt-3">
+  <div class="card-body">
     <h6>Sincronizar empleados</h6>
     <p class="text-body-secondary small mb-2">Encola todos los empleados activos hacia este checador (PIN = ID de empleado en Vita). El device los crea en su próximo polling; luego solo registras huella/rostro físicamente.</p>
     <form action="/checadores/<%= checador.ID_Checador %>/sincronizar" method="POST"

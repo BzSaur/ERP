@@ -6,6 +6,7 @@
 import prisma from '../config/database.js';
 import * as asistenciaService from '../services/asistenciaService.js';
 import * as nominaService from '../services/nominaService.js';
+import { generarExcelHoras } from '../services/excelHorasService.js';
 
 // ============================================================
 // VISTAS (EJS)
@@ -121,6 +122,29 @@ export const horasTodos = async (req, res, next) => {
       fechaFin: fin.toISOString().split('T')[0],
       user: req.user
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Descarga Excel de horas (matriz empleados × días) para un rango.
+ * GET /asistencia/horas/excel?fechaInicio=&fechaFin=
+ */
+export const descargarHorasExcel = async (req, res, next) => {
+  try {
+    const { fechaInicio, fechaFin, sort, dir } = req.query;
+    const semana = nominaService.getSemanaActual();
+    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
+    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir });
+
+    const f1 = inicio.toISOString().slice(0, 10);
+    const f2 = fin.toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="horas_${f1}_a_${f2}.xlsx"`);
+    res.send(buffer);
   } catch (error) {
     next(error);
   }

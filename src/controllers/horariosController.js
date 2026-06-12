@@ -33,23 +33,29 @@ export const crear = async (req, res) => {
 // Guardar nuevo horario
 export const store = async (req, res) => {
   try {
-    const { Nombre_Horario, Descripcion, Horas_Semana } = req.body;
-    
+    const { Nombre_Horario, Descripcion, Horas_Semana, Horas_Jornada, Dias_Semana } = req.body;
+
     // Verificar si ya existe
     const existente = await prisma.cat_Tipo_Horario.findUnique({
       where: { Nombre_Horario }
     });
-    
+
     if (existente) {
       req.flash('error', 'Ya existe un horario con ese nombre');
       return res.redirect('/horarios/crear');
     }
-    
+
+    const diasSemana = Dias_Semana ? parseInt(Dias_Semana) : 6;
+    const horasJornada = Horas_Jornada ? parseInt(Horas_Jornada) : 8;
+    const horasSemana = Horas_Semana ? parseInt(Horas_Semana) : horasJornada * diasSemana;
+
     const horario = await prisma.cat_Tipo_Horario.create({
       data: {
         Nombre_Horario,
         Descripcion: Descripcion || null,
-        Horas_Semana: Horas_Semana ? parseInt(Horas_Semana) : null
+        Dias_Semana: diasSemana,
+        Horas_Jornada: horasJornada,
+        Horas_Semana: horasSemana
       }
     });
     
@@ -107,20 +113,27 @@ export const editar = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { Nombre_Horario, Descripcion, Horas_Semana } = req.body;
+    const { Nombre_Horario, Descripcion, Horas_Semana, Horas_Jornada, Dias_Semana } = req.body;
     const idNum = parseInt(id);
-    
+
     // Obtener datos previos para comparar horas
     const horarioPrevio = await prisma.cat_Tipo_Horario.findUnique({
       where: { ID_Tipo_Horario: idNum }
     });
-    
+
+    const diasSemana = Dias_Semana ? parseInt(Dias_Semana) : horarioPrevio.Dias_Semana;
+    const horasJornada = Horas_Jornada ? parseInt(Horas_Jornada) : horarioPrevio.Horas_Jornada;
+    // Horas_Semana se deriva de jornada × días (fuente del cálculo de asistencia/nómina)
+    const horasSemana = Horas_Semana ? parseInt(Horas_Semana) : horasJornada * diasSemana;
+
     const horario = await prisma.cat_Tipo_Horario.update({
       where: { ID_Tipo_Horario: idNum },
       data: {
         Nombre_Horario,
         Descripcion: Descripcion || null,
-        Horas_Semana: Horas_Semana ? parseInt(Horas_Semana) : null
+        Dias_Semana: diasSemana,
+        Horas_Jornada: horasJornada,
+        Horas_Semana: horasSemana
       }
     });
     

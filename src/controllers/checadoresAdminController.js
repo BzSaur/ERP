@@ -263,6 +263,44 @@ export const diagnostico = async (req, res, next) => {
   }
 };
 
+/**
+ * Logs ADMS recientes de un checador (JSON). Para el box desplegable del diagnóstico.
+ * GET /checadores/:id/logs?limit=50
+ */
+export const logsJson = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+
+    const checador = await prisma.checadores.findUnique({
+      where: { ID_Checador: id },
+      select: { Serial_Number: true }
+    });
+    if (!checador) return res.status(404).json({ error: 'No encontrado' });
+
+    const logs = await prisma.aDMS_Logs.findMany({
+      where: { SN: checador.Serial_Number },
+      orderBy: { Fecha: 'desc' },
+      take: limit
+    });
+
+    res.json({
+      sn: checador.Serial_Number,
+      total: logs.length,
+      logs: logs.map(l => ({
+        fecha: l.Fecha,
+        endpoint: l.Endpoint,
+        code: l.Response_Code,
+        ms: l.Processing_Ms,
+        bytes: l.Body_Size,
+        error: l.Error
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ============================================================
 // SINCRONIZAR EMPLEADOS -> CHECADOR (cola CREATE_USER)
 // ============================================================
@@ -357,6 +395,6 @@ export const plantaStore = async (req, res, next) => {
 export default {
   index, crear, store, editar, update, destroy,
   pendientes, aprobar, rechazar,
-  diagnostico, sincronizar, huerfanas, resolverHuerfana,
+  diagnostico, logsJson, sincronizar, huerfanas, resolverHuerfana,
   plantasIndex, plantaStore
 };

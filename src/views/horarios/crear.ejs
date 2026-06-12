@@ -27,12 +27,24 @@
         </div>
         
         <div class="col-6 col-md-3">
-          <label for="Horas_Semana" class="form-label">Horas por Semana</label>
-          <input type="number" class="form-control" id="Horas_Semana" 
-                 name="Horas_Semana" min="1" max="168"
-                 placeholder="40">
+          <label for="Dias_Semana" class="form-label">Días por Semana *</label>
+          <input type="number" class="form-control" id="Dias_Semana"
+                 name="Dias_Semana" min="1" max="7" required value="6" oninput="calcSemana()">
         </div>
-        
+
+        <div class="col-6 col-md-3">
+          <label for="Horas_Jornada" class="form-label">Horas por Jornada (día) *</label>
+          <input type="number" class="form-control" id="Horas_Jornada"
+                 name="Horas_Jornada" min="1" max="24" required value="8" oninput="calcSemana()">
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label for="Horas_Semana" class="form-label">Horas por Semana</label>
+          <input type="number" class="form-control bg-light" id="Horas_Semana"
+                 name="Horas_Semana" min="1" max="168" readonly value="48">
+          <small class="text-body-secondary">jornada × días</small>
+        </div>
+
         <div class="col-md-12">
           <label for="Descripcion" class="form-label">Descripción</label>
           <textarea class="form-control" id="Descripcion" 
@@ -52,3 +64,11 @@
     </form>
   </div>
 </div>
+
+<script>
+function calcSemana() {
+  const j = parseFloat(document.getElementById('Horas_Jornada').value) || 0;
+  const d = parseInt(document.getElementById('Dias_Semana').value) || 0;
+  document.getElementById('Horas_Semana').value = Math.round(j * d * 100) / 100;
+}
+</script>
