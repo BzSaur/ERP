@@ -31,4 +31,8 @@ router.get('/getrequest', adms.getrequest);
 // Confirmación de comandos
 router.post('/devicecmd', adms.devicecmd);
 
+// Sincronización de tiempo (el device pide hora del servidor)
+router.get('/rtdata', adms.rtdata);
+router.post('/rtdata', adms.rtdata);
+
 export default router;

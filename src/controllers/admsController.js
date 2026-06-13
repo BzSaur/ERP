@@ -118,7 +118,7 @@ export async function devicecmd(req, res) {
   try {
     if (req.checador) await confirmarComando(body);
     res.type('text/plain').send('OK');
-    logAdms({ sn, endpoint: 'devicecmd', bodySize: body.length, responseCode: 200, processingMs: Date.now() - inicio });
+    logAdms({ sn, endpoint: 'devicecmd', bodySize: body.length, responseCode: 200, processingMs: Date.now() - inicio, error: body ? body.slice(0, 500) : null });
   } catch (err) {
     res.type('text/plain').send('OK');
     logAdms({ sn, endpoint: 'devicecmd', bodySize: body.length, responseCode: 200, processingMs: Date.now() - inicio, error: err.message });
@@ -130,6 +130,28 @@ export async function devicecmd(req, res) {
  * ⚠️ VERIFICAR contra device real. TimeZone configurable vía ADMS_TIMEZONE.
  * TransFlag indica qué tablas sube el device; Realtime=1 => push inmediato.
  */
+/**
+ * GET|POST /iclock/rtdata?SN=<sn>&type=time
+ * El device solicita la hora actual del servidor para sincronizar su reloj.
+ * Respuesta ZK: "TIME HH:MM:SS\nDATE YYYY-MM-DD\n"
+ */
+export async function rtdata(req, res) {
+  const inicio = Date.now();
+  const sn = req._admsSN;
+  const type = req.query.type || '';
+
+  // Hora local del device (ajustada al TZ configurado)
+  const tzOffsetHoras = parseInt(config.adms.timezone, 10);
+  const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
+  const pad = n => String(n).padStart(2, '0');
+  const fecha = `${ahora.getUTCFullYear()}-${pad(ahora.getUTCMonth()+1)}-${pad(ahora.getUTCDate())}`;
+  const hora  = `${pad(ahora.getUTCHours())}:${pad(ahora.getUTCMinutes())}:${pad(ahora.getUTCSeconds())}`;
+
+  const cuerpo = `TIME ${hora}\nDATE ${fecha}\n`;
+  res.type('text/plain').send(cuerpo);
+  logAdms({ sn, endpoint: `rtdata:${type}`, responseCode: 200, processingMs: Date.now() - inicio });
+}
+
 function construirHandshake(sn) {
   return [
     `GET OPTION FROM: ${sn}`,
@@ -146,4 +168,4 @@ function construirHandshake(sn) {
   ].join('\n');
 }
 
-export default { ping, cdata, getrequest, devicecmd };
+export default { ping, cdata, getrequest, devicecmd, rtdata };
