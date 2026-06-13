@@ -44,8 +44,31 @@ function rangoDias(inicio, fin) {
  * @param {Date} fechaFin
  * @returns {Buffer}
  */
+function redondearEntradaExcel(hhmm) {
+  if (!hhmm) return hhmm;
+  const [h, m] = hhmm.split(':').map(Number);
+  return String(m <= 15 ? h : h + 1).padStart(2, '0') + ':00';
+}
+function redondearSalidaExcel(hhmm) {
+  if (!hhmm) return hhmm;
+  const [h, m] = hhmm.split(':').map(Number);
+  return String(m <= 5 ? h : h + 1).padStart(2, '0') + ':00';
+}
+function horasEntreRedondeadas(ent, sal) {
+  const [he, me] = ent.split(':').map(Number);
+  const [hs, ms] = sal.split(':').map(Number);
+  const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
+  const entMin = he * 60 + me, salMin = hs * 60 + ms;
+  if (salMin <= entMin) return 0;
+  let netos = salMin - entMin;
+  if (entMin < COMIDA_FIN && salMin > COMIDA_INI) {
+    netos -= Math.min(salMin, COMIDA_FIN) - Math.max(entMin, COMIDA_INI);
+  }
+  return Math.round(Math.max(0, netos) / 60 * 100) / 100;
+}
+
 export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
-  const { sort = null, dir = 'asc' } = opciones;
+  const { sort = null, dir = 'asc', redondear = false } = opciones;
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
   const dias = rangoDias(inicio, fin);
@@ -115,12 +138,22 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const ultCheca = a.historial_checadas[a.historial_checadas.length - 1];
       const plantaSal = a.Ubicacion_Salida || ultCheca?.checador?.planta?.Nombre || '';
 
-      const ent = a.Hora_Entrada ? `${fmtHora(a.Hora_Entrada)}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
-      const sal = a.Hora_Salida ? `${fmtHora(a.Hora_Salida)}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
-      const horas = Number(a.Horas_Trabajadas) || 0;
-      totalHoras += horas;
+      const entRaw = a.Hora_Entrada ? fmtHora(a.Hora_Entrada) : null;
+      const salRaw = a.Hora_Salida ? fmtHora(a.Hora_Salida) : null;
+      let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
+      let salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
+      let horas = Number(a.Horas_Trabajadas) || 0;
 
-      fila.push(ent, sal, horas ? Math.round(horas * 100) / 100 : '');
+      if (redondear && entRaw && salRaw) {
+        const entR = redondearEntradaExcel(entRaw);
+        const salR = redondearSalidaExcel(salRaw);
+        entMostrar = `${entR}${plantaEnt ? ' (' + plantaEnt + ')' : ''}`;
+        salMostrar = `${salR}${plantaSal ? ' (' + plantaSal + ')' : ''}`;
+        horas = horasEntreRedondeadas(entR, salR);
+      }
+
+      totalHoras += horas;
+      fila.push(entMostrar, salMostrar, horas ? Math.round(horas * 100) / 100 : '');
     }
 
     const total = Math.round(totalHoras * 100) / 100;

@@ -21,6 +21,13 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
       <input type="hidden" name="fechaInicio" id="fechaInicio" value="<%= fechaInicio %>">
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
     </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="chkRedondear" name="redondear" value="1"
+               <%= (typeof redondear !== 'undefined' && redondear) ? 'checked' : '' %>>
+        <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
+      </div>
+    </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
     <a id="btnExcel" href="/asistencia/horas/excel?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>"
        class="btn btn-sm btn-success">
@@ -144,7 +151,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    else if (c.incompleta) { cls='cel-parcial'; tip='Incompleta'; }
                    else if (c.presente) { cls = c.jornadaCompleta ? 'cel-completa' : ''; tip=(c.planta||''); }
               %>
-                <td class="text-center <%= cls %>" title="<%= tip %>">
+                <td class="text-center <%= cls %> cel-dia"
+                    title="<%= tip %>"
+                    data-ent="<%= c.entrada || '' %>"
+                    data-sal="<%= c.salida || '' %>"
+                    data-horas="<%= c.horas || 0 %>"
+                    data-presente="<%= c.presente ? 1 : 0 %>"
+                    data-dom="<%= c.esDomingo ? 1 : 0 %>"
+                    data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
                   <% if (c.esDomingo) { %>
                     <span class="text-body-secondary small">Dom</span>
                   <% } else if (!c.presente && c.vacio) { %>
@@ -213,7 +227,66 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     });
   });
 
-  // El botón Excel actualiza su href con fechas + orden vivos (mismo scope)
+  // ---- Redondeo de horas ----
+  function redondearEntrada(hhmm) {
+    if (!hhmm) return hhmm;
+    const [h, m] = hhmm.split(':').map(Number);
+    if (m <= 15) return String(h).padStart(2,'0') + ':00';
+    return String(h + 1).padStart(2,'0') + ':00';
+  }
+  function redondearSalida(hhmm) {
+    if (!hhmm) return hhmm;
+    const [h, m] = hhmm.split(':').map(Number);
+    if (m <= 5) return String(h).padStart(2,'0') + ':00';
+    return String(h + 1).padStart(2,'0') + ':00';
+  }
+  function minutosEntre(ent, sal) {
+    const [he, me] = ent.split(':').map(Number);
+    const [hs, ms] = sal.split(':').map(Number);
+    const COMIDA_INI = 14*60, COMIDA_FIN = 15*60;
+    const CIERRE = 18*60;
+    const entMin = he*60+me, salMin = hs*60+ms;
+    if (salMin <= entMin) return 0;
+    let netos = salMin - entMin;
+    // descuento comida si jornada cruza 14-15
+    if (entMin < COMIDA_FIN && salMin > COMIDA_INI) {
+      netos -= Math.min(salMin, COMIDA_FIN) - Math.max(entMin, COMIDA_INI);
+    }
+    return Math.max(0, netos);
+  }
+
+  const chk = document.getElementById('chkRedondear');
+  function aplicarRedondeo() {
+    const activo = chk.checked;
+    document.querySelectorAll('.cel-dia').forEach(td => {
+      if (td.dataset.dom === '1' || td.dataset.vacio === '1' || td.dataset.presente !== '1') return;
+      const entRaw = td.dataset.ent;
+      const salRaw = td.dataset.sal;
+      const horasRaw = parseFloat(td.dataset.horas) || 0;
+      const celEs = td.querySelector('.cel-es');
+      if (!celEs) return;
+
+      let entMostrar, salMostrar, horasMostrar;
+      if (activo && entRaw && salRaw) {
+        entMostrar = redondearEntrada(entRaw);
+        salMostrar = redondearSalida(salRaw);
+        const mins = minutosEntre(entMostrar, salMostrar);
+        horasMostrar = Math.round((mins / 60) * 10) / 10;
+      } else {
+        entMostrar = entRaw || '--:--';
+        salMostrar = salRaw || '--:--';
+        horasMostrar = Math.round(horasRaw * 10) / 10;
+      }
+      celEs.querySelector('.ent').textContent = entMostrar;
+      celEs.querySelector('.sal').textContent = salMostrar;
+      celEs.querySelector('.hrs').textContent = horasMostrar.toFixed(1) + 'h';
+    });
+  }
+  chk.addEventListener('change', aplicarRedondeo);
+  // Aplicar estado inicial si viene con ?redondear=1
+  if (chk.checked) aplicarRedondeo();
+
+  // El botón Excel actualiza su href con fechas + orden + redondeo vivos
   const btnExcel = document.getElementById('btnExcel');
   function actualizarLinkExcel(){
     if (!btnExcel) return;
@@ -221,10 +294,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     const ff = document.getElementById('fechaFin').value;
     let url = `/asistencia/horas/excel?fechaInicio=${fi}&fechaFin=${ff}`;
     if (sortState.key) url += `&sort=${sortState.key}&dir=${sortState.asc ? 'asc' : 'desc'}`;
+    if (document.getElementById('chkRedondear').checked) url += '&redondear=1';
     btnExcel.href = url;
   }
-  // Actualizar también justo antes de navegar (por si cambiaron las fechas en flatpickr)
   if (btnExcel) btnExcel.addEventListener('click', actualizarLinkExcel);
+  chk.addEventListener('change', actualizarLinkExcel);
 })();
 </script>
 

@@ -320,6 +320,20 @@ export const sincronizar = async (req, res, next) => {
   }
 };
 
+export const sincronizarGlobal = async (req, res, next) => {
+  try {
+    const { encolados, checadores } = await sincronizarTodos(null);
+    if (checadores === 0) {
+      req.flash('error', 'No hay checadores activos/aprobados');
+    } else {
+      req.flash('success', `Sincronización global: ${encolados} empleado(s) encolados en ${checadores} checador(es).`);
+    }
+    res.redirect('/checadores');
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ============================================================
 // CHECADAS HUÉRFANAS (PIN no resuelto)
 // ============================================================
@@ -392,9 +406,33 @@ export const plantaStore = async (req, res, next) => {
   }
 };
 
+export const plantaUpdate = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { Nombre, Direccion } = req.body;
+    await prisma.cat_Plantas.update({
+      where: { ID_Planta: id },
+      data: { Nombre: String(Nombre).trim(), Direccion: Direccion || null }
+    });
+    await registrarCambio({
+      usuario: req.user, accion: 'UPDATE', tabla: 'Cat_Plantas',
+      idRegistro: id.toString(), descripcion: `Planta renombrada a: ${Nombre}`,
+      ip: obtenerIP(req)
+    });
+    req.flash('success', 'Planta actualizada');
+    res.redirect('/checadores/plantas');
+  } catch (error) {
+    if (error.code === 'P2002') {
+      req.flash('error', 'Ya existe una planta con ese nombre');
+      return res.redirect('/checadores/plantas');
+    }
+    next(error);
+  }
+};
+
 export default {
   index, crear, store, editar, update, destroy,
   pendientes, aprobar, rechazar,
-  diagnostico, logsJson, sincronizar, huerfanas, resolverHuerfana,
-  plantasIndex, plantaStore
+  diagnostico, logsJson, sincronizar, sincronizarGlobal, huerfanas, resolverHuerfana,
+  plantasIndex, plantaStore, plantaUpdate
 };

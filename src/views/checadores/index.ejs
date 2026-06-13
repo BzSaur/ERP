@@ -8,6 +8,12 @@
     <a href="/checadores/plantas" class="btn btn-outline-secondary">
       <i class="bi bi-building me-1"></i> Plantas
     </a>
+    <form action="/checadores/sincronizar-global" method="POST" class="d-inline"
+          onsubmit="return confirm('¿Sincronizar TODOS los empleados en TODOS los checadores?')">
+      <button type="submit" class="btn btn-outline-success">
+        <i class="bi bi-arrow-repeat me-1"></i> Sincronizar Todo
+      </button>
+    </form>
     <a href="/checadores/crear" class="btn btn-primary">
       <i class="bi bi-plus-lg me-1"></i> Nuevo Checador
     </a>

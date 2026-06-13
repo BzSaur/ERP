@@ -363,8 +363,10 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const checadas = a.historial_checadas || [];
     const calc = calcularHorasDesdeChecadas(checadas, fecha);
 
-    const horas = Number(a.Horas_Trabajadas) || 0;
-    const extras = Number(a.Horas_Extras) || 0;
+    // Preferir horas recalculadas desde checadas (cubre registros con 0h guardados)
+    const horasBD = Number(a.Horas_Trabajadas) || 0;
+    const horas = (checadas.length > 0 && calc.horasTrabajadas > 0) ? calc.horasTrabajadas : horasBD;
+    const extras = (checadas.length > 0 && calc.horasExtras != null) ? (calc.horasExtras || 0) : (Number(a.Horas_Extras) || 0);
     if (a.Presente && horas > 0) diasTrabajados++;
     if (a.Retardo) { diasRetardo++; minutosRetardoTotal += a.Minutos_Retardo || 0; }
     if (a.Multi_Planta) diasMultiPlanta++;
@@ -519,13 +521,24 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     const entrada = a.Hora_Entrada ? new Date(a.Hora_Entrada) : null;
     const salida = a.Hora_Salida ? new Date(a.Hora_Salida) : null;
     const fmt = d => d ? String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : null;
+    const incompleta = a.Presente && (!entrada || !salida);
+    // Si sin salida y sin horas guardadas, estimar hasta 18:00
+    let horasCelda = h;
+    if (incompleta && h === 0 && entrada) {
+      const entMin = entrada.getHours() * 60 + entrada.getMinutes();
+      const CIERRE = 18 * 60;
+      const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
+      let netos = Math.max(0, CIERRE - entMin);
+      if (entMin < COMIDA_FIN) netos -= Math.max(0, Math.min(CIERRE, COMIDA_FIN) - Math.max(entMin, COMIDA_INI));
+      horasCelda = Math.round((netos / 60) * 100) / 100;
+    }
     diasEmp.get(a.ID_Empleado).set(key, {
       presente: a.Presente,
-      horas: h,
+      horas: horasCelda,
       extras: Number(a.Horas_Extras) || 0,
       entrada: fmt(entrada),
       salida: fmt(salida),
-      incompleta: a.Presente && (!entrada || !salida),
+      incompleta,
       retardo: a.Retardo,
       minutosRetardo: a.Minutos_Retardo || 0,
       multiPlanta: a.Multi_Planta,

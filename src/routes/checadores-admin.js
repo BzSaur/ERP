@@ -15,6 +15,9 @@ router.use(isAuthenticated, isAdmin);
 // Listado principal
 router.get('/', ctrl.index);
 
+// Sincronización global (todos los checadores)
+router.post('/sincronizar-global', ctrl.sincronizarGlobal);
+
 // Pendientes de aprobación (auto-discovery)
 router.get('/pendientes', ctrl.pendientes);
 router.post('/:id/aprobar', ctrl.aprobar);
@@ -27,6 +30,7 @@ router.post('/huerfanas/:id/resolver', ctrl.resolverHuerfana);
 // Plantas
 router.get('/plantas', ctrl.plantasIndex);
 router.post('/plantas', ctrl.plantaStore);
+router.post('/plantas/:id', ctrl.plantaUpdate);
 
 // CRUD checador
 router.get('/crear', ctrl.crear);

@@ -337,7 +337,7 @@
                   } else if (dia.incompleta) {
                     bgClass = 'table-warning';
                     textClass = 'text-dark';
-                    cellContent = dia.entrada || '?';
+                    cellContent = (dia.entrada || '?') + '<br><span class="text-muted small">--:--</span><br>' + (dia.horasTrabajadas > 0 ? dia.horasTrabajadas.toFixed(1) + 'h' : '0.0h');
                   } else if (dia.jornadaCompleta) {
                     bgClass = 'table-success';
                     textClass = 'text-dark';
@@ -350,7 +350,7 @@
                   // Build tooltip
                   let tooltipText = 'Ausente';
                   if (dia.presente) {
-                    tooltipText = (dia.entrada || '') + ' - ' + (dia.salida || '?');
+                    tooltipText = (dia.entrada || '') + ' - ' + (dia.salida || '18:00*');
                     if (dia.entradaPago) tooltipText += ' | Pago: ' + dia.entradaPago;
                     if (dia.horasExtras > 0) tooltipText += ' | Extras: ' + dia.horasExtras.toFixed(1) + 'h';
                     if (dia.minutosComidaDescontados > 0) tooltipText += ' | -' + dia.minutosComidaDescontados + 'min comida';

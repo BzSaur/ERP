@@ -384,28 +384,18 @@ export function calcularHorasDia(checadas, opciones = {}) {
     };
   }
 
-  // Solo una checada = incompleta
+  // Solo una checada = cerrar a 18:00 al final del día
   if (checadas.length === 1) {
     const entrada = checadas[0];
     const entradaPagoMin = redondearEntrada(entrada.totalMinutos);
     const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
-
+    // Sintetizar salida a 18:00 para calcular horas
+    const salidaSintetica = { horaStr: '18:00', hora: 18, minuto: 0, totalMinutos: HORA_SALIDA_ESTANDAR };
     return {
-      presente: true,
-      entrada: entrada.horaStr,
-      entradaPago: minutosAHora(entradaPagoMin),
+      ...calcularHorasDia([entrada, salidaSintetica], opciones),
       salida: null,
-      horasTrabajadas: 0,
-      horasNormales: 0,
-      horasExtras: 0,
-      horasTrabajadasBruto: 0,
-      minutosComidaDescontados: 0,
-      minutosRetardo: minutosRetardo > 0 ? minutosRetardo : 0,
-      retardo: !esMixto && minutosRetardo > 0,
-      jornadaCompleta: false,
       incompleta: true,
-      esSabado,
-      notas: 'Solo entrada registrada, falta salida'
+      notas: 'Falta salida · horas estimadas al cierre de jornada (18:00)'
     };
   }
 
@@ -549,8 +539,9 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
 
   for (let i = 0; i < orden.length; i += 2) {
     const ent = orden[i];
-    const sal = orden[i + 1];
-    if (!sal) { incompleta = true; break; } // checada de entrada sin salida
+    // Sin par de salida: cerrar a 18:00
+    const sal = orden[i + 1] ?? { horaStr: '18:00', hora: 18, minuto: 0, totalMinutos: HORA_SALIDA_ESTANDAR };
+    if (!orden[i + 1]) incompleta = true;
 
     // El primer par usa la entrada redondeada (pago); los demás, la real
     const entMin = (i === 0) ? entradaPagoMin : ent.totalMinutos;
@@ -601,7 +592,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     esSabado,
     totalChecadas: orden.length,
     pares,
-    notas: `${pares.length} periodo(s)${incompleta ? ' · falta salida' : ''}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
+    notas: `${pares.length} periodo(s)${incompleta ? ' · falta salida (estimado 18:00)' : ''}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
   };
 }
 

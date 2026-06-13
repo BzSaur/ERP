@@ -16,7 +16,7 @@
       <div class="card-body p-0">
         <table class="table table-hover mb-0">
           <thead class="table-light">
-            <tr><th>Nombre</th><th>Dirección</th><th class="text-center">Checadores</th></tr>
+            <tr><th>Nombre</th><th>Dirección</th><th class="text-center">Checadores</th><th></th></tr>
           </thead>
           <tbody>
             <% if (plantas && plantas.length > 0) { %>
@@ -25,10 +25,19 @@
                 <td><i class="bi bi-building text-primary me-2"></i><strong><%= p.Nombre %></strong></td>
                 <td class="small"><%= p.Direccion || '-' %></td>
                 <td class="text-center"><span class="badge bg-info"><%= p._count.checadores %></span></td>
+                <td class="text-end">
+                  <button type="button" class="btn btn-sm btn-outline-primary"
+                          data-bs-toggle="modal" data-bs-target="#modalEditarPlanta"
+                          data-id="<%= p.ID_Planta %>"
+                          data-nombre="<%= p.Nombre %>"
+                          data-direccion="<%= p.Direccion || '' %>">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                </td>
               </tr>
               <% }); %>
             <% } else { %>
-              <tr><td colspan="3" class="text-center text-body-secondary py-4">No hay plantas</td></tr>
+              <tr><td colspan="4" class="text-center text-body-secondary py-4">No hay plantas</td></tr>
             <% } %>
           </tbody>
         </table>
@@ -54,3 +63,40 @@
     </div>
   </div>
 </div>
+
+<!-- Modal editar planta -->
+<div class="modal fade" id="modalEditarPlanta" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formEditarPlanta" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Planta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nombre <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre" id="editNombre" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Dirección</label>
+            <input type="text" class="form-control" name="Direccion" id="editDireccion">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('modalEditarPlanta').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('formEditarPlanta').action = '/checadores/plantas/' + btn.dataset.id;
+  document.getElementById('editNombre').value = btn.dataset.nombre;
+  document.getElementById('editDireccion').value = btn.dataset.direccion;
+});
+</script>

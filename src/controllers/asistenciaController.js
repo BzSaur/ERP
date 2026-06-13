@@ -108,7 +108,7 @@ export const reporteEmpleado = async (req, res, next) => {
  */
 export const horasTodos = async (req, res, next) => {
   try {
-    const { fechaInicio, fechaFin } = req.query;
+    const { fechaInicio, fechaFin, redondear } = req.query;
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
     const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
@@ -120,6 +120,7 @@ export const horasTodos = async (req, res, next) => {
       datos,
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: fin.toISOString().split('T')[0],
+      redondear: redondear === '1',
       user: req.user
     });
   } catch (error) {
@@ -133,12 +134,12 @@ export const horasTodos = async (req, res, next) => {
  */
 export const descargarHorasExcel = async (req, res, next) => {
   try {
-    const { fechaInicio, fechaFin, sort, dir } = req.query;
+    const { fechaInicio, fechaFin, sort, dir, redondear } = req.query;
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
     const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
 
-    const buffer = await generarExcelHoras(inicio, fin, { sort, dir });
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, redondear: redondear === '1' });
 
     const f1 = inicio.toISOString().slice(0, 10);
     const f2 = fin.toISOString().slice(0, 10);
