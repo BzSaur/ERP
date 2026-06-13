@@ -57,15 +57,20 @@ export async function encolarAltaEmpleado(emp, tipo = 'CREATE_USER') {
 }
 
 /**
- * Sincroniza TODOS los empleados activos hacia un checador específico (o todos
- * los activos si no se pasa ID). Útil para poblar un device recién dado de alta
- * o para empleados que ya existían antes del módulo ADMS.
+ * Sincronización DIFERENCIAL de empleados hacia un checador (o todos si no se
+ * pasa ID). Reconcilia el estado del device contra la BD:
  *
- * Evita duplicar: no encola si ya hay un CREATE_USER pendiente/enviado para ese
- * empleado en ese checador.
+ * - Empleado ACTIVO que no está (ni confirmado ni en cola) en el device
+ *   -> CREATE_USER (alta nueva).
+ * - Empleado dado de BAJA (inactivo) que SÍ está confirmado en el device y no
+ *   tiene ya un DELETE en cola/confirmado -> DELETE_USER (sale del checador;
+ *   su ID en BD NO se toca).
+ * - Empleado activo ya presente en el device -> se SALTA (no re-encola).
+ *
+ * Idempotente: correrlo dos veces seguidas no genera comandos nuevos.
  *
  * @param {number|null} idChecador - checador destino, o null = todos los activos
- * @returns {{encolados:number, checadores:number}}
+ * @returns {{encolados:number, eliminados:number, checadores:number}}
  */
 export async function sincronizarTodos(idChecador = null) {
   const destinos = idChecador
@@ -75,41 +80,72 @@ export async function sincronizarTodos(idChecador = null) {
       })
     : await checadoresDestino();
 
-  if (destinos.length === 0) return { encolados: 0, checadores: 0 };
+  if (destinos.length === 0) return { encolados: 0, eliminados: 0, checadores: 0 };
 
-  const empleados = await prisma.empleados.findMany({
+  const activos = await prisma.empleados.findMany({
     where: { ID_Estatus: 1 },
     select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
   });
+  const activosSet = new Set(activos.map(e => e.ID_Empleado));
 
   let encolados = 0;
+  let eliminados = 0;
+
   for (const d of destinos) {
-    // PINs ya en cola (pendiente/enviado) para no duplicar
-    const enCola = await prisma.checadores_Comandos.findMany({
+    // Todos los comandos de usuario de este device, para saber el estado de cada PIN
+    const comandos = await prisma.checadores_Comandos.findMany({
       where: {
         ID_Checador: d.ID_Checador,
-        Tipo_Comando: { in: ['CREATE_USER', 'UPDATE_USER'] },
-        Estatus: { in: ['pendiente', 'enviado'] }
+        Tipo_Comando: { in: ['CREATE_USER', 'UPDATE_USER', 'DELETE_USER'] }
       },
-      select: { ID_Empleado: true }
+      select: { ID_Empleado: true, Tipo_Comando: true, Estatus: true }
     });
-    const yaEncolados = new Set(enCola.map(c => c.ID_Empleado));
 
-    const nuevos = empleados.filter(e => !yaEncolados.has(e.ID_Empleado));
-    if (nuevos.length === 0) continue;
+    // PIN presente en device = tiene CREATE/UPDATE confirmado o en cola,
+    // y NO tiene un DELETE posterior confirmado/en cola.
+    const enDevice = new Set();   // PINs que el device ya conoce (alta vigente)
+    const conDeletePend = new Set(); // PINs con DELETE confirmado/en cola
+    for (const c of comandos) {
+      if (c.ID_Empleado == null) continue;
+      const vigente = ['pendiente', 'enviado', 'confirmado'].includes(c.Estatus);
+      if (!vigente) continue;
+      if (c.Tipo_Comando === 'DELETE_USER') conDeletePend.add(c.ID_Empleado);
+      else enDevice.add(c.ID_Empleado);
+    }
 
-    await prisma.checadores_Comandos.createMany({
-      data: nuevos.map(e => ({
-        ID_Checador: d.ID_Checador,
-        Tipo_Comando: 'CREATE_USER',
-        ID_Empleado: e.ID_Empleado,
-        Comando: `DATA UPDATE USERINFO PIN=${e.ID_Empleado}\tName=${nombreCompleto(e)}\tPri=0`
-      }))
-    });
-    encolados += nuevos.length;
+    // ALTAS: activos que el device no conoce (o tienen un DELETE previo y vuelven)
+    const aAltar = activos.filter(e =>
+      !enDevice.has(e.ID_Empleado) || conDeletePend.has(e.ID_Empleado)
+    );
+    if (aAltar.length > 0) {
+      await prisma.checadores_Comandos.createMany({
+        data: aAltar.map(e => ({
+          ID_Checador: d.ID_Checador,
+          Tipo_Comando: 'CREATE_USER',
+          ID_Empleado: e.ID_Empleado,
+          Comando: `DATA UPDATE USERINFO PIN=${e.ID_Empleado}\tName=${nombreCompleto(e)}\tPri=0`
+        }))
+      });
+      encolados += aAltar.length;
+    }
+
+    // BAJAS: PINs presentes en el device que ya NO son empleados activos
+    // y aún no tienen un DELETE en cola/confirmado.
+    const aBorrar = [...enDevice].filter(pin => !activosSet.has(pin) && !conDeletePend.has(pin));
+    if (aBorrar.length > 0) {
+      await prisma.checadores_Comandos.createMany({
+        data: aBorrar.map(pin => ({
+          ID_Checador: d.ID_Checador,
+          Tipo_Comando: 'DELETE_USER',
+          ID_Empleado: pin,
+          Comando: `DATA DELETE USERINFO PIN=${pin}`
+        }))
+      });
+      eliminados += aBorrar.length;
+    }
   }
 
-  return { encolados, checadores: destinos.length };
+  return { encolados, eliminados, checadores: destinos.length };
 }
 
 /** Encola DELETE_USER (baja) en todos los checadores activos. */

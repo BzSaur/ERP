@@ -309,11 +309,13 @@ export const logsJson = async (req, res, next) => {
 export const sincronizar = async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
-    const { encolados, checadores } = await sincronizarTodos(id);
+    const { encolados, eliminados, checadores } = await sincronizarTodos(id);
     if (checadores === 0) {
       req.flash('error', 'El checador no está activo/aprobado, no se sincronizó');
+    } else if (encolados === 0 && eliminados === 0) {
+      req.flash('success', 'Checador ya sincronizado. Sin cambios.');
     } else {
-      req.flash('success', `${encolados} empleado(s) encolados para sincronizar. El device los recogerá en su próximo polling.`);
+      req.flash('success', `Sincronización: ${encolados} alta(s), ${eliminados} baja(s) encoladas. El device las aplicará en su próximo polling.`);
     }
     res.redirect(`/checadores/${id}/diagnostico`);
   } catch (error) {
@@ -351,11 +353,13 @@ export const forzarSetTime = async (req, res, next) => {
 
 export const sincronizarGlobal = async (req, res, next) => {
   try {
-    const { encolados, checadores } = await sincronizarTodos(null);
+    const { encolados, eliminados, checadores } = await sincronizarTodos(null);
     if (checadores === 0) {
       req.flash('error', 'No hay checadores activos/aprobados');
+    } else if (encolados === 0 && eliminados === 0) {
+      req.flash('success', `Checadores ya sincronizados (${checadores}). Sin cambios.`);
     } else {
-      req.flash('success', `Sincronización global: ${encolados} empleado(s) encolados en ${checadores} checador(es).`);
+      req.flash('success', `Sincronización global en ${checadores} checador(es): ${encolados} alta(s), ${eliminados} baja(s).`);
     }
     res.redirect('/checadores');
   } catch (error) {
