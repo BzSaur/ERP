@@ -368,13 +368,25 @@ async function verificarDrift(checador, fechaHoraDevice) {
 // ============================================================
 
 /**
- * Construye la respuesta de getrequest: hasta `limite` comandos pendientes
- * (orden FIFO), marcándolos como 'enviado'. Devuelve string en formato ZK:
- *   C:<ID_Comando>:<Comando>\n
+ * Construye la respuesta de getrequest: hasta `limite` comandos para el device
+ * (orden FIFO), marcándolos 'enviado'. Devuelve string ZK: C:<ID>:<Comando>\n
+ *
+ * Incluye comandos 'pendiente' Y comandos 'enviado' que el device nunca confirmó
+ * (>2 min sin devicecmd) hasta maxIntentos — algunos firmwares procesan solo
+ * parte del lote y no reintentan solos, dejando comandos zombi en 'enviado'.
  */
 export async function obtenerComandosPendientes(checador, limite = 20) {
+  const maxIntentos = 5;
+  const reintentarAntesDe = new Date(Date.now() - 2 * 60 * 1000); // 2 min
+
   const comandos = await prisma.checadores_Comandos.findMany({
-    where: { ID_Checador: checador.ID_Checador, Estatus: 'pendiente' },
+    where: {
+      ID_Checador: checador.ID_Checador,
+      OR: [
+        { Estatus: 'pendiente' },
+        { Estatus: 'enviado', Intentos: { lt: maxIntentos }, Fecha_Enviado: { lt: reintentarAntesDe } }
+      ]
+    },
     orderBy: { Fecha_Creacion: 'asc' },
     take: limite
   });
@@ -384,7 +396,7 @@ export async function obtenerComandosPendientes(checador, limite = 20) {
   const ids = comandos.map(c => c.ID_Comando);
   await prisma.checadores_Comandos.updateMany({
     where: { ID_Comando: { in: ids } },
-    data: { Estatus: 'enviado', Fecha_Enviado: new Date() }
+    data: { Estatus: 'enviado', Fecha_Enviado: new Date(), Intentos: { increment: 1 } }
   });
 
   return comandos.map(c => `C:${c.ID_Comando}:${c.Comando}`).join('\n');
@@ -407,14 +419,22 @@ export async function confirmarComando(body) {
   const returnCode = parseInt(params.Return, 10);
   const exito = !isNaN(returnCode) && returnCode >= 0;
 
-  await prisma.checadores_Comandos.update({
+  const comando = await prisma.checadores_Comandos.update({
     where: { ID_Comando: idComando },
     data: {
       Estatus: exito ? 'confirmado' : 'fallido',
       Respuesta: body ? String(body).slice(0, 1000) : null,
       Intentos: { increment: 1 }
     }
-  }).catch(() => { /* comando inexistente: ignorar */ });
+  }).catch(() => null); // comando inexistente: ignorar
+
+  // SET_TIME confirmado => el device aplicó la hora; offset vuelve a 0.
+  if (comando && exito && comando.Tipo_Comando === 'SET_TIME') {
+    await prisma.checadores.update({
+      where: { ID_Checador: comando.ID_Checador },
+      data: { Offset_Tiempo_Min: 0 }
+    }).catch(() => {});
+  }
 
   return { ok: exito, idComando };
 }
