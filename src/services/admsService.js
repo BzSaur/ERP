@@ -355,13 +355,15 @@ async function verificarDrift(checador, fechaHoraDevice) {
   });
   if (yaPendiente) return;
 
-  const ahora = new Date();
-  const yyyy = ahora.getFullYear();
-  const mm = String(ahora.getMonth() + 1).padStart(2, '0');
-  const dd = String(ahora.getDate()).padStart(2, '0');
-  const hh = String(ahora.getHours()).padStart(2, '0');
-  const mi = String(ahora.getMinutes()).padStart(2, '0');
-  const ss = String(ahora.getSeconds()).padStart(2, '0');
+  // Hora local del device (TZ configurada, ej. UTC-6)
+  const tzOffsetHoras = parseInt(config.adms.timezone, 10); // -6
+  const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
+  const yyyy = ahora.getUTCFullYear();
+  const mm = String(ahora.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(ahora.getUTCDate()).padStart(2, '0');
+  const hh = String(ahora.getUTCHours()).padStart(2, '0');
+  const mi = String(ahora.getUTCMinutes()).padStart(2, '0');
+  const ss = String(ahora.getUTCSeconds()).padStart(2, '0');
 
   await prisma.checadores_Comandos.create({
     data: {

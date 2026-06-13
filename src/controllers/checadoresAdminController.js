@@ -320,6 +320,38 @@ export const sincronizar = async (req, res, next) => {
   }
 };
 
+export const forzarSetTime = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const checador = await prisma.checadores.findUnique({ where: { ID_Checador: id } });
+    if (!checador) return res.redirect('/checadores');
+
+    // Eliminar SET_TIME pendientes anteriores para forzar uno nuevo
+    await prisma.checadores_Comandos.deleteMany({
+      where: { ID_Checador: id, Tipo_Comando: 'SET_TIME', Estatus: { in: ['pendiente', 'enviado'] } }
+    });
+
+    const tzOffsetHoras = parseInt(process.env.ADMS_TIMEZONE || '-6', 10);
+    const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
+    const pad = n => String(n).padStart(2, '0');
+    const fechaStr = `${ahora.getUTCFullYear()}-${pad(ahora.getUTCMonth()+1)}-${pad(ahora.getUTCDate())}`;
+    const horaStr = `${pad(ahora.getUTCHours())}:${pad(ahora.getUTCMinutes())}:${pad(ahora.getUTCSeconds())}`;
+
+    await prisma.checadores_Comandos.create({
+      data: {
+        ID_Checador: id,
+        Tipo_Comando: 'SET_TIME',
+        Comando: `SET OPTIONS DateTime=${fechaStr} ${horaStr}`
+      }
+    });
+
+    req.flash('success', `SET_TIME encolado: ${fechaStr} ${horaStr} (UTC${tzOffsetHoras >= 0 ? '+' : ''}${tzOffsetHoras}). El device lo aplicará en su próximo polling.`);
+    res.redirect(`/checadores/${id}/diagnostico`);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const sincronizarGlobal = async (req, res, next) => {
   try {
     const { encolados, checadores } = await sincronizarTodos(null);
@@ -433,6 +465,6 @@ export const plantaUpdate = async (req, res, next) => {
 export default {
   index, crear, store, editar, update, destroy,
   pendientes, aprobar, rechazar,
-  diagnostico, logsJson, sincronizar, sincronizarGlobal, huerfanas, resolverHuerfana,
+  diagnostico, logsJson, sincronizar, sincronizarGlobal, forzarSetTime, huerfanas, resolverHuerfana,
   plantasIndex, plantaStore, plantaUpdate
 };
