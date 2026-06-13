@@ -10,6 +10,7 @@
 import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { sincronizarTodos } from '../services/checadorComandosService.js';
+import { horaLocalDevice } from '../utils/tiempo.js';
 
 // ============================================================
 // LISTADO
@@ -331,11 +332,7 @@ export const forzarSetTime = async (req, res, next) => {
       where: { ID_Checador: id, Tipo_Comando: 'SET_TIME', Estatus: { in: ['pendiente', 'enviado'] } }
     });
 
-    const tzOffsetHoras = parseInt(process.env.ADMS_TIMEZONE || '-6', 10);
-    const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
-    const pad = n => String(n).padStart(2, '0');
-    const fechaStr = `${ahora.getUTCFullYear()}-${pad(ahora.getUTCMonth()+1)}-${pad(ahora.getUTCDate())}`;
-    const horaStr = `${pad(ahora.getUTCHours())}:${pad(ahora.getUTCMinutes())}:${pad(ahora.getUTCSeconds())}`;
+    const { fecha: fechaStr, hora: horaStr } = horaLocalDevice();
 
     await prisma.checadores_Comandos.create({
       data: {
@@ -345,7 +342,7 @@ export const forzarSetTime = async (req, res, next) => {
       }
     });
 
-    req.flash('success', `SET_TIME encolado: ${fechaStr} ${horaStr} (UTC${tzOffsetHoras >= 0 ? '+' : ''}${tzOffsetHoras}). El device lo aplicará en su próximo polling.`);
+    req.flash('success', `SET_TIME encolado: ${fechaStr} ${horaStr} (hora México). El device lo aplicará en su próximo polling.`);
     res.redirect(`/checadores/${id}/diagnostico`);
   } catch (error) {
     next(error);

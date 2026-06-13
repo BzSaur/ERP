@@ -1,16 +1,7 @@
-/**
- * Controlador ADMS — endpoints /iclock/* del protocolo ZK PUSH.
- *
- * Reglas clave del protocolo:
- * - SIEMPRE responder texto plano. Los devices NO entienden JSON/HTML.
- * - Ante duda, responder "OK" para no romper el loop del device.
- * - El handshake (GET cdata?options) define cómo y cuándo el device sube datos.
- *   ⚠️ El template es CRÍTICO: si está mal, el device no envía checadas y NO da
- *   error visible. Verificar contra captura de red real (docs/adms-handshake-referencia.txt).
- */
 
 import config from '../config/env.js';
 import { logAdms } from '../middleware/admsAuth.js';
+import { horaLocalDevice } from '../utils/tiempo.js';
 import {
   procesarAttlog,
   obtenerComandosPendientes,
@@ -140,13 +131,7 @@ export async function rtdata(req, res) {
   const sn = req._admsSN;
   const type = req.query.type || '';
 
-  // Hora local del device (ajustada al TZ configurado)
-  const tzOffsetHoras = parseInt(config.adms.timezone, 10);
-  const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
-  const pad = n => String(n).padStart(2, '0');
-  const fecha = `${ahora.getUTCFullYear()}-${pad(ahora.getUTCMonth()+1)}-${pad(ahora.getUTCDate())}`;
-  const hora  = `${pad(ahora.getUTCHours())}:${pad(ahora.getUTCMinutes())}:${pad(ahora.getUTCSeconds())}`;
-
+  const { fecha, hora } = horaLocalDevice();
   const cuerpo = `TIME ${hora}\nDATE ${fecha}\n`;
   res.type('text/plain').send(cuerpo);
   logAdms({ sn, endpoint: `rtdata:${type}`, responseCode: 200, processingMs: Date.now() - inicio });

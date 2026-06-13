@@ -21,7 +21,7 @@
     "vita:restart": "docker compose restart",
     "vita:logs": "docker compose logs -f",
     "vita:logs:app": "docker logs -f erp_rh_app",
-    "vita:rebuild": "docker compose up -d --build --no-deps app",
+    "vita:rebuild": "docker compose up -d --build --force-recreate --no-deps app",
     "vita:deploy": "git pull origin main && npm run vita:rebuild",
     "vita:migrate": "docker exec erp_rh_app npx prisma migrate deploy",
     "vita:seed": "docker exec erp_rh_app node prisma/seed.js",

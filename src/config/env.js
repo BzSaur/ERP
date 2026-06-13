@@ -120,7 +120,8 @@ export const config = {
     timeDriftMaxMin: parseInt(process.env.ADMS_TIME_DRIFT_MAX_MIN || '5', 10),
     dedupWindowSec: parseInt(process.env.ADMS_DEDUP_WINDOW_SEC || '0', 10),
     pendientesMax: parseInt(process.env.ADMS_PENDIENTES_MAX || '10', 10),
-    timezone: process.env.ADMS_TIMEZONE || '-6'
+    timezone: process.env.ADMS_TIMEZONE || '-6',
+    tzName: process.env.ADMS_TZ_NAME || 'America/Mexico_City'
   },
 
   // Helpers

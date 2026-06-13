@@ -38,6 +38,7 @@ services:
       HOST: ${HOST:-0.0.0.0}
       NODE_ENV: ${NODE_ENV:-production}
       SESSION_SECRET: ${SESSION_SECRET:-change_me_in_production_min_32_chars}
+      TZ: ${TZ:-America/Mexico_City}
     ports:
       - "${PORT:-3001}:3001"
     depends_on:

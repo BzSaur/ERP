@@ -21,6 +21,7 @@
 import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
+import { horaLocalDevice } from '../utils/tiempo.js';
 import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
 
 // ============================================================
@@ -328,14 +329,11 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 // ============================================================
 
 async function verificarDrift(checador, fechaHoraDevice) {
-  // El device manda su hora LOCAL (TZ = ADMS_TIMEZONE, ej. -6). parsearTimestamp la
-  // construye con componentes locales; en un server en UTC eso equivale a tratarla
-  // como UTC, quedando "adelantada" |offset| horas respecto al instante real.
-  // Para comparar contra Date.now() (UTC real) llevamos la hora del device a UTC real:
-  //   instanteUTC = fechaHoraDevice - tzOffsetMin   (tz=-6 => resta -360 => suma 360min)
-  const tzOffsetMin = parseInt(config.adms.timezone, 10) * 60; // -6 -> -360
-  const instanteDeviceUTC = fechaHoraDevice.getTime() - tzOffsetMin * 60000;
-  const driftMin = Math.round((Date.now() - instanteDeviceUTC) / 60000);
+  // El device manda su hora LOCAL (TZ del device = America/Mexico_City).
+  // parsearTimestamp la construye con el constructor local del proceso; con el
+  // proceso en TZ Mexico (ver docker-compose TZ), fechaHoraDevice.getTime() ya
+  // es el instante UTC real. Comparar directo contra Date.now().
+  const driftMin = Math.round((Date.now() - fechaHoraDevice.getTime()) / 60000);
   if (Math.abs(driftMin) <= config.adms.timeDriftMaxMin) return;
 
   // Actualizar offset detectado
@@ -355,21 +353,12 @@ async function verificarDrift(checador, fechaHoraDevice) {
   });
   if (yaPendiente) return;
 
-  // Hora local del device (TZ configurada, ej. UTC-6)
-  const tzOffsetHoras = parseInt(config.adms.timezone, 10); // -6
-  const ahora = new Date(Date.now() + tzOffsetHoras * 3600000);
-  const yyyy = ahora.getUTCFullYear();
-  const mm = String(ahora.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(ahora.getUTCDate()).padStart(2, '0');
-  const hh = String(ahora.getUTCHours()).padStart(2, '0');
-  const mi = String(ahora.getUTCMinutes()).padStart(2, '0');
-  const ss = String(ahora.getUTCSeconds()).padStart(2, '0');
-
+  const { fecha, hora } = horaLocalDevice();
   await prisma.checadores_Comandos.create({
     data: {
       ID_Checador: checador.ID_Checador,
       Tipo_Comando: 'SET_TIME',
-      Comando: `SET OPTIONS DateTime=${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`
+      Comando: `SET OPTIONS DateTime=${fecha} ${hora}`
     }
   });
 }
