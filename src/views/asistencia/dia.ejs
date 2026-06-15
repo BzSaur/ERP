@@ -57,35 +57,49 @@
                 <i class="bi bi-person-x me-2"></i>Nadie con entrada activa en esta fecha.
             </div>
         <% } else { %>
-        <div class="row mb-4">
+        <!-- Desglose por planta > áreas (acordeón) -->
+        <div class="accordion shadow-sm mb-4" id="accPlantas">
             <% presencia.plantas.forEach((pl, i) => { %>
                 <% const accent = pl.id < 0 ? 'warning' : (i % 2 === 0 ? 'info' : 'secondary'); %>
-                <div class="col-md-6 col-xl-4 mb-3">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-header bg-<%= accent %> text-white py-2 d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-geo-alt-fill me-1"></i><%= pl.nombre %></span>
-                            <span class="badge bg-light text-dark"><%= pl.total %></span>
-                        </div>
-                        <div class="list-group list-group-flush" style="max-height: 320px; overflow-y:auto;">
-                            <% if (pl.presentes.length === 0) { %>
-                                <div class="list-group-item text-center text-body-secondary py-3">Nadie</div>
-                            <% } else { %>
-                                <% pl.presentes.forEach(p => { %>
-                                    <a href="/asistencia/empleado/<%= p.id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <div class="fw-semibold"><%= p.nombre %></div>
-                                            <small class="text-body-secondary"><%= p.puesto || p.area || '' %></small>
-                                        </div>
-                                        <div class="text-end">
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-box-arrow-in-right"></i>
-                                                <%= new Date(p.entrada).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'}) %>
-                                            </span>
-                                            <% if (p.retardo) { %><br><small class="text-danger">retardo</small><% } %>
-                                        </div>
-                                    </a>
-                                <% }); %>
-                            <% } %>
+                <% const pid = 'pl' + (pl.id < 0 ? 'X' : pl.id); %>
+                <div class="accordion-item border-0 mb-2">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button <%= i === 0 ? '' : 'collapsed' %> bg-<%= accent %> bg-opacity-10 fw-semibold"
+                                type="button" data-bs-toggle="collapse" data-bs-target="#c<%= pid %>"
+                                aria-expanded="<%= i === 0 ? 'true' : 'false' %>" aria-controls="c<%= pid %>">
+                            <i class="bi bi-geo-alt-fill me-2 text-<%= accent %>"></i>
+                            <span class="me-2"><%= pl.nombre %></span>
+                            <span class="badge bg-<%= accent %>"><%= pl.total %> dentro</span>
+                            <small class="text-body-secondary ms-2"><%= pl.areas.length %> área(s)</small>
+                        </button>
+                    </h2>
+                    <div id="c<%= pid %>" class="accordion-collapse collapse <%= i === 0 ? 'show' : '' %>" data-bs-parent="#accPlantas">
+                        <div class="accordion-body p-2">
+                            <% pl.areas.forEach(ar => { %>
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between align-items-center px-2 py-1 bg-body-secondary rounded-top">
+                                        <span class="fw-semibold"><i class="bi bi-diagram-3 me-1"></i><%= ar.nombre %></span>
+                                        <span class="badge bg-secondary"><%= ar.total %></span>
+                                    </div>
+                                    <div class="list-group list-group-flush border rounded-bottom">
+                                        <% ar.empleados.forEach(p => { %>
+                                            <a href="/asistencia/empleado/<%= p.id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
+                                                <div>
+                                                    <div class="fw-semibold"><%= p.nombre %></div>
+                                                    <small class="text-body-secondary"><%= p.puesto || '' %></small>
+                                                </div>
+                                                <div class="text-end">
+                                                    <span class="badge bg-success">
+                                                        <i class="bi bi-box-arrow-in-right"></i>
+                                                        <%= new Date(p.entrada).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'}) %>
+                                                    </span>
+                                                    <% if (p.retardo) { %><br><small class="text-danger">retardo</small><% } %>
+                                                </div>
+                                            </a>
+                                        <% }); %>
+                                    </div>
+                                </div>
+                            <% }); %>
                         </div>
                     </div>
                 </div>
@@ -96,7 +110,10 @@
         <!-- Tabla cronológica COMPLETA del día -->
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Todas las checadas del día</h5>
+                <div>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Todas las checadas del día</h5>
+                    <small class="text-body-secondary">Las marcadas <span class="badge bg-warning text-dark">doble</span> caen dentro de 1h de la anterior y se ignoran al calcular horas.</small>
+                </div>
                 <span class="badge bg-primary"><%= dia.total %> registros</span>
             </div>
             <div class="card-body p-0">
@@ -116,8 +133,13 @@
                         <tbody>
                             <% if (dia.checadas && dia.checadas.length > 0) { %>
                                 <% dia.checadas.forEach(c => { %>
-                                    <tr>
-                                        <td><strong><%= new Date(c.hora).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) %></strong></td>
+                                    <tr class="<%= c.ignoradaDoble ? 'table-warning text-muted' : '' %>">
+                                        <td>
+                                            <strong><%= new Date(c.hora).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) %></strong>
+                                            <% if (c.ignoradaDoble) { %>
+                                                <span class="badge bg-warning text-dark ms-1" title="Doble checada dentro de 1h — ignorada en el cálculo de horas">doble</span>
+                                            <% } %>
+                                        </td>
                                         <td>
                                             <% if (c.empleado) { %>
                                                 <a href="/asistencia/empleado/<%= c.empleado.id %>" class="text-decoration-none"><%= c.empleado.nombre %></a>

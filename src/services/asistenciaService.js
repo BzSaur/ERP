@@ -790,7 +790,17 @@ export async function obtenerPresenciaPorPlanta(fecha = null) {
   const resultado = [];
   for (const b of buckets.values()) {
     if (b.id === SIN_PLANTA && b.presentes.length === 0) continue;
-    resultado.push({ ...b, total: b.presentes.length });
+    // Agrupar los presentes de la planta por área (anidado para el acordeón)
+    const areaMap = new Map();
+    for (const p of b.presentes) {
+      const area = p.area || 'Sin área';
+      if (!areaMap.has(area)) areaMap.set(area, []);
+      areaMap.get(area).push(p);
+    }
+    const areas = Array.from(areaMap.entries())
+      .map(([nombre, empleados]) => ({ nombre, total: empleados.length, empleados }))
+      .sort((x, y) => y.total - x.total);
+    resultado.push({ ...b, total: b.presentes.length, areas });
   }
 
   return { fecha: fechaStr, plantas: resultado, totalPresentes };
@@ -829,6 +839,25 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
     }
   });
 
+  // Marcar dobles checadas (misma regla que el cálculo: por empleado, global,
+  // ventana 1h vs la última conservada). Se computa sobre TODAS las checadas
+  // del empleado, ANTES del filtro de planta, para que el flag sea coherente.
+  const VENTANA_MIN = 60;
+  const ultimaConservadaPorEmp = new Map(); // ID_Empleado -> minutos del día
+  const minutosDelDia = (d) => d.getHours() * 60 + d.getMinutes();
+  const dobles = new Set(); // ID_Checada ignoradas
+  for (const c of checadas) {
+    const empId = c.asistencia?.empleado?.ID_Empleado;
+    if (empId == null) continue;
+    const min = minutosDelDia(c.Fecha_Hora);
+    const ult = ultimaConservadaPorEmp.get(empId);
+    if (ult != null && min - ult < VENTANA_MIN) {
+      dobles.add(c.ID_Checada); // dentro de la ventana -> doble, ignorada
+    } else {
+      ultimaConservadaPorEmp.set(empId, min); // conservada -> reinicia ventana
+    }
+  }
+
   const filas = [];
   for (const c of checadas) {
     const idPlanta = c.checador?.ID_Planta ?? null;
@@ -842,6 +871,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
       dispositivo: c.checador?.Nombre || c.Dispositivo || null,
       planta: c.checador?.planta?.Nombre || c.Ubicacion || 'Sin planta',
       plantaId: idPlanta,
+      ignoradaDoble: dobles.has(c.ID_Checada),
       empleado: emp ? {
         id: emp.ID_Empleado,
         nombre: `${emp.Nombre} ${emp.Apellido_Paterno} ${emp.Apellido_Materno || ''}`.trim(),

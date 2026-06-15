@@ -508,15 +508,44 @@ export function calcularHorasDia(checadas, opciones = {}) {
  * @param {Array} checadas - [{hora, minuto, totalMinutos, horaStr}], se ordenan
  * @param {object} opciones - {comidaInicio, comidaFin, esSabado, esMixto}
  */
+/**
+ * Colapsa checadas duplicadas: si dos (o más) caen dentro de `ventanaMin`
+ * minutos, conserva solo la PRIMERA. La ventana se mide contra la última
+ * checada conservada (no contra la anterior cruda), así una racha de marcajes
+ * espaciados <1h no se borra entera; cada conservada reinicia la ventana.
+ *
+ * Ej (ventana 60): 08:00, 08:50, 09:30 -> 08:00, 09:30 (08:50 cae en la hora de 08:00).
+ *
+ * @param {Array} ordenadas - checadas YA ordenadas asc por totalMinutos
+ * @param {number} ventanaMin - tamaño de ventana en minutos (0 = sin dedup)
+ * @returns {Array} subconjunto conservado
+ */
+export function dedupChecadas(ordenadas, ventanaMin = 60) {
+  if (!ventanaMin || ordenadas.length < 2) return ordenadas;
+  const out = [ordenadas[0]];
+  let ultimaConservada = ordenadas[0].totalMinutos;
+  for (let i = 1; i < ordenadas.length; i++) {
+    if (ordenadas[i].totalMinutos - ultimaConservada >= ventanaMin) {
+      out.push(ordenadas[i]);
+      ultimaConservada = ordenadas[i].totalMinutos;
+    }
+    // dentro de la ventana -> doble checada, se descarta
+  }
+  return out;
+}
+
 export function calcularHorasPorPares(checadas, opciones = {}) {
   const {
     comidaInicio = COMIDA_INICIO_DEFAULT,
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
-    esMixto = false
+    esMixto = false,
+    ventanaDedupMin = 60
   } = opciones;
 
-  const orden = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
+  const ordenCrudo = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
+  // Colapsar dobles checadas (mismo empleado, <1h) antes de armar pares E/S.
+  const orden = dedupChecadas(ordenCrudo, ventanaDedupMin);
 
   if (orden.length === 0) {
     return { presente: false, entrada: null, salida: null, horasTrabajadas: 0,
@@ -1064,5 +1093,6 @@ export default {
   redondearEntrada,
   calcularHorasDia,
   calcularHorasPorPares,
+  dedupChecadas,
   minutosAHora
 };
