@@ -83,8 +83,11 @@ router.get('/horas', asistenciaController.horasTodos);
 router.get('/horas/excel', asistenciaController.descargarHorasExcel);
 router.get('/horas/:id', asistenciaController.desgloseHoras);
 
-// Reporte por ubicación (RAM1/RAM2)
+// Reporte por ubicación (dinámico por planta)
 router.get('/por-ubicacion', asistenciaController.reporteUbicacion);
+
+// Desglose completo del día (presencia en vivo + tabla cronológica)
+router.get('/dia', asistenciaController.desgloseDia);
 
 // Formulario para checada manual
 router.get('/checada-manual', asistenciaController.formChecadaManual);

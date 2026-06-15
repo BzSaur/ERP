@@ -12,6 +12,7 @@
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
+import { horaLocalDevice } from '../utils/tiempo.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -588,28 +589,91 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
 /**
  * Obtiene el reporte de asistencia por ubicación (RAM1/RAM2)
  */
+/**
+ * Normaliza un string de ubicación para comparar ("RAM 1" == "ram1" == "RAM1").
+ */
+function normalizarUbicacion(str) {
+  return (str || '').toString().trim().toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * Reporte por ubicación, dinámico desde Cat_Plantas.
+ *
+ * La planta de cada asistencia se resuelve, en orden de prioridad:
+ *   1. ID_Checador_Entrada/Salida -> planta del checador (autoritativo ADMS)
+ *   2. string Ubicacion_Entrada/Salida normalizado contra Cat_Plantas
+ *      (match por Ubicacion_Codigo o por Nombre)
+ * Lo que no haga match cae en un bucket "SIN_PLANTA" para que nada se pierda.
+ *
+ * @param {Object} p
+ * @param {Date} p.fechaInicio
+ * @param {Date} p.fechaFin
+ * @param {number|null} p.plantaId  Filtro opcional por ID_Planta
+ * @returns {Promise<{periodo:Object, plantas:Array}>}
+ */
 export async function obtenerReportePorUbicacion({
   fechaInicio,
   fechaFin,
-  ubicacion = null // null = ambas
+  plantaId = null
 }) {
-  const whereClause = {
-    Fecha: {
-      gte: fechaInicio,
-      lte: fechaFin
-    },
-    Presente: true
+  // Catálogo de plantas + checadores (para resolver FK y strings legacy)
+  const [plantas, checadores] = await Promise.all([
+    prisma.cat_Plantas.findMany({
+      where: { Activo: true },
+      orderBy: { ID_Planta: 'asc' }
+    }),
+    prisma.checadores.findMany({
+      select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true }
+    })
+  ]);
+
+  // Mapas de resolución
+  const checadorAPlanta = new Map(checadores.map(c => [c.ID_Checador, c.ID_Planta]));
+  const stringAPlanta = new Map(); // normalizado -> ID_Planta
+  for (const pl of plantas) {
+    stringAPlanta.set(normalizarUbicacion(pl.Nombre), pl.ID_Planta);
+  }
+  for (const c of checadores) {
+    if (c.Ubicacion_Codigo) stringAPlanta.set(normalizarUbicacion(c.Ubicacion_Codigo), c.ID_Planta);
+  }
+
+  // Buckets: uno por planta del catálogo + uno "sin planta" para huérfanos
+  const SIN_PLANTA = -1;
+  const buckets = new Map();
+  for (const pl of plantas) {
+    buckets.set(pl.ID_Planta, {
+      id: pl.ID_Planta,
+      nombre: pl.Nombre,
+      empleados: new Set(),
+      totalChecadas: 0,
+      detalle: []
+    });
+  }
+  buckets.set(SIN_PLANTA, {
+    id: SIN_PLANTA,
+    nombre: 'Sin planta asignada',
+    empleados: new Set(),
+    totalChecadas: 0,
+    detalle: []
+  });
+
+  const resolverPlanta = (asistencia) => {
+    // 1. FK del checador (entrada preferida)
+    const idChk = asistencia.ID_Checador_Entrada ?? asistencia.ID_Checador_Salida;
+    if (idChk != null && checadorAPlanta.has(idChk)) return checadorAPlanta.get(idChk);
+    // 2. string legacy normalizado
+    const str = normalizarUbicacion(asistencia.Ubicacion_Entrada || asistencia.Ubicacion_Salida);
+    if (str && stringAPlanta.has(str)) return stringAPlanta.get(str);
+    return SIN_PLANTA;
   };
 
   const asistencias = await prisma.empleados_Asistencia.findMany({
-    where: whereClause,
+    where: {
+      Fecha: { gte: fechaInicio, lte: fechaFin },
+      Presente: true
+    },
     include: {
-      empleado: {
-        include: {
-          puesto: true,
-          area: true
-        }
-      }
+      empleado: { include: { puesto: true, area: true } }
     },
     orderBy: [
       { Fecha: 'asc' },
@@ -617,59 +681,176 @@ export async function obtenerReportePorUbicacion({
     ]
   });
 
-  const porUbicacion = {
-    RAM1: {
-      empleados: new Set(),
-      totalChecadas: 0,
-      detalle: []
-    },
-    RAM2: {
-      empleados: new Set(),
-      totalChecadas: 0,
-      detalle: []
-    }
-  };
-
   for (const asistencia of asistencias) {
-    // Determinar ubicación (priorizar entrada, luego salida)
-    const ubi = asistencia.Ubicacion_Entrada || asistencia.Ubicacion_Salida;
-    
-    if (ubi && porUbicacion[ubi]) {
-      // Filtrar por ubicación si se especificó
-      if (ubicacion && ubi !== ubicacion) continue;
-      
-      porUbicacion[ubi].empleados.add(asistencia.ID_Empleado);
-      porUbicacion[ubi].totalChecadas++;
-      porUbicacion[ubi].detalle.push({
-        fecha: asistencia.Fecha,
-        empleado: {
-          id: asistencia.empleado.ID_Empleado,
-          nombre: `${asistencia.empleado.Nombre} ${asistencia.empleado.Apellido_Paterno}`,
-          puesto: asistencia.empleado.puesto?.Nombre_Puesto,
-          area: asistencia.empleado.area?.Nombre_Area
-        },
-        entrada: asistencia.Hora_Entrada,
-        salida: asistencia.Hora_Salida,
-        ubicacionEntrada: asistencia.Ubicacion_Entrada,
-        ubicacionSalida: asistencia.Ubicacion_Salida
-      });
-    }
+    const idPlanta = resolverPlanta(asistencia);
+    if (plantaId && idPlanta !== plantaId) continue;
+
+    const bucket = buckets.get(idPlanta);
+    bucket.empleados.add(asistencia.ID_Empleado);
+    bucket.totalChecadas++;
+    bucket.detalle.push({
+      fecha: asistencia.Fecha,
+      empleado: {
+        id: asistencia.empleado.ID_Empleado,
+        nombre: `${asistencia.empleado.Nombre} ${asistencia.empleado.Apellido_Paterno}`,
+        puesto: asistencia.empleado.puesto?.Nombre_Puesto,
+        area: asistencia.empleado.area?.Nombre_Area
+      },
+      entrada: asistencia.Hora_Entrada,
+      salida: asistencia.Hora_Salida,
+      ubicacionEntrada: asistencia.Ubicacion_Entrada,
+      ubicacionSalida: asistencia.Ubicacion_Salida,
+      multiPlanta: asistencia.Multi_Planta
+    });
   }
 
-  // Convertir Sets a conteo
+  // Salida: array de plantas. Omitir el bucket "sin planta" si quedó vacío
+  // para no ensuciar la vista cuando todo está bien mapeado.
+  const resultado = [];
+  for (const bucket of buckets.values()) {
+    if (bucket.id === SIN_PLANTA && bucket.totalChecadas === 0) continue;
+    if (plantaId && bucket.id !== plantaId) continue;
+    resultado.push({
+      id: bucket.id,
+      nombre: bucket.nombre,
+      totalEmpleados: bucket.empleados.size,
+      totalChecadas: bucket.totalChecadas,
+      detalle: bucket.detalle
+    });
+  }
+
   return {
     periodo: { fechaInicio, fechaFin },
-    RAM1: {
-      totalEmpleados: porUbicacion.RAM1.empleados.size,
-      totalChecadas: porUbicacion.RAM1.totalChecadas,
-      detalle: ubicacion === 'RAM2' ? [] : porUbicacion.RAM1.detalle
-    },
-    RAM2: {
-      totalEmpleados: porUbicacion.RAM2.empleados.size,
-      totalChecadas: porUbicacion.RAM2.totalChecadas,
-      detalle: ubicacion === 'RAM1' ? [] : porUbicacion.RAM2.detalle
-    }
+    plantas: resultado
   };
+}
+
+/**
+ * Presencia EN VIVO por planta para una fecha (default hoy en TZ México).
+ * "Presente ahora" = tiene entrada registrada y NO tiene salida ese día.
+ *
+ * @param {string|Date|null} fecha  YYYY-MM-DD o Date; null = hoy México
+ * @returns {Promise<{fecha:string, plantas:Array, totalPresentes:number}>}
+ */
+export async function obtenerPresenciaPorPlanta(fecha = null) {
+  const fechaStr = fecha
+    ? horaLocalDevice(new Date(`${fecha}T12:00:00`)).fecha
+    : horaLocalDevice().fecha;
+  // Bounds en hora local del proceso (TZ=America/Mexico_City en el contenedor),
+  // igual que admsService. Sin 'Z' para no desplazar -6h.
+  const inicio = new Date(`${fechaStr}T00:00:00`); inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(`${fechaStr}T00:00:00`); fin.setHours(23, 59, 59, 999);
+
+  const [plantas, checadores, asistencias] = await Promise.all([
+    prisma.cat_Plantas.findMany({ where: { Activo: true }, orderBy: { ID_Planta: 'asc' } }),
+    prisma.checadores.findMany({ select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true } }),
+    prisma.empleados_Asistencia.findMany({
+      where: { Fecha: { gte: inicio, lte: fin }, Presente: true, Hora_Entrada: { not: null } },
+      include: { empleado: { include: { puesto: true, area: true } } },
+      orderBy: { Hora_Entrada: 'asc' }
+    })
+  ]);
+
+  const checadorAPlanta = new Map(checadores.map(c => [c.ID_Checador, c.ID_Planta]));
+  const stringAPlanta = new Map();
+  for (const pl of plantas) stringAPlanta.set(normalizarUbicacion(pl.Nombre), pl.ID_Planta);
+  for (const c of checadores) {
+    if (c.Ubicacion_Codigo) stringAPlanta.set(normalizarUbicacion(c.Ubicacion_Codigo), c.ID_Planta);
+  }
+
+  const SIN_PLANTA = -1;
+  const buckets = new Map();
+  for (const pl of plantas) {
+    buckets.set(pl.ID_Planta, { id: pl.ID_Planta, nombre: pl.Nombre, presentes: [] });
+  }
+  buckets.set(SIN_PLANTA, { id: SIN_PLANTA, nombre: 'Sin planta asignada', presentes: [] });
+
+  let totalPresentes = 0;
+  for (const a of asistencias) {
+    // Sigue dentro si no ha marcado salida
+    if (a.Hora_Salida) continue;
+    // Planta actual = la de la entrada
+    const idChk = a.ID_Checador_Entrada ?? a.ID_Checador_Salida;
+    let idPlanta = (idChk != null && checadorAPlanta.has(idChk)) ? checadorAPlanta.get(idChk) : null;
+    if (idPlanta == null) {
+      const str = normalizarUbicacion(a.Ubicacion_Entrada || a.Ubicacion_Salida);
+      idPlanta = stringAPlanta.has(str) ? stringAPlanta.get(str) : SIN_PLANTA;
+    }
+    buckets.get(idPlanta).presentes.push({
+      id: a.empleado.ID_Empleado,
+      nombre: `${a.empleado.Nombre} ${a.empleado.Apellido_Paterno} ${a.empleado.Apellido_Materno || ''}`.trim(),
+      puesto: a.empleado.puesto?.Nombre_Puesto,
+      area: a.empleado.area?.Nombre_Area,
+      entrada: a.Hora_Entrada,
+      retardo: a.Retardo
+    });
+    totalPresentes++;
+  }
+
+  const resultado = [];
+  for (const b of buckets.values()) {
+    if (b.id === SIN_PLANTA && b.presentes.length === 0) continue;
+    resultado.push({ ...b, total: b.presentes.length });
+  }
+
+  return { fecha: fechaStr, plantas: resultado, totalPresentes };
+}
+
+/**
+ * Desglose cronológico COMPLETO de checadas de un día (todas, no limitado).
+ * Cada checada con su planta resuelta (checador FK -> string legacy).
+ *
+ * @param {string|Date|null} fecha  YYYY-MM-DD o Date; null = hoy México
+ * @param {number|null} plantaId    Filtro opcional por ID_Planta
+ * @returns {Promise<{fecha:string, checadas:Array, total:number}>}
+ */
+export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
+  const fechaStr = fecha
+    ? horaLocalDevice(new Date(`${fecha}T12:00:00`)).fecha
+    : horaLocalDevice().fecha;
+  const inicio = new Date(`${fechaStr}T00:00:00`); inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(`${fechaStr}T00:00:00`); fin.setHours(23, 59, 59, 999);
+
+  const checadas = await prisma.historial_Checadas.findMany({
+    where: { Fecha_Hora: { gte: inicio, lte: fin } },
+    orderBy: { Fecha_Hora: 'asc' },
+    include: {
+      checador: { select: { ID_Planta: true, Nombre: true, planta: { select: { Nombre: true } } } },
+      asistencia: {
+        include: {
+          empleado: {
+            select: {
+              ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
+              area: { select: { Nombre_Area: true } }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const filas = [];
+  for (const c of checadas) {
+    const idPlanta = c.checador?.ID_Planta ?? null;
+    if (plantaId && idPlanta !== plantaId) continue;
+    const emp = c.asistencia?.empleado;
+    filas.push({
+      hora: c.Fecha_Hora,
+      tipo: c.Tipo_Checada,
+      estado: c.Estado,
+      origen: c.Origen_Sincronizacion,
+      dispositivo: c.checador?.Nombre || c.Dispositivo || null,
+      planta: c.checador?.planta?.Nombre || c.Ubicacion || 'Sin planta',
+      plantaId: idPlanta,
+      empleado: emp ? {
+        id: emp.ID_Empleado,
+        nombre: `${emp.Nombre} ${emp.Apellido_Paterno} ${emp.Apellido_Materno || ''}`.trim(),
+        area: emp.area?.Nombre_Area
+      } : null
+    });
+  }
+
+  return { fecha: fechaStr, checadas: filas, total: filas.length };
 }
 
 /**
@@ -716,21 +897,29 @@ export async function obtenerResumenDiario(fecha = new Date()) {
   const conSalida = asistencias.filter(a => a.Hora_Salida);
   const conRetardo = asistencias.filter(a => a.Retardo);
 
+  // Conteo por ubicación dinámico (cualquier planta, no solo RAM1/RAM2)
+  const porUbicacionMap = new Map();
+  for (const a of presentes) {
+    const ubi = a.Ubicacion_Entrada || a.Ubicacion_Salida;
+    if (!ubi) continue;
+    porUbicacionMap.set(ubi, (porUbicacionMap.get(ubi) || 0) + 1);
+  }
+  const porUbicacion = Array.from(porUbicacionMap.entries())
+    .map(([nombre, total]) => ({ nombre, total }))
+    .sort((a, b) => b.total - a.total);
+
   return {
     fecha,
     totalEmpleadosActivos,
     totalPresentes: presentes.length,
     totalAusentes: totalEmpleadosActivos - presentes.length,
-    porcentajeAsistencia: totalEmpleadosActivos > 0 
-      ? Math.round((presentes.length / totalEmpleadosActivos) * 100) 
+    porcentajeAsistencia: totalEmpleadosActivos > 0
+      ? Math.round((presentes.length / totalEmpleadosActivos) * 100)
       : 0,
     conEntrada: conEntrada.length,
     conSalida: conSalida.length,
     conRetardo: conRetardo.length,
-    porUbicacion: {
-      RAM1: asistencias.filter(a => a.Ubicacion_Entrada === 'RAM1').length,
-      RAM2: asistencias.filter(a => a.Ubicacion_Entrada === 'RAM2').length
-    },
+    porUbicacion,
     detalle: asistencias.map(a => ({
       empleadoId: a.ID_Empleado,
       nombreCompleto: `${a.empleado.Nombre} ${a.empleado.Apellido_Paterno} ${a.empleado.Apellido_Materno || ''}`.trim(),
@@ -863,6 +1052,8 @@ export default {
   registrarChecada,
   obtenerResumenAsistencia,
   obtenerReportePorUbicacion,
+  obtenerPresenciaPorPlanta,
+  obtenerChecadasDelDia,
   obtenerResumenDiario,
   marcarFaltasAutomaticas,
   calcularHorasDesdeChecadas,

@@ -189,28 +189,70 @@ export const desgloseHoras = async (req, res, next) => {
 };
 
 /**
- * Reporte por ubicación (RAM1/RAM2)
+ * Reporte por ubicación (dinámico desde Cat_Plantas)
  */
 export const reporteUbicacion = async (req, res, next) => {
   try {
-    const { ubicacion, fechaInicio, fechaFin } = req.query;
-    
+    const { planta, fechaInicio, fechaFin } = req.query;
+    const plantaId = planta ? parseInt(planta) : null;
+
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
     const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
 
-    const reporte = await asistenciaService.obtenerReportePorUbicacion({
-      fechaInicio: inicio,
-      fechaFin: fin,
-      ubicacion: ubicacion || null
-    });
+    const [reporte, plantas] = await Promise.all([
+      asistenciaService.obtenerReportePorUbicacion({
+        fechaInicio: inicio,
+        fechaFin: fin,
+        plantaId
+      }),
+      prisma.cat_Plantas.findMany({
+        where: { Activo: true },
+        orderBy: { ID_Planta: 'asc' },
+        select: { ID_Planta: true, Nombre: true }
+      })
+    ]);
 
     res.render('asistencia/por-ubicacion', {
       title: 'Reporte por Ubicación',
       reporte,
-      ubicacionSeleccionada: ubicacion || 'TODAS',
+      plantas,
+      plantaSeleccionada: plantaId,
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: fin.toISOString().split('T')[0],
+      user: req.user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Desglose completo del día: presencia en vivo por planta + tabla cronológica.
+ * GET /asistencia/dia?fecha=YYYY-MM-DD&planta=ID
+ */
+export const desgloseDia = async (req, res, next) => {
+  try {
+    const { fecha, planta } = req.query;
+    const plantaId = planta ? parseInt(planta) : null;
+
+    const [presencia, dia, plantas] = await Promise.all([
+      asistenciaService.obtenerPresenciaPorPlanta(fecha || null),
+      asistenciaService.obtenerChecadasDelDia(fecha || null, plantaId),
+      prisma.cat_Plantas.findMany({
+        where: { Activo: true },
+        orderBy: { ID_Planta: 'asc' },
+        select: { ID_Planta: true, Nombre: true }
+      })
+    ]);
+
+    res.render('asistencia/dia', {
+      title: 'Desglose del Día',
+      presencia,
+      dia,
+      plantas,
+      plantaSeleccionada: plantaId,
+      fecha: dia.fecha,
       user: req.user
     });
   } catch (error) {
@@ -426,16 +468,16 @@ export const apiBonoPuntualidad = async (req, res) => {
  */
 export const apiReportePorUbicacion = async (req, res) => {
   try {
-    const { ubicacion, fechaInicio, fechaFin } = req.query;
-    
+    const { planta, fechaInicio, fechaFin } = req.query;
+
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
     const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
-    
+
     const reporte = await asistenciaService.obtenerReportePorUbicacion({
       fechaInicio: inicio,
       fechaFin: fin,
-      ubicacion: ubicacion || null
+      plantaId: planta ? parseInt(planta) : null
     });
     
     res.json({
@@ -533,6 +575,7 @@ export default {
   index,
   reporteEmpleado,
   reporteUbicacion,
+  desgloseDia,
   formChecadaManual,
   registrarChecadaManual,
   

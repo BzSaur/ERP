@@ -7,11 +7,16 @@
                         <li class="breadcrumb-item active">Reporte por Ubicación</li>
                     </ol>
                 </nav>
-                <h1 class="h3 mb-0">Reporte por Ubicación (RAM1/RAM2)</h1>
+                <h1 class="h3 mb-0">Reporte por Ubicación</h1>
             </div>
-            <a href="/asistencia" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Volver
-            </a>
+            <div class="d-flex gap-2">
+                <a href="/asistencia/dia" class="btn btn-outline-primary">
+                    <i class="bi bi-calendar-day me-2"></i>Desglose del Día
+                </a>
+                <a href="/asistencia" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Volver
+                </a>
+            </div>
         </div>
 
         <!-- Filtros -->
@@ -19,21 +24,24 @@
             <div class="card-body">
                 <form method="GET" action="/asistencia/por-ubicacion" class="row g-3">
                     <div class="col-6 col-md-3">
-                        <label for="ubicacion" class="form-label">Ubicación</label>
-                        <select class="form-select" id="ubicacion" name="ubicacion">
-                            <option value="" <%= ubicacionSeleccionada === 'TODAS' ? 'selected' : '' %>>Todas</option>
-                            <option value="RAM1" <%= ubicacionSeleccionada === 'RAM1' ? 'selected' : '' %>>RAM1</option>
-                            <option value="RAM2" <%= ubicacionSeleccionada === 'RAM2' ? 'selected' : '' %>>RAM2</option>
+                        <label for="planta" class="form-label">Planta</label>
+                        <select class="form-select" id="planta" name="planta">
+                            <option value="" <%= plantaSeleccionada == null ? 'selected' : '' %>>Todas</option>
+                            <% plantas.forEach(pl => { %>
+                                <option value="<%= pl.ID_Planta %>" <%= plantaSeleccionada === pl.ID_Planta ? 'selected' : '' %>>
+                                    <%= pl.Nombre %>
+                                </option>
+                            <% }); %>
                         </select>
                     </div>
                     <div class="col-6 col-md-3">
                         <label for="fechaInicio" class="form-label">Fecha Inicio</label>
-                        <input type="date" class="form-control" id="fechaInicio" name="fechaInicio" 
+                        <input type="date" class="form-control" id="fechaInicio" name="fechaInicio"
                                value="<%= fechaInicio %>">
                     </div>
                     <div class="col-6 col-md-3">
                         <label for="fechaFin" class="form-label">Fecha Fin</label>
-                        <input type="date" class="form-control" id="fechaFin" name="fechaFin" 
+                        <input type="date" class="form-control" id="fechaFin" name="fechaFin"
                                value="<%= fechaFin %>">
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
@@ -45,173 +53,108 @@
             </div>
         </div>
 
-        <!-- Resumen por ubicación -->
+        <% if (!reporte.plantas || reporte.plantas.length === 0) { %>
+            <div class="alert alert-info border-0 shadow-sm">
+                <i class="bi bi-info-circle me-2"></i>
+                No hay registros de asistencia en este período. Verifica el rango de fechas o que existan plantas activas en el catálogo.
+            </div>
+        <% } else { %>
+
+        <!-- Tarjetas resumen por planta -->
         <div class="row mb-4">
-            <div class="col-md-6 mb-3">
-                <div class="card border-0 shadow-sm h-100 border-start border-info border-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="text-info mb-1">RAM1</h5>
-                                <h2 class="mb-0"><%= reporte.RAM1.totalEmpleados %></h2>
-                                <small class="text-body-secondary">Empleados únicos</small>
-                            </div>
-                            <div class="text-end">
-                                <p class="mb-0">
-                                    <span class="badge bg-info fs-6"><%= reporte.RAM1.totalChecadas %></span>
-                                </p>
-                                <small class="text-body-secondary">Total checadas</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 mb-3">
-                <div class="card border-0 shadow-sm h-100 border-start border-secondary border-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="text-secondary mb-1">RAM2</h5>
-                                <h2 class="mb-0"><%= reporte.RAM2.totalEmpleados %></h2>
-                                <small class="text-body-secondary">Empleados únicos</small>
-                            </div>
-                            <div class="text-end">
-                                <p class="mb-0">
-                                    <span class="badge bg-secondary fs-6"><%= reporte.RAM2.totalChecadas %></span>
-                                </p>
-                                <small class="text-body-secondary">Total checadas</small>
+            <% reporte.plantas.forEach((pl, i) => { %>
+                <% const accent = pl.id < 0 ? 'warning' : (i % 2 === 0 ? 'info' : 'secondary'); %>
+                <div class="col-md-6 col-xl-4 mb-3">
+                    <div class="card border-0 shadow-sm h-100 border-start border-<%= accent %> border-4">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="text-<%= accent %> mb-1">
+                                        <i class="bi bi-geo-alt-fill me-1"></i><%= pl.nombre %>
+                                    </h5>
+                                    <h2 class="mb-0"><%= pl.totalEmpleados %></h2>
+                                    <small class="text-body-secondary">Empleados únicos</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-<%= accent %> fs-6"><%= pl.totalChecadas %></span>
+                                    <div><small class="text-body-secondary">Registros</small></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            <% }); %>
         </div>
 
-        <!-- Tablas de detalle -->
+        <!-- Tablas de detalle por planta -->
         <div class="row">
-            <% if (ubicacionSeleccionada !== 'RAM2') { %>
-            <!-- RAM1 -->
-            <div class="<%= ubicacionSeleccionada === 'RAM1' ? 'col-12' : 'col-md-6' %> mb-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-info text-white py-3">
-                        <h5 class="mb-0">
-                            <i class="bi bi-geo-alt-fill me-2"></i>RAM1
-                        </h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 500px;">
-                            <table class="table table-hover table-sm mb-0">
-                                <thead class="table-light sticky-top">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Empleado</th>
-                                        <th>Área</th>
-                                        <th>Entrada</th>
-                                        <th>Salida</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% if (reporte.RAM1.detalle && reporte.RAM1.detalle.length > 0) { %>
-                                        <% reporte.RAM1.detalle.forEach(reg => { %>
+            <% reporte.plantas.forEach((pl, i) => { %>
+                <% const accent = pl.id < 0 ? 'warning' : (i % 2 === 0 ? 'info' : 'secondary'); %>
+                <% const ancho = reporte.plantas.length === 1 ? 'col-12' : 'col-xl-6'; %>
+                <div class="<%= ancho %> mb-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-<%= accent %> text-white py-3">
+                            <h5 class="mb-0">
+                                <i class="bi bi-geo-alt-fill me-2"></i><%= pl.nombre %>
+                                <span class="badge bg-light text-dark ms-2"><%= pl.detalle.length %></span>
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 500px;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Empleado</th>
+                                            <th>Área</th>
+                                            <th>Entrada</th>
+                                            <th>Salida</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (pl.detalle && pl.detalle.length > 0) { %>
+                                            <% pl.detalle.forEach(reg => { %>
+                                                <tr>
+                                                    <td><%= new Date(reg.fecha).toLocaleDateString('es-MX') %></td>
+                                                    <td>
+                                                        <a href="/asistencia/empleado/<%= reg.empleado.id %>">
+                                                            <%= reg.empleado.nombre %>
+                                                        </a>
+                                                        <% if (reg.multiPlanta) { %>
+                                                            <span class="badge bg-warning text-dark ms-1" title="Entrada y salida en plantas distintas">multi</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td><small><%= reg.empleado.area || '-' %></small></td>
+                                                    <td>
+                                                        <% if (reg.entrada) { %>
+                                                            <%= new Date(reg.entrada).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
+                                                        <% } else { %>
+                                                            <span class="text-body-secondary">-</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td>
+                                                        <% if (reg.salida) { %>
+                                                            <%= new Date(reg.salida).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
+                                                        <% } else { %>
+                                                            <span class="text-body-secondary">-</span>
+                                                        <% } %>
+                                                    </td>
+                                                </tr>
+                                            <% }); %>
+                                        <% } else { %>
                                             <tr>
-                                                <td><%= new Date(reg.fecha).toLocaleDateString('es-MX') %></td>
-                                                <td>
-                                                    <a href="/asistencia/empleado/<%= reg.empleado.id %>">
-                                                        <%= reg.empleado.nombre %>
-                                                    </a>
-                                                </td>
-                                                <td><small><%= reg.empleado.area || '-' %></small></td>
-                                                <td>
-                                                    <% if (reg.entrada) { %>
-                                                        <%= new Date(reg.entrada).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
-                                                    <% } else { %>
-                                                        <span class="text-body-secondary">-</span>
-                                                    <% } %>
-                                                </td>
-                                                <td>
-                                                    <% if (reg.salida) { %>
-                                                        <%= new Date(reg.salida).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
-                                                    <% } else { %>
-                                                        <span class="text-body-secondary">-</span>
-                                                    <% } %>
+                                                <td colspan="5" class="text-center py-4 text-body-secondary">
+                                                    Sin registros en este período
                                                 </td>
                                             </tr>
-                                        <% }); %>
-                                    <% } else { %>
-                                        <tr>
-                                            <td colspan="5" class="text-center py-4 text-body-secondary">
-                                                Sin registros en este período
-                                            </td>
-                                        </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <% } %>
-
-            <% if (ubicacionSeleccionada !== 'RAM1') { %>
-            <!-- RAM2 -->
-            <div class="<%= ubicacionSeleccionada === 'RAM2' ? 'col-12' : 'col-md-6' %> mb-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-secondary text-white py-3">
-                        <h5 class="mb-0">
-                            <i class="bi bi-geo-alt-fill me-2"></i>RAM2
-                        </h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" style="max-height: 500px;">
-                            <table class="table table-hover table-sm mb-0">
-                                <thead class="table-light sticky-top">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Empleado</th>
-                                        <th>Área</th>
-                                        <th>Entrada</th>
-                                        <th>Salida</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% if (reporte.RAM2.detalle && reporte.RAM2.detalle.length > 0) { %>
-                                        <% reporte.RAM2.detalle.forEach(reg => { %>
-                                            <tr>
-                                                <td><%= new Date(reg.fecha).toLocaleDateString('es-MX') %></td>
-                                                <td>
-                                                    <a href="/asistencia/empleado/<%= reg.empleado.id %>">
-                                                        <%= reg.empleado.nombre %>
-                                                    </a>
-                                                </td>
-                                                <td><small><%= reg.empleado.area || '-' %></small></td>
-                                                <td>
-                                                    <% if (reg.entrada) { %>
-                                                        <%= new Date(reg.entrada).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
-                                                    <% } else { %>
-                                                        <span class="text-body-secondary">-</span>
-                                                    <% } %>
-                                                </td>
-                                                <td>
-                                                    <% if (reg.salida) { %>
-                                                        <%= new Date(reg.salida).toLocaleTimeString('es-MX', {hour: '2-digit', minute: '2-digit'}) %>
-                                                    <% } else { %>
-                                                        <span class="text-body-secondary">-</span>
-                                                    <% } %>
-                                                </td>
-                                            </tr>
-                                        <% }); %>
-                                    <% } else { %>
-                                        <tr>
-                                            <td colspan="5" class="text-center py-4 text-body-secondary">
-                                                Sin registros en este período
-                                            </td>
-                                        </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <% } %>
+            <% }); %>
         </div>
+
+        <% } %>
