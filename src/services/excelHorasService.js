@@ -52,8 +52,13 @@ function redondearEntradaExcel(hhmm) {
 function redondearSalidaExcel(hhmm) {
   if (!hhmm) return hhmm;
   const [h, m] = hhmm.split(':').map(Number);
-  return String(m <= 5 ? h : h + 1).padStart(2, '0') + ':00';
+  // Baja a la hora si m<=55; sube solo en los últimos 4 min (m>=56).
+  // Ej: 8:54->8:00, 8:56->9:00, 18:30->18:00.
+  return String(m <= 55 ? h : h + 1).padStart(2, '0') + ':00';
 }
+
+// Límite semanal fijo de horas normales; el excedente es extra.
+const LIMITE_SEMANAL_HORAS = 45;
 function horasEntreRedondeadas(ent, sal) {
   const [he, me] = ent.split(':').map(Number);
   const [hs, ms] = sal.split(':').map(Number);
@@ -118,8 +123,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     head1.push(`${NOMBRES_DIA[d.getDay()]} ${fmtFechaCorta(d)}`, '', '');
     head2.push('Entrada', 'Salida', 'Horas');
   }
-  head1.push('Total hrs');
-  head2.push('');
+  head1.push('Total hrs', 'Normal', 'Extra');
+  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h)`, `(>${LIMITE_SEMANAL_HORAS}h)`);
   aoa.push(head1);
   aoa.push(head2);
 
@@ -157,7 +162,10 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     }
 
     const total = Math.round(totalHoras * 100) / 100;
-    fila.push(total);
+    // Split semanal: extra = excedente sobre 45h (incluye sábado en el total).
+    const extra = Math.max(0, Math.round((total - LIMITE_SEMANAL_HORAS) * 100) / 100);
+    const normal = Math.round((total - extra) * 100) / 100;
+    fila.push(total, normal, extra);
     return { fila, id: e.ID_Empleado, nombre, total };
   });
 
@@ -178,7 +186,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const cols = [{ wch: 6 }, { wch: 28 }, { wch: 16 }];
   for (let i = 0; i < dias.length; i++) cols.push({ wch: 14 }, { wch: 14 }, { wch: 7 });
-  cols.push({ wch: 9 });
+  cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 });
   ws['!cols'] = cols;
 
   // Merge del título sobre las primeras columnas

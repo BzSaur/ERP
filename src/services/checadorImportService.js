@@ -360,7 +360,8 @@ export function calcularHorasDia(checadas, opciones = {}) {
     comidaInicio = COMIDA_INICIO_DEFAULT,
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
-    esMixto = false
+    esMixto = false,
+    minutoCierre = HORA_SALIDA_ESTANDAR
   } = opciones;
 
   // Sin checadas = ausente
@@ -384,18 +385,32 @@ export function calcularHorasDia(checadas, opciones = {}) {
     };
   }
 
-  // Solo una checada = cerrar a 18:00 al final del día
+  // Solo una checada = jornada abierta. Cerrar al minuto de cierre:
+  //  - día pasado: 18:00 (estimación de jornada completa)
+  //  - día en curso: hora actual (no estima, solo lo trabajado hasta ahora)
   if (checadas.length === 1) {
     const entrada = checadas[0];
-    const entradaPagoMin = redondearEntrada(entrada.totalMinutos);
-    const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
-    // Sintetizar salida a 18:00 para calcular horas
-    const salidaSintetica = { horaStr: '18:00', hora: 18, minuto: 0, totalMinutos: HORA_SALIDA_ESTANDAR };
+    const enCurso = minutoCierre < HORA_SALIDA_ESTANDAR;
+    // En curso y aún no pasa de la entrada -> 0h, presente pero sin horas
+    if (enCurso && minutoCierre <= entrada.totalMinutos) {
+      return {
+        presente: true, entrada: entrada.horaStr, entradaPago: minutosAHora(redondearEntrada(entrada.totalMinutos)),
+        salida: null, horasTrabajadas: 0, horasNormales: 0, horasExtras: 0, horasTrabajadasBruto: 0,
+        minutosComidaDescontados: 0,
+        minutosRetardo: Math.max(0, redondearEntrada(entrada.totalMinutos) - HORA_ENTRADA_ESTANDAR),
+        retardo: !esMixto && redondearEntrada(entrada.totalMinutos) > HORA_ENTRADA_ESTANDAR,
+        jornadaCompleta: false, incompleta: true, enCurso: true, esSabado,
+        notas: 'En curso (sin salida)'
+      };
+    }
+    const cierreMin = enCurso ? minutoCierre : HORA_SALIDA_ESTANDAR;
+    const salidaSintetica = { horaStr: minutosAHora(cierreMin), hora: Math.floor(cierreMin/60), minuto: cierreMin%60, totalMinutos: cierreMin };
     return {
-      ...calcularHorasDia([entrada, salidaSintetica], opciones),
+      ...calcularHorasDia([entrada, salidaSintetica], { ...opciones, minutoCierre: HORA_SALIDA_ESTANDAR }),
       salida: null,
       incompleta: true,
-      notas: 'Falta salida · horas estimadas al cierre de jornada (18:00)'
+      enCurso,
+      notas: enCurso ? 'En curso (sin salida)' : 'Falta salida · horas estimadas al cierre de jornada (18:00)'
     };
   }
 
@@ -540,7 +555,11 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
     esMixto = false,
-    ventanaDedupMin = 60
+    ventanaDedupMin = 60,
+    // Minuto al que se cierra una jornada SIN salida. Default 18:00 (día cerrado).
+    // Para un día EN CURSO se pasa la hora actual: no estima hasta el cierre,
+    // solo cuenta lo trabajado hasta ahora. Marca enCurso=true.
+    minutoCierre = HORA_SALIDA_ESTANDAR
   } = opciones;
 
   const ordenCrudo = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
@@ -550,7 +569,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   if (orden.length === 0) {
     return { presente: false, entrada: null, salida: null, horasTrabajadas: 0,
       horasNormales: 0, horasExtras: 0, minutosComidaDescontados: 0, minutosRetardo: 0,
-      retardo: false, jornadaCompleta: false, incompleta: false, esSabado,
+      retardo: false, jornadaCompleta: false, incompleta: false, enCurso: false, esSabado,
       totalChecadas: 0, pares: [], notas: 'Sin checada' };
   }
 
@@ -558,6 +577,9 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   if (orden.length === 1) {
     return calcularHorasDia(orden, opciones);
   }
+
+  const enCurso = minutoCierre < HORA_SALIDA_ESTANDAR; // se pasó una hora de corte previa a 18:00
+  const cierre = { horaStr: minutosAHora(minutoCierre), hora: Math.floor(minutoCierre / 60), minuto: minutoCierre % 60, totalMinutos: minutoCierre };
 
   const entradaPagoMin = redondearEntrada(orden[0].totalMinutos);
   let minutosNormales = 0;
@@ -568,8 +590,8 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
 
   for (let i = 0; i < orden.length; i += 2) {
     const ent = orden[i];
-    // Sin par de salida: cerrar a 18:00
-    const sal = orden[i + 1] ?? { horaStr: '18:00', hora: 18, minuto: 0, totalMinutos: HORA_SALIDA_ESTANDAR };
+    // Sin par de salida: cerrar al minuto de cierre (18:00 día pasado, o ahora si en curso)
+    const sal = orden[i + 1] ?? cierre;
     if (!orden[i + 1]) incompleta = true;
 
     // El primer par usa la entrada redondeada (pago); los demás, la real
@@ -606,10 +628,16 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
   const retardo = !esMixto && minutosRetardo > 0;
 
+  // Nota de jornada abierta: en curso (no estima) vs día cerrado (estimó 18:00)
+  const notaIncompleta = incompleta
+    ? (enCurso ? ' · en curso (sin salida)' : ' · falta salida (estimado 18:00)')
+    : '';
+
   return {
     presente: true,
     entrada: orden[0].horaStr,
-    salida: orden[orden.length - 1].horaStr,
+    // Si la jornada quedó abierta, no inventamos hora de salida
+    salida: incompleta ? null : orden[orden.length - 1].horaStr,
     horasTrabajadas,
     horasNormales,
     horasExtras,
@@ -618,10 +646,11 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     retardo,
     jornadaCompleta: horasNormales >= JORNADA_COMPLETA_HORAS,
     incompleta,
+    enCurso,
     esSabado,
     totalChecadas: orden.length,
     pares,
-    notas: `${pares.length} periodo(s)${incompleta ? ' · falta salida (estimado 18:00)' : ''}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
+    notas: `${pares.length} periodo(s)${notaIncompleta}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
   };
 }
 

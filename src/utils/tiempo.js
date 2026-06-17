@@ -28,4 +28,34 @@ export function horaLocalDevice(date = new Date()) {
   return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${hh}:${p.minute}:${p.second}` };
 }
 
-export default { horaLocalDevice };
+/**
+ * ¿La fecha dada corresponde al día EN CURSO (hoy) en la zona del checador?
+ * Compara solo la parte YYYY-MM-DD, así no importa la hora ni el TZ del proceso.
+ * @param {Date|string} fecha  Date o 'YYYY-MM-DD'
+ * @returns {boolean}
+ */
+export function esDiaEnCurso(fecha) {
+  const hoy = horaLocalDevice().fecha;
+  let f;
+  if (typeof fecha === 'string') {
+    f = fecha.slice(0, 10);
+  } else {
+    // Mediodía evita que el shift de TZ caiga al día anterior/siguiente
+    const d = new Date(fecha);
+    f = horaLocalDevice(new Date(`${d.toISOString().slice(0,10)}T12:00:00`)).fecha;
+  }
+  return f === hoy;
+}
+
+/**
+ * Minutos transcurridos del día actual en la zona del checador (0..1439).
+ * Sirve como "hora de corte" para jornadas aún abiertas (sin salida).
+ * @returns {number}
+ */
+export function minutosDelDiaAhora() {
+  const { hora } = horaLocalDevice();
+  const [h, m] = hora.split(':').map(Number);
+  return h * 60 + m;
+}
+
+export default { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora };

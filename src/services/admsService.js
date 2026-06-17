@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -273,11 +273,20 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 
   if (checadas.length === 0) return;
 
-  const primera = checadas[0];
-  const ultima = checadas[checadas.length - 1];
+  // Colapsar dobles checadas (<1h, conserva la primera) ANTES de elegir
+  // entrada/salida y calcular horas. Evita que un doble marcaje (ej. 07:35 y
+  // 07:36) quede como entrada+salida de 1 min.
+  const enriquecidas = checadas.map(c => ({
+    totalMinutos: c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes(),
+    c
+  }));
+  const conservadas = dedupChecadas(enriquecidas, 60).map(x => x.c);
 
-  // Construir input para calcularHorasDia (espera {hora, minuto, totalMinutos, horaStr})
-  const checadasCalc = checadas.map(c => {
+  const primera = conservadas[0];
+  const ultima = conservadas[conservadas.length - 1];
+
+  // Construir input para calcularHorasPorPares (espera {hora, minuto, totalMinutos, horaStr})
+  const checadasCalc = conservadas.map(c => {
     const h = c.Fecha_Hora.getHours();
     const m = c.Fecha_Hora.getMinutes();
     return { hora: h, minuto: m, totalMinutos: h * 60 + m, horaStr: minutosAHora(h * 60 + m) };
@@ -285,7 +294,8 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 
   const esSabado = fechaDia.getDay() === 6;
   // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
-  const calc = calcularHorasPorPares(checadasCalc, { esSabado });
+  // ventanaDedupMin 0 porque ya deduplicamos arriba.
+  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0 });
 
   // Ubicaciones (String legacy) y plantas
   const ubicEntrada = primera.checador?.Ubicacion_Codigo || primera.checador?.planta?.Nombre || primera.Ubicacion;
@@ -294,8 +304,8 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
   const plantaSalida  = ultima.checador?.ID_Planta ?? null;
   const multiPlanta = plantaEntrada !== null && plantaSalida !== null && plantaEntrada !== plantaSalida;
 
-  const horaEntrada = checadas.length >= 1 ? primera.Fecha_Hora : null;
-  const horaSalida  = checadas.length >= 2 ? ultima.Fecha_Hora : null;
+  const horaEntrada = conservadas.length >= 1 ? primera.Fecha_Hora : null;
+  const horaSalida  = conservadas.length >= 2 ? ultima.Fecha_Hora : null;
 
   await tx.empleados_Asistencia.update({
     where: { ID_Asistencia: idAsistencia },
@@ -319,7 +329,7 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 
   // Marcar tipos de checada (entrada/salida) en historial para coherencia con vistas
   await tx.historial_Checadas.update({ where: { ID_Checada: primera.ID_Checada }, data: { Tipo_Checada: 'ENTRADA' } });
-  if (checadas.length >= 2) {
+  if (conservadas.length >= 2) {
     await tx.historial_Checadas.update({ where: { ID_Checada: ultima.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
   }
 }

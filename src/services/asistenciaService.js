@@ -12,7 +12,7 @@
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora } from './checadorImportService.js';
-import { horaLocalDevice } from '../utils/tiempo.js';
+import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora } from '../utils/tiempo.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -22,6 +22,11 @@ const UBICACIONES = {
   RAM1: 'RAM1',
   RAM2: 'RAM2'
 };
+
+// Límite de horas normales por semana (fijo para todos). Lo que exceda este
+// total semanal (sumando L-S, incluido sábado) se paga como extra. No hay
+// extra por día (post-18:00) — el extra es puramente el excedente semanal.
+const LIMITE_SEMANAL_HORAS = 45;
 
 // ============================================================
 // REGISTRO DE ASISTENCIA
@@ -234,7 +239,9 @@ export function calcularHorasDesdeChecadas(checadasHistorial, fecha) {
     .sort((a, b) => a.totalMinutos - b.totalMinutos);
 
   const esSabado = new Date(fecha).getDay() === 6;
-  return calcularHorasPorPares(checadas, { esSabado });
+  // Día en curso: no estimar salida a 18:00; cerrar a la hora actual (México).
+  const minutoCierre = esDiaEnCurso(fecha) ? minutosDelDiaAhora() : undefined;
+  return calcularHorasPorPares(checadas, { esSabado, ...(minutoCierre != null ? { minutoCierre } : {}) });
 }
 
 /**
@@ -354,7 +361,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
 
   const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const dias = [];
-  let totalHoras = 0, totalNormales = 0, totalExtras = 0;
+  let totalHoras = 0;
   let diasTrabajados = 0, diasRetardo = 0, diasMultiPlanta = 0;
   let minutosRetardoTotal = 0;
   const horasPorPlanta = new Map(); // planta -> horas
@@ -367,13 +374,10 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Preferir horas recalculadas desde checadas (cubre registros con 0h guardados)
     const horasBD = Number(a.Horas_Trabajadas) || 0;
     const horas = (checadas.length > 0 && calc.horasTrabajadas > 0) ? calc.horasTrabajadas : horasBD;
-    const extras = (checadas.length > 0 && calc.horasExtras != null) ? (calc.horasExtras || 0) : (Number(a.Horas_Extras) || 0);
     if (a.Presente && horas > 0) diasTrabajados++;
     if (a.Retardo) { diasRetardo++; minutosRetardoTotal += a.Minutos_Retardo || 0; }
     if (a.Multi_Planta) diasMultiPlanta++;
     totalHoras += horas;
-    totalExtras += extras;
-    totalNormales += Math.max(0, horas - extras);
 
     // Horas por planta (ubicación de entrada como planta del día)
     const plantaDia = a.Ubicacion_Entrada || a.Ubicacion_Salida;
@@ -387,8 +391,9 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       presente: a.Presente,
       entrada: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
       salida: a.Hora_Salida ? new Date(a.Hora_Salida) : null,
-      horas, extras,
-      normales: Math.max(0, horas - extras),
+      // El extra ya no es por día: es el excedente semanal sobre 45h (ver totales).
+      horas, extras: 0,
+      normales: horas,
       retardo: a.Retardo,
       minutosRetardo: a.Minutos_Retardo || 0,
       multiPlanta: a.Multi_Planta,
@@ -411,11 +416,12 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   }
 
   // ---- KPIs ----
-  const limiteSemana = empleado?.tipo_horario?.Horas_Semana
-    || (empleado?.tipo_horario?.Horas_Jornada || 8) * (empleado?.tipo_horario?.Dias_Semana || 6);
+  // Límite semanal FIJO de 45h para todos. El extra es el excedente semanal
+  // (incluye sábado en el total); no hay extra por día.
+  const limiteSemana = LIMITE_SEMANAL_HORAS;
   const horasRedondeadas = Math.round(totalHoras * 100) / 100;
-  // Horas extra reales = lo que excede el límite semanal del horario (ej. >45)
   const extrasSobreLimite = Math.max(0, Math.round((horasRedondeadas - limiteSemana) * 100) / 100);
+  const normalesSemana = Math.round((horasRedondeadas - extrasSobreLimite) * 100) / 100;
   // Días laborables del rango (L-S, sin domingos)
   let diasLaborables = 0;
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
@@ -435,8 +441,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     dias,
     totales: {
       horas: horasRedondeadas,
-      normales: Math.round(totalNormales * 100) / 100,
-      extras: Math.round(totalExtras * 100) / 100,
+      normales: normalesSemana,
+      extras: extrasSobreLimite,
       diasTrabajados, diasRetardo, diasMultiPlanta
     },
     kpis: {
@@ -523,11 +529,14 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     const salida = a.Hora_Salida ? new Date(a.Hora_Salida) : null;
     const fmt = d => d ? String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : null;
     const incompleta = a.Presente && (!entrada || !salida);
-    // Si sin salida y sin horas guardadas, estimar hasta 18:00
+    const enCurso = incompleta && esDiaEnCurso(a.Fecha);
+    // Jornada abierta sin horas guardadas:
+    //  - día pasado (cerrado): estimar hasta 18:00
+    //  - día en curso: cerrar a la hora actual (NO estima jornada completa)
     let horasCelda = h;
     if (incompleta && h === 0 && entrada) {
       const entMin = entrada.getHours() * 60 + entrada.getMinutes();
-      const CIERRE = 18 * 60;
+      const CIERRE = enCurso ? minutosDelDiaAhora() : 18 * 60;
       const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
       let netos = Math.max(0, CIERRE - entMin);
       if (entMin < COMIDA_FIN) netos -= Math.max(0, Math.min(CIERRE, COMIDA_FIN) - Math.max(entMin, COMIDA_INI));
@@ -540,6 +549,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
       entrada: fmt(entrada),
       salida: fmt(salida),
       incompleta,
+      enCurso,
       retardo: a.Retardo,
       minutosRetardo: a.Minutos_Retardo || 0,
       multiPlanta: a.Multi_Planta,
@@ -547,22 +557,44 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     });
   }
 
+  // Umbral de horas bajo el cual un día con checada se marca para revisión de RH.
+  const UMBRAL_REVISION_HORAS = 2;
+  const NOMBRES_DIA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
   const filas = empleados.map(e => {
     const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const horas = Math.round(acc.horas * 100) / 100;
-    const extras = Math.round(acc.extras * 100) / 100;
+    // Extra = excedente sobre 45h semanales (incluye sábado en el total).
+    // Normal = lo trabajado hasta el tope de 45h.
+    const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
+    const normales = Math.round((horas - extras) * 100) / 100;
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
     const diasSemana = e.tipo_horario?.Dias_Semana || 6;
     const esperadas = jornada * diasSemana;
 
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
+    const revisiones = []; // días <2h que RH debe revisar
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
       const esDomingo = f.getDay() === 0;
       if (!c) return { presente: false, vacio: !esDomingo, esDomingo };
-      return { ...c, esDomingo, jornadaCompleta: c.horas >= (jornada - 0.5) };
+      // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
+      // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
+      const tieneChecada = !!(c.entrada || c.salida);
+      const requiereRevision = c.presente && !c.enCurso && tieneChecada && c.horas < UMBRAL_REVISION_HORAS;
+      if (requiereRevision) {
+        revisiones.push({
+          fecha: key,
+          nombreDia: NOMBRES_DIA_CORTO[f.getDay()],
+          horas: c.horas,
+          entrada: c.entrada || null,
+          salida: c.salida || null,
+          motivo: !c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')
+        });
+      }
+      return { ...c, esDomingo, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
 
     return {
@@ -570,20 +602,38 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
       nombre: [e.Nombre, e.Apellido_Paterno, e.Apellido_Materno].filter(Boolean).join(' '),
       area: e.area?.Nombre_Area || '',
       puesto: e.puesto?.Nombre_Puesto || '',
-      horas, extras,
-      normales: Math.round((horas - extras) * 100) / 100,
+      horas, extras, normales,
       dias: acc.dias, retardos: acc.retardos, multi: acc.multi,
       esperadas,
       faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100),
-      celdas
+      celdas,
+      revisiones,
+      requiereRevision: revisiones.length > 0
     };
   });
+
+  // Resumen global de revisiones (para banner/confirmación antes de descargar)
+  const resumenRevisiones = filas
+    .filter(f => f.requiereRevision)
+    .map(f => ({
+      ID_Empleado: f.ID_Empleado,
+      nombre: f.nombre,
+      area: f.area,
+      dias: f.revisiones
+    }));
+  const totalRevisiones = resumenRevisiones.reduce((s, r) => s + r.dias.length, 0);
 
   const plantas = Array.from(porPlanta.entries())
     .map(([nombre, v]) => ({ nombre, horas: Math.round(v.horas * 100) / 100, dias: v.dias }))
     .sort((a, b) => b.horas - a.horas);
 
-  return { periodo: { fechaInicio: inicio, fechaFin: fin }, filas, plantas, fechas };
+  return {
+    periodo: { fechaInicio: inicio, fechaFin: fin },
+    filas, plantas, fechas,
+    revisiones: resumenRevisiones,
+    totalRevisiones,
+    umbralRevision: UMBRAL_REVISION_HORAS
+  };
 }
 
 /**

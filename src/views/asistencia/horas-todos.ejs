@@ -80,6 +80,52 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
 </div>
 <% } %>
 
+<!-- Panel de revisiones (días <2h con checada: probable olvido de entrada/salida) -->
+<% if (datos.totalRevisiones && datos.totalRevisiones > 0) { %>
+<div class="card border-warning mb-4" id="panelRevisiones">
+  <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">
+      <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+      <%= datos.totalRevisiones %> día(s) requieren revisión de RH
+      <small class="text-body-secondary ms-1">(menos de <%= datos.umbralRevision %>h con checada — posible olvido de entrada/salida)</small>
+    </span>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaRevisiones">
+      Ver / ocultar
+    </button>
+  </div>
+  <div class="collapse show" id="listaRevisiones">
+    <div class="list-group list-group-flush">
+      <% datos.revisiones.forEach(function(r){ %>
+        <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2" data-rev-emp="<%= r.ID_Empleado %>">
+          <div>
+            <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="fw-semibold text-decoration-none">
+              <%= r.nombre %>
+            </a>
+            <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
+            <div class="mt-1 d-flex flex-wrap gap-1">
+              <% r.dias.forEach(function(d){ %>
+                <span class="badge bg-warning text-dark" title="<%= d.motivo %> · entrada <%= d.entrada||'—' %> / salida <%= d.salida||'—' %>">
+                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
+                  <%= d.horas.toFixed(1) %>h · <%= d.motivo %>
+                </span>
+              <% }); %>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-self-center">
+            <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye me-1"></i>Revisar
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-descartar-rev" data-rev-emp="<%= r.ID_Empleado %>">
+              <i class="bi bi-check2 me-1"></i>Descartar
+            </button>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</div>
+<% } %>
+
 <!-- Matriz tipo checador (empleados × días) -->
 <%
 const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -93,6 +139,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas td.cel-parcial  { background:#fff3cd; }
   .matriz-horas td.cel-ausente  { background:#f8d7da; }
   .matriz-horas td.cel-dom      { background:#f1f3f5; }
+  .matriz-horas td.cel-revision { background:#ffe0b2; outline:2px solid #fd7e14; outline-offset:-2px; }
+  .matriz-horas td.cel-revision .hrs { color:#d63384; }
   .matriz-horas .col-id  { position:sticky; left:0; background:#fff; z-index:2; min-width:48px; }
   .matriz-horas .col-emp { position:sticky; left:48px; background:#fff; z-index:2; min-width:190px; }
   .matriz-horas thead .col-id, .matriz-horas thead .col-emp { z-index:3; }
@@ -148,7 +196,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    let cls='', tip='';
                    if (c.esDomingo) { cls='cel-dom'; }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
-                   else if (c.incompleta) { cls='cel-parcial'; tip='Incompleta'; }
+                   else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + (c.horas||0).toFixed(1) + 'h (menos de 2h con checada)'; }
+                   else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
+                   else if (c.incompleta) { cls='cel-parcial'; tip='Incompleta · estimada a 18:00'; }
                    else if (c.presente) { cls = c.jornadaCompleta ? 'cel-completa' : ''; tip=(c.planta||''); }
               %>
                 <td class="text-center <%= cls %> cel-dia"
@@ -167,14 +217,20 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <div class="cel-es">
                       <div class="ent"><%= c.entrada || '--:--' %></div>
                       <div class="sal"><%= c.salida || '--:--' %></div>
-                      <div class="hrs"><%= (c.horas||0).toFixed(1) %>h</div>
+                      <% if (c.requiereRevision) { %>
+                        <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= (c.horas||0).toFixed(1) %>h</div>
+                      <% } else if (c.enCurso) { %>
+                        <div class="hrs text-primary"><i class="bi bi-hourglass-split"></i> <%= (c.horas||0).toFixed(1) %>h</div>
+                      <% } else { %>
+                        <div class="hrs"><%= (c.horas||0).toFixed(1) %>h</div>
+                      <% } %>
                     </div>
                   <% } else { %>-<% } %>
                 </td>
               <% }); %>
-              <td class="text-center"><%= f.normales>0?f.normales.toFixed(1):'-' %></td>
-              <td class="text-center"><%= f.extras>0?f.extras.toFixed(1):'-' %></td>
-              <td class="text-center fw-bold"><%= f.horas>0?f.horas.toFixed(1):'0' %></td>
+              <td class="text-center col-normal"><%= f.normales>0?f.normales.toFixed(1):'-' %></td>
+              <td class="text-center col-extra"><%= f.extras>0?f.extras.toFixed(1):'-' %></td>
+              <td class="text-center fw-bold col-total"><%= f.horas>0?f.horas.toFixed(1):'0' %></td>
               <td class="text-center <%= f.retardos>0?'text-danger fw-bold':'' %>"><%= f.retardos>0?f.retardos:'-' %></td>
             </tr>
             <% }); %>
@@ -237,7 +293,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   function redondearSalida(hhmm) {
     if (!hhmm) return hhmm;
     const [h, m] = hhmm.split(':').map(Number);
-    if (m <= 5) return String(h).padStart(2,'0') + ':00';
+    // Baja a la hora si faltan 5+ min para la siguiente (m<=55); sube solo en
+    // los últimos 4 min (m>=56). Ej: 8:54->8:00, 8:56->9:00, 18:30->18:00.
+    if (m <= 55) return String(h).padStart(2,'0') + ':00';
     return String(h + 1).padStart(2,'0') + ':00';
   }
   function minutosEntre(ent, sal) {
@@ -256,30 +314,48 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
 
   const chk = document.getElementById('chkRedondear');
+  const LIMITE_SEMANAL = 45; // tope de horas normales; excedente = extra
   function aplicarRedondeo() {
     const activo = chk.checked;
-    document.querySelectorAll('.cel-dia').forEach(td => {
-      if (td.dataset.dom === '1' || td.dataset.vacio === '1' || td.dataset.presente !== '1') return;
-      const entRaw = td.dataset.ent;
-      const salRaw = td.dataset.sal;
-      const horasRaw = parseFloat(td.dataset.horas) || 0;
-      const celEs = td.querySelector('.cel-es');
-      if (!celEs) return;
+    // Recalcular celda por celda y totalizar por fila para reflejar el redondeo
+    // en Total / Normal / Extra (split semanal de 45h).
+    getRows().forEach(tr => {
+      let totalFila = 0;
+      tr.querySelectorAll('.cel-dia').forEach(td => {
+        if (td.dataset.dom === '1' || td.dataset.vacio === '1' || td.dataset.presente !== '1') return;
+        const entRaw = td.dataset.ent;
+        const salRaw = td.dataset.sal;
+        const horasRaw = parseFloat(td.dataset.horas) || 0;
+        const celEs = td.querySelector('.cel-es');
+        if (!celEs) return;
 
-      let entMostrar, salMostrar, horasMostrar;
-      if (activo && entRaw && salRaw) {
-        entMostrar = redondearEntrada(entRaw);
-        salMostrar = redondearSalida(salRaw);
-        const mins = minutosEntre(entMostrar, salMostrar);
-        horasMostrar = Math.round((mins / 60) * 10) / 10;
-      } else {
-        entMostrar = entRaw || '--:--';
-        salMostrar = salRaw || '--:--';
-        horasMostrar = Math.round(horasRaw * 10) / 10;
-      }
-      celEs.querySelector('.ent').textContent = entMostrar;
-      celEs.querySelector('.sal').textContent = salMostrar;
-      celEs.querySelector('.hrs').textContent = horasMostrar.toFixed(1) + 'h';
+        let entMostrar, salMostrar, horasMostrar;
+        if (activo && entRaw && salRaw) {
+          entMostrar = redondearEntrada(entRaw);
+          salMostrar = redondearSalida(salRaw);
+          const mins = minutosEntre(entMostrar, salMostrar);
+          horasMostrar = Math.round((mins / 60) * 10) / 10;
+        } else {
+          entMostrar = entRaw || '--:--';
+          salMostrar = salRaw || '--:--';
+          horasMostrar = Math.round(horasRaw * 10) / 10;
+        }
+        celEs.querySelector('.ent').textContent = entMostrar;
+        celEs.querySelector('.sal').textContent = salMostrar;
+        celEs.querySelector('.hrs').textContent = horasMostrar.toFixed(1) + 'h';
+        totalFila += horasMostrar;
+      });
+
+      totalFila = Math.round(totalFila * 100) / 100;
+      const extra = Math.max(0, Math.round((totalFila - LIMITE_SEMANAL) * 100) / 100);
+      const normal = Math.round((totalFila - extra) * 100) / 100;
+      const tdNorm = tr.querySelector('.col-normal');
+      const tdExtra = tr.querySelector('.col-extra');
+      const tdTotal = tr.querySelector('.col-total');
+      if (tdNorm) tdNorm.textContent = normal > 0 ? normal.toFixed(1) : '-';
+      if (tdExtra) tdExtra.textContent = extra > 0 ? extra.toFixed(1) : '-';
+      if (tdTotal) tdTotal.textContent = totalFila > 0 ? totalFila.toFixed(1) : '0';
+      tr.dataset.total = totalFila; // mantener orden por total coherente
     });
   }
   chk.addEventListener('change', aplicarRedondeo);
@@ -299,6 +375,41 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
   if (btnExcel) btnExcel.addEventListener('click', actualizarLinkExcel);
   chk.addEventListener('change', actualizarLinkExcel);
+
+  // --- Revisiones <2h: descartar (solo UI/sesión) + confirmar antes de descargar ---
+  const panel = document.getElementById('panelRevisiones');
+  function pendientesRevision(){
+    if (!panel) return [];
+    return Array.from(panel.querySelectorAll('.list-group-item:not([data-descartada])'));
+  }
+  // Descartar una persona de la lista (no persiste; solo oculta para esta sesión)
+  document.querySelectorAll('.btn-descartar-rev').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const item = this.closest('.list-group-item');
+      item.setAttribute('data-descartada', '1');
+      item.style.opacity = '.45';
+      item.querySelectorAll('a, button').forEach(el => { el.classList.add('disabled'); el.setAttribute('tabindex','-1'); });
+      this.innerHTML = '<i class="bi bi-check2-all me-1"></i>Revisado';
+      // Si ya no quedan pendientes, atenuar el header del panel
+      if (pendientesRevision().length === 0) {
+        panel.querySelector('.card-header').classList.add('bg-opacity-10');
+      }
+    });
+  });
+  // Confirmar antes de descargar Excel si hay días sin revisar
+  if (btnExcel) {
+    btnExcel.addEventListener('click', function(ev){
+      const pend = pendientesRevision();
+      if (pend.length === 0) return; // nada que revisar
+      const nombres = pend.map(i => i.querySelector('.fw-semibold')?.textContent.trim()).filter(Boolean);
+      const lista = nombres.slice(0, 8).join(', ') + (nombres.length > 8 ? `, +${nombres.length - 8} más` : '');
+      const ok = window.confirm(
+        `Hay ${pend.length} persona(s) con días de menos de 2h (posible olvido de checada):\n\n${lista}\n\n` +
+        `Revisa o descarta antes de exportar. ¿Descargar el Excel de todas formas?`
+      );
+      if (!ok) ev.preventDefault();
+    });
+  }
 })();
 </script>
 
