@@ -75,8 +75,8 @@ export const reporteEmpleado = async (req, res, next) => {
     
     // Defaults: semana actual
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
     
     const empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: parseInt(id) },
@@ -119,8 +119,9 @@ export const horasTodos = async (req, res, next) => {
   try {
     const { fechaInicio, fechaFin, redondear } = req.query;
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    // 'YYYY-MM-DD' se parsea con hora local (T00:00:00) para no desplazarse -1 día por UTC.
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const datos = await asistenciaService.obtenerHorasSemanalTodos(inicio, fin);
 
@@ -145,8 +146,8 @@ export const descargarHorasExcel = async (req, res, next) => {
   try {
     const { fechaInicio, fechaFin, sort, dir, redondear } = req.query;
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const buffer = await generarExcelHoras(inicio, fin, { sort, dir, redondear: redondear === '1' });
 
@@ -170,8 +171,8 @@ export const desgloseHoras = async (req, res, next) => {
     const { fechaInicio, fechaFin } = req.query;
 
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: parseInt(id) },
@@ -206,8 +207,8 @@ export const reporteUbicacion = async (req, res, next) => {
     const plantaId = planta ? parseInt(planta) : null;
 
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const [reporte, plantas] = await Promise.all([
       asistenciaService.obtenerReportePorUbicacion({
@@ -423,8 +424,8 @@ export const apiAsistenciaEmpleado = async (req, res) => {
     const { fechaInicio, fechaFin } = req.query;
     
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
     
     const resumen = await asistenciaService.obtenerResumenAsistencia({
       empleadoId: parseInt(id),
@@ -480,8 +481,8 @@ export const apiReportePorUbicacion = async (req, res) => {
     const { planta, fechaInicio, fechaFin } = req.query;
 
     const semana = nominaService.getSemanaActual();
-    const inicio = fechaInicio ? new Date(fechaInicio) : semana.lunes;
-    const fin = fechaFin ? new Date(fechaFin) : semana.sabado;
+    const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
+    const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const reporte = await asistenciaService.obtenerReportePorUbicacion({
       fechaInicio: inicio,
