@@ -6,7 +6,6 @@
  *
  * Reglas de negocio:
  * - Jornada completa: 8:00 - 18:00 (9h netas, 1h comida 14-15)
- * - Tolerancia 15 min por hora: 8:15→paga 8:00, 8:16→paga 9:00
  * - Tiempo completo: retardo + ajuste de pago
  * - Mixto: solo ajuste de pago (sin retardo)
  * - Horas después de 18:00 = extras
@@ -40,7 +39,50 @@ const HORA_ENTRADA_ESTANDAR = 8 * 60;         // 08:00
 const HORA_SALIDA_ESTANDAR = 18 * 60;         // 18:00
 const HORA_EXTRAS_INICIO = 18 * 60;            // Después de 18:00 = horas extras
 const JORNADA_COMPLETA_HORAS = 9;              // 9 horas efectivas (10 - 1h comida)
-const TOLERANCIA_MINUTOS = 15;                 // 15 min tolerancia por hora
+const TOLERANCIA_MINUTOS = 15;
+const TOLERANCIA_MINUTOS_NUEVA = 10;
+
+const COBERTURA_DESCUENTO_MIN = 10;
+const COBERTURA_VENTANA_MAX = 25;
+
+// Catálogo de coincidencia para el área/puesto con cobertura especial (configurable).
+const COBERTURA_AREAS = ['sistemas'];
+const COBERTURA_PUESTOS = ['it', 'sistemas'];
+
+const FECHA_TOLERANCIA_UNIFICADA = { anio: 2026, mes: 6, dia: 30 };
+
+export function reglaToleranciaPorFecha(fecha) {
+  const f = fecha ? new Date(fecha) : null;
+  let esNueva = false;
+  if (f && !isNaN(f.getTime())) {
+    const clave = f.getFullYear() * 10000 + (f.getMonth() + 1) * 100 + f.getDate();
+    const corte = FECHA_TOLERANCIA_UNIFICADA.anio * 10000 + FECHA_TOLERANCIA_UNIFICADA.mes * 100 + FECHA_TOLERANCIA_UNIFICADA.dia;
+    esNueva = clave >= corte;
+  }
+  return esNueva
+    ? { toleranciaMin: TOLERANCIA_MINUTOS_NUEVA, aplicaCobertura: false }
+    : { toleranciaMin: TOLERANCIA_MINUTOS, aplicaCobertura: true };
+}
+
+export function esAreaCoberturaEspecial({ area, puesto } = {}) {
+  const a = (area || '').toString().toLowerCase();
+  const p = (puesto || '').toString().toLowerCase();
+  const areaOk = COBERTURA_AREAS.some(t => a.includes(t));
+  const puestoOk = COBERTURA_PUESTOS.some(t => new RegExp('\\b' + t + '\\b').test(p));
+  return areaOk && puestoOk;
+}
+
+export function entradaCobertura(entradaRealMin) {
+  const ref = Math.max(entradaRealMin, HORA_ENTRADA_ESTANDAR);
+  const minutosPasados = ref % 60;
+  const enVentana = minutosPasados > TOLERANCIA_MINUTOS && minutosPasados <= COBERTURA_VENTANA_MAX;
+  const ajustada = enVentana ? ref - COBERTURA_DESCUENTO_MIN : ref;
+  const pagoMin = redondearEntrada(ajustada);
+  const mostrarMin = enVentana ? ajustada : ref;
+  const minAjustada = ((ajustada % 60) + 60) % 60;
+  const retardoMin = minAjustada > TOLERANCIA_MINUTOS ? minAjustada - TOLERANCIA_MINUTOS : 0;
+  return { pagoMin, mostrarMin, retardoMin };
+}
 
 // Mixtos
 const MIXTO_HORAS_PRESENCIALES_SEMANA = 15;    // 15h presenciales semanales
@@ -157,24 +199,12 @@ export function combinarChecadores(datosRAM1, datosRAM2) {
 }
 
 // ============================================================
-// REDONDEO DE ENTRADA (TOLERANCIA 15 MIN POR HORA)
+// REDONDEO DE ENTRADA
 // ============================================================
 
-/**
- * Redondea la hora de entrada para cálculo de pago.
- * Tolerancia de 15 minutos por hora:
- *   8:00-8:15 → paga desde 8:00
- *   8:16-9:00 → paga desde 9:00
- *   9:01-9:15 → paga desde 9:00
- *   9:16-10:00 → paga desde 10:00
- *   10:16-10:30 → paga desde 11:00
- *
- * @param {number} totalMinutos - Hora de entrada en minutos desde medianoche
- * @returns {number} Hora de pago en minutos desde medianoche
- */
-export function redondearEntrada(totalMinutos) {
+export function redondearEntrada(totalMinutos, toleranciaMin = TOLERANCIA_MINUTOS) {
   const minutosPasados = totalMinutos % 60;
-  if (minutosPasados <= TOLERANCIA_MINUTOS) {
+  if (minutosPasados <= toleranciaMin) {
     return Math.floor(totalMinutos / 60) * 60;
   }
   return Math.ceil(totalMinutos / 60) * 60;
@@ -348,7 +378,6 @@ function parsearChecadasDia(checadasStr) {
  * Calcula las horas trabajadas en un día basándose en las checadas.
  *
  * Nuevas reglas:
- * - Entrada se redondea con tolerancia 15min/hora para pago
  * - Horas normales: entradaPago hasta min(salida, 18:00) menos comida
  * - Horas extras: después de 18:00
  * - Sábados: todas las horas son extras
@@ -361,7 +390,9 @@ export function calcularHorasDia(checadas, opciones = {}) {
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
     esMixto = false,
-    minutoCierre = HORA_SALIDA_ESTANDAR
+    minutoCierre = HORA_SALIDA_ESTANDAR,
+    coberturaEspecial = false,
+    toleranciaMin = TOLERANCIA_MINUTOS
   } = opciones;
 
   // Sin checadas = ausente
@@ -393,12 +424,15 @@ export function calcularHorasDia(checadas, opciones = {}) {
     const enCurso = minutoCierre < HORA_SALIDA_ESTANDAR;
     // En curso y aún no pasa de la entrada -> 0h, presente pero sin horas
     if (enCurso && minutoCierre <= entrada.totalMinutos) {
+      const sis = coberturaEspecial ? entradaCobertura(entrada.totalMinutos) : null;
+      const entShowMin = sis ? sis.mostrarMin : redondearEntrada(entrada.totalMinutos, toleranciaMin);
+      const minRet = sis ? sis.retardoMin : Math.max(0, redondearEntrada(entrada.totalMinutos, toleranciaMin) - HORA_ENTRADA_ESTANDAR);
       return {
-        presente: true, entrada: entrada.horaStr, entradaPago: minutosAHora(redondearEntrada(entrada.totalMinutos)),
+        presente: true, entrada: entrada.horaStr, entradaPago: minutosAHora(entShowMin),
         salida: null, horasTrabajadas: 0, horasNormales: 0, horasExtras: 0, horasTrabajadasBruto: 0,
         minutosComidaDescontados: 0,
-        minutosRetardo: Math.max(0, redondearEntrada(entrada.totalMinutos) - HORA_ENTRADA_ESTANDAR),
-        retardo: !esMixto && redondearEntrada(entrada.totalMinutos) > HORA_ENTRADA_ESTANDAR,
+        minutosRetardo: minRet,
+        retardo: !esMixto && minRet > 0,
         jornadaCompleta: false, incompleta: true, enCurso: true, esSabado,
         notas: 'En curso (sin salida)'
       };
@@ -418,8 +452,9 @@ export function calcularHorasDia(checadas, opciones = {}) {
   const entrada = checadas[0];
   const salida = checadas[checadas.length - 1];
 
-  // Redondear entrada para pago
-  const entradaPagoMin = redondearEntrada(entrada.totalMinutos);
+  const sisEnt = coberturaEspecial ? entradaCobertura(entrada.totalMinutos) : null;
+  const entradaPagoMin = sisEnt ? sisEnt.pagoMin : redondearEntrada(entrada.totalMinutos, toleranciaMin);
+  const entradaShowMin = sisEnt ? sisEnt.mostrarMin : entradaPagoMin;
   const salidaMin = salida.totalMinutos;
 
   // Minutos brutos (entrada real a salida)
@@ -472,9 +507,9 @@ export function calcularHorasDia(checadas, opciones = {}) {
 
   const horasTrabajadas = Math.round((horasNormales + horasExtras) * 100) / 100;
 
-  // Retardo: diferencia entre hora de pago y hora estándar
-  const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
-  // Solo marcar retardo para tiempo completo, mixto solo ajuste de pago
+  const minutosRetardo = sisEnt
+    ? sisEnt.retardoMin
+    : Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
   const retardo = !esMixto && minutosRetardo > 0;
 
   // Jornada completa = 9h normales (sin contar extras)
@@ -485,7 +520,7 @@ export function calcularHorasDia(checadas, opciones = {}) {
   return {
     presente: true,
     entrada: entrada.horaStr,
-    entradaPago: minutosAHora(entradaPagoMin),
+    entradaPago: minutosAHora(entradaShowMin),
     salida: salida.horaStr,
     horasTrabajadas,
     horasNormales,
@@ -515,7 +550,6 @@ export function calcularHorasDia(checadas, opciones = {}) {
  * 14-15); si se fue a comer, el hueco ya lo cubre (sin doble descuento).
  *
  * Reglas compartidas con calcularHorasDia:
- * - Entrada de pago: el PRIMER par redondea su entrada con tolerancia 15min/hora.
  * - Extras: minutos de cada par después de las 18:00.
  * - Sábado: todo es extra.
  * - Retardo: según la entrada de pago del primer par.
@@ -559,7 +593,9 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     // Minuto al que se cierra una jornada SIN salida. Default 18:00 (día cerrado).
     // Para un día EN CURSO se pasa la hora actual: no estima hasta el cierre,
     // solo cuenta lo trabajado hasta ahora. Marca enCurso=true.
-    minutoCierre = HORA_SALIDA_ESTANDAR
+    minutoCierre = HORA_SALIDA_ESTANDAR,
+    coberturaEspecial = false,
+    toleranciaMin = TOLERANCIA_MINUTOS
   } = opciones;
 
   const ordenCrudo = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
@@ -581,7 +617,9 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   const enCurso = minutoCierre < HORA_SALIDA_ESTANDAR; // se pasó una hora de corte previa a 18:00
   const cierre = { horaStr: minutosAHora(minutoCierre), hora: Math.floor(minutoCierre / 60), minuto: minutoCierre % 60, totalMinutos: minutoCierre };
 
-  const entradaPagoMin = redondearEntrada(orden[0].totalMinutos);
+  const sisEnt = coberturaEspecial ? entradaCobertura(orden[0].totalMinutos) : null;
+  const entradaPagoMin = sisEnt ? sisEnt.pagoMin : redondearEntrada(orden[0].totalMinutos, toleranciaMin);
+  const entradaShowMin = sisEnt ? sisEnt.mostrarMin : entradaPagoMin;
   let minutosNormales = 0;
   let minutosExtras = 0;
   let minutosComida = 0;
@@ -625,7 +663,9 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   const horasNormales = Math.round((minutosNormales / 60) * 100) / 100;
   const horasExtras = Math.round((minutosExtras / 60) * 100) / 100;
   const horasTrabajadas = Math.round((horasNormales + horasExtras) * 100) / 100;
-  const minutosRetardo = Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
+  const minutosRetardo = sisEnt
+    ? sisEnt.retardoMin
+    : Math.max(0, entradaPagoMin - HORA_ENTRADA_ESTANDAR);
   const retardo = !esMixto && minutosRetardo > 0;
 
   // Nota de jornada abierta: en curso (no estima) vs día cerrado (estimó 18:00)
@@ -636,6 +676,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   return {
     presente: true,
     entrada: orden[0].horaStr,
+    entradaPago: minutosAHora(entradaShowMin),
     // Si la jornada quedó abierta, no inventamos hora de salida
     salida: incompleta ? null : orden[orden.length - 1].horaStr,
     horasTrabajadas,
@@ -1123,5 +1164,7 @@ export default {
   calcularHorasDia,
   calcularHorasPorPares,
   dedupChecadas,
+  esAreaCoberturaEspecial,
+  entradaCobertura,
   minutosAHora
 };

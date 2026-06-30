@@ -12,6 +12,25 @@
 
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
+import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
+
+/**
+ * Entrada a MOSTRAR (Date). El redondeo a HH:00 NO se aplica aquí (lo hace, aparte, el
+ * selector "Redondear horas"). Misma lógica que asistenciaService.entradaPagoDesde.
+ */
+function entradaPagoDesdeXls(horaEntradaReal, empleado) {
+  if (!horaEntradaReal) return null;
+  const d = new Date(horaEntradaReal);
+  const { aplicaCobertura } = reglaToleranciaPorFecha(d);
+  if (!aplicaCobertura) return d;
+  const cobertura = esAreaCoberturaEspecial({ area: empleado?.area?.Nombre_Area, puesto: empleado?.puesto?.Nombre_Puesto });
+  if (!cobertura) return d;
+  const realMin = d.getHours() * 60 + d.getMinutes();
+  const showMin = entradaCobertura(realMin).mostrarMin;
+  const out = new Date(d);
+  out.setHours(Math.floor(showMin / 60), showMin % 60, 0, 0);
+  return out;
+}
 
 const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -82,10 +101,14 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     where: { ID_Estatus: 1 },
     select: {
       ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
-      area: { select: { Nombre_Area: true } }
+      area: { select: { Nombre_Area: true } },
+      puesto: { select: { Nombre_Puesto: true } }
     },
     orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
   });
+
+  // Horas/retardo desde Empleados_Asistencia (BD ya consolidada por ADMS).
+  // Misma fuente que la vista /asistencia/horas.
 
   // Asistencias del rango con checadas + planta de cada checada
   const asistencias = await prisma.empleados_Asistencia.findMany({
@@ -143,10 +166,12 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const ultCheca = a.historial_checadas[a.historial_checadas.length - 1];
       const plantaSal = a.Ubicacion_Salida || ultCheca?.checador?.planta?.Nombre || '';
 
-      const entRaw = a.Hora_Entrada ? fmtHora(a.Hora_Entrada) : null;
+      const entradaPago = entradaPagoDesdeXls(a.Hora_Entrada, e);
+      const entRaw = entradaPago ? fmtHora(entradaPago) : null;
       const salRaw = a.Hora_Salida ? fmtHora(a.Hora_Salida) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
       let salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
+      // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
       let horas = Number(a.Horas_Trabajadas) || 0;
 
       if (redondear && entRaw && salRaw) {

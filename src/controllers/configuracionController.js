@@ -4,6 +4,7 @@
 
 import prisma from '../config/database.js';
 import { getAllConfig, updateConfig, getConfig } from '../services/nominaService.js';
+import { simularChecada } from '../services/admsService.js';
 
 // Panel de configuración
 export const index = async (req, res) => {
@@ -315,5 +316,57 @@ export const actualizarCategoriaNominaConfig = async (req, res) => {
     console.error('Error al actualizar configs:', error);
     req.flash('error', 'Error al actualizar la configuración');
     res.redirect('/configuracion/nomina');
+  }
+};
+
+// ============================================================
+// SIMULADOR DE CHECADOR (QA · solo SuperAdmin)
+// ============================================================
+
+export const qaChecadorForm = async (req, res) => {
+  try {
+    const checadores = await prisma.checadores.findMany({
+      where: { Activo: true },
+      select: { ID_Checador: true, Nombre: true, Serial_Number: true, planta: { select: { Nombre: true } } },
+      orderBy: { Nombre: 'asc' }
+    });
+    res.render('configuracion/qa-checador', {
+      title: 'QA Checador',
+      checadores,
+      resultado: null
+    });
+  } catch (error) {
+    console.error('Error qaChecadorForm:', error);
+    req.flash('error', 'Error al cargar el simulador');
+    res.redirect('/configuracion');
+  }
+};
+
+export const qaChecadorEjecutar = async (req, res) => {
+  const { idEmpleado, fecha, hora, idChecador, verify } = req.body;
+  try {
+    if (!idEmpleado || !fecha || !hora || !idChecador) {
+      req.flash('error', 'Faltan campos: empleado, fecha, hora y checador son obligatorios');
+      return res.redirect('/configuracion/_qa-checador');
+    }
+    const timestampRaw = `${fecha} ${hora}:00`;
+
+    const actor = req.user?.Email_Office365 || req.session?.user?.Email_Office365 || `usuario:${req.user?.ID_Usuario ?? '?'}`;
+    console.warn(`[QA-CHECADOR] superadmin=${actor} inyecta empleado=${idEmpleado} ts="${timestampRaw}" checador=${idChecador}`);
+
+    const r = await simularChecada({
+      idEmpleado,
+      timestampRaw,
+      idChecador,
+      verify: verify ? Number(verify) : null
+    });
+
+    const msg = { procesada: 'Checada inyectada y jornada recalculada', duplicada: 'Checada duplicada (idempotente, ya existía)', huerfana: 'PIN huérfano: el ID de empleado no existe' }[r] || `Resultado: ${r}`;
+    req.flash(r === 'huerfana' ? 'error' : 'success', msg);
+    res.redirect('/configuracion/_qa-checador');
+  } catch (error) {
+    console.error('Error qaChecadorEjecutar:', error);
+    req.flash('error', `Error al inyectar: ${error.message}`);
+    res.redirect('/configuracion/_qa-checador');
   }
 };

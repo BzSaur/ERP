@@ -7,7 +7,7 @@
  *
  * Reutiliza la lógica de cálculo de horas del pipeline XLSX existente
  * (checadorImportService.js): redondearEntrada, calcularHorasDia, minutosAHora.
- * NO duplica reglas de negocio (tolerancia 15min, comida 14-15, extras >18:00).
+ * NO duplica reglas de negocio (comida 14-15, extras >18:00).
  *
  * Idempotencia (Opción A — try/catch P2002):
  *   Cada checada tiene Hash_Checada = sha256(SN \t PIN \t timestamp_crudo).
@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora, dedupChecadas } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -122,11 +122,22 @@ export async function procesarAttlog(checador, body) {
   return resumen;
 }
 
+export async function simularChecada({ idEmpleado, timestampRaw, idChecador, verify = null }) {
+  const checador = await prisma.checadores.findUnique({
+    where: { ID_Checador: Number(idChecador) },
+    include: { planta: { select: { ID_Planta: true, Nombre: true } } }
+  });
+  if (!checador) throw new Error(`Checador ${idChecador} no existe`);
+
+  const ch = { pin: String(idEmpleado), timestampRaw, status: null, verify };
+  return procesarChecadaIndividual(checador, ch, new Map(), { skipDrift: true });
+}
+
 /**
  * Procesa una checada individual: idempotencia, drift temporal, dedup,
  * huérfano, empleado de baja, y consolidación normal.
  */
-async function procesarChecadaIndividual(checador, ch, empleadoCache) {
+async function procesarChecadaIndividual(checador, ch, empleadoCache, opts = {}) {
   const hash = hashChecada(checador.Serial_Number, ch.pin, ch.timestampRaw);
   const fechaHora = parsearTimestamp(ch.timestampRaw);
 
@@ -134,8 +145,12 @@ async function procesarChecadaIndividual(checador, ch, empleadoCache) {
     throw new Error(`Timestamp inválido: "${ch.timestampRaw}"`);
   }
 
-  // 2. Validación temporal (drift) — encolar SET_TIME si excede umbral (1 solo pendiente)
-  await verificarDrift(checador, fechaHora);
+  // 2. Validación temporal (drift) — encolar SET_TIME si excede umbral (1 solo pendiente).
+  //    Se omite en simulación QA: el device simulado no tiene reloj que sincronizar y un
+  //    timestamp de prueba (p.ej. retroactivo) NO debe encolar SET_TIME al hardware real.
+  if (!opts.skipDrift) {
+    await verificarDrift(checador, fechaHora);
+  }
 
   // 3. Dedup corto configurable (default OFF). Idempotencia por hash ya cubre rebote exacto.
   if (config.adms.dedupWindowSec > 0) {
@@ -273,6 +288,16 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 
   if (checadas.length === 0) return;
 
+  const { toleranciaMin, aplicaCobertura } = reglaToleranciaPorFecha(fechaDia);
+  let coberturaEspecial = false;
+  if (aplicaCobertura) {
+    const empInfo = await tx.empleados.findUnique({
+      where: { ID_Empleado: idEmpleado },
+      select: { area: { select: { Nombre_Area: true } }, puesto: { select: { Nombre_Puesto: true } } }
+    });
+    coberturaEspecial = esAreaCoberturaEspecial({ area: empInfo?.area?.Nombre_Area, puesto: empInfo?.puesto?.Nombre_Puesto });
+  }
+
   // Colapsar dobles checadas (<1h, conserva la primera) ANTES de elegir
   // entrada/salida y calcular horas. Evita que un doble marcaje (ej. 07:35 y
   // 07:36) quede como entrada+salida de 1 min.
@@ -295,7 +320,7 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
   const esSabado = fechaDia.getDay() === 6;
   // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
   // ventanaDedupMin 0 porque ya deduplicamos arriba.
-  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0 });
+  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin });
 
   // Ubicaciones (String legacy) y plantas
   const ubicEntrada = primera.checador?.Ubicacion_Codigo || primera.checador?.planta?.Nombre || primera.Ubicacion;
@@ -327,8 +352,14 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
     }
   });
 
-  // Marcar tipos de checada (entrada/salida) en historial para coherencia con vistas
-  await tx.historial_Checadas.update({ where: { ID_Checada: primera.ID_Checada }, data: { Tipo_Checada: 'ENTRADA' } });
+  // Marcar tipos de checada y el Estado de la ENTRADA en historial, para coherencia con
+  // las vistas (que muestran Historial_Checadas.Estado). El retardo sale de calc (misma
+  // fuente que la jornada).
+  const estadoEntrada = calc.retardo ? 'RETARDO' : 'A_TIEMPO';
+  await tx.historial_Checadas.update({
+    where: { ID_Checada: primera.ID_Checada },
+    data: { Tipo_Checada: 'ENTRADA', Estado: estadoEntrada }
+  });
   if (conservadas.length >= 2) {
     await tx.historial_Checadas.update({ where: { ID_Checada: ultima.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
   }
@@ -453,6 +484,7 @@ export default {
   parsearAttlog,
   hashChecada,
   procesarAttlog,
+  simularChecada,
   obtenerComandosPendientes,
   confirmarComando
 };

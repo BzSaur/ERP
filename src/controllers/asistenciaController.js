@@ -34,12 +34,21 @@ export const index = async (req, res, next) => {
                   ID_Empleado: true,
                   Nombre: true,
                   Apellido_Paterno: true,
-                  Apellido_Materno: true
+                  Apellido_Materno: true,
+                  area: { select: { Nombre_Area: true } },
+                  puesto: { select: { Nombre_Puesto: true } }
                 }
               }
             }
           }
         }
+      });
+      // La checada ENTRADA muestra la hora ajustada; la real se conserva en Fecha_Hora_Real.
+      ultimasChecadas = ultimasChecadas.map(c => {
+        if (c.Tipo_Checada !== 'ENTRADA') return c;
+        const emp = c.asistencia?.empleado;
+        const ajustada = asistenciaService.entradaPagoDesde(c.Fecha_Hora, emp);
+        return ajustada ? { ...c, Fecha_Hora: ajustada, Fecha_Hora_Real: c.Fecha_Hora } : c;
       });
     } catch (e) {
       // Tabla puede no existir aún si no se ha corrido la migración

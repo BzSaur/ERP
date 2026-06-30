@@ -135,7 +135,7 @@
                                 <% dia.checadas.forEach(c => { %>
                                     <tr class="<%= c.ignoradaDoble ? 'table-warning text-muted' : '' %>">
                                         <td>
-                                            <strong><%= new Date(c.hora).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) %></strong>
+                                            <strong><%= new Date(c.hora).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'}) %></strong>
                                             <% if (c.ignoradaDoble) { %>
                                                 <span class="badge bg-warning text-dark ms-1" title="Doble checada dentro de 1h — ignorada en el cálculo de horas">doble</span>
                                             <% } %>
@@ -154,12 +154,21 @@
                                             <% } else { %><span class="badge bg-secondary"><%= c.tipo %></span><% } %>
                                         </td>
                                         <td><span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"><%= c.planta %></span></td>
-                                        <td><small class="text-body-secondary"><%= c.origen %></small></td>
                                         <td>
-                                            <% if (c.estado === 'A_TIEMPO') { %><span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
-                                            <% } else if (c.estado === 'TOLERANCIA') { %><span class="text-warning"><i class="bi bi-exclamation-circle-fill"></i></span>
-                                            <% } else if (c.estado === 'RETARDO') { %><span class="text-danger"><i class="bi bi-x-circle-fill"></i> Retardo</span>
-                                            <% } else { %><small class="text-body-secondary"><%= c.estado %></small><% } %>
+                                            <% if (c.origen === 'MANUAL' || c.dispositivo === 'MANUAL') { %>
+                                                <span class="badge bg-warning text-dark" title="Registro manual"><i class="bi bi-hand-index-thumb"></i> Manual</span>
+                                            <% } else { %><small class="text-body-secondary"><%= c.origen %></small><% } %>
+                                        </td>
+                                        <td>
+                                            <%
+                                                var esEntradaDia = c.tipo === 'ENTRADA';
+                                                var estadoDia = c.estado;
+                                                if (esEntradaDia && c.jornadaRetardo) estadoDia = 'RETARDO';
+                                            %>
+                                            <% if (estadoDia === 'A_TIEMPO') { %><span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
+                                            <% } else if (estadoDia === 'TOLERANCIA') { %><span class="text-warning"><i class="bi bi-exclamation-circle-fill"></i></span>
+                                            <% } else if (estadoDia === 'RETARDO') { %><span class="text-danger"><i class="bi bi-x-circle-fill"></i> Retardo</span>
+                                            <% } else { %><small class="text-body-secondary"><%= estadoDia %></small><% } %>
                                         </td>
                                     </tr>
                                 <% }); %>

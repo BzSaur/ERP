@@ -30,4 +30,8 @@ router.get('/nomina', configuracionController.nominaConfig);
 router.put('/nomina/:clave', configuracionController.actualizarNominaConfig);
 router.post('/nomina/categoria', configuracionController.actualizarCategoriaNominaConfig);
 
+// Simulador de checador (QA · solo SuperAdmin).
+router.get('/_qa-checador', configuracionController.qaChecadorForm);
+router.post('/_qa-checador', configuracionController.qaChecadorEjecutar);
+
 export default router;

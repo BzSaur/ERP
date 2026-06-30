@@ -159,6 +159,9 @@
                                                     <% } else { %>
                                                         <span class="badge bg-primary">Salida</span>
                                                     <% } %>
+                                                    <% if (checada.Origen_Sincronizacion === 'MANUAL' || checada.Dispositivo === 'MANUAL') { %>
+                                                        <span class="badge bg-warning text-dark" title="Registro manual"><i class="bi bi-hand-index-thumb"></i> Manual</span>
+                                                    <% } %>
                                                 </td>
                                                 <td>
                                                     <span class="badge bg-<%= checada.Ubicacion === 'RAM1' ? 'info' : 'secondary' %>">
@@ -166,21 +169,27 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <% if (checada.Estado === 'A_TIEMPO') { %>
+                                                    <%
+                                                        var esEntrada = checada.Tipo_Checada === 'ENTRADA';
+                                                        var jornadaRetardo = checada.asistencia && checada.asistencia.Retardo;
+                                                        var estadoMostrar = checada.Estado;
+                                                        if (esEntrada && jornadaRetardo) estadoMostrar = 'RETARDO';
+                                                    %>
+                                                    <% if (estadoMostrar === 'A_TIEMPO') { %>
                                                         <span class="text-success">
                                                             <i class="bi bi-check-circle-fill"></i> A tiempo
                                                         </span>
-                                                    <% } else if (checada.Estado === 'TOLERANCIA') { %>
+                                                    <% } else if (estadoMostrar === 'TOLERANCIA') { %>
                                                         <span class="text-warning">
                                                             <i class="bi bi-exclamation-circle-fill"></i> Tolerancia
                                                         </span>
-                                                    <% } else if (checada.Estado === 'RETARDO') { %>
+                                                    <% } else if (estadoMostrar === 'RETARDO') { %>
                                                         <span class="text-danger">
                                                             <i class="bi bi-x-circle-fill"></i> Retardo
                                                         </span>
                                                     <% } else { %>
                                                         <span class="text-body-secondary">
-                                                            <i class="bi bi-dash-circle"></i> <%= checada.Estado %>
+                                                            <i class="bi bi-dash-circle"></i> <%= estadoMostrar %>
                                                         </span>
                                                     <% } %>
                                                 </td>
