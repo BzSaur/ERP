@@ -28,6 +28,53 @@ const UBICACIONES = {
 const LIMITE_SEMANAL_HORAS = 45;
 
 // ============================================================
+// FILTRO DE VISIBILIDAD POR USUARIO (permisos granulares)
+// ============================================================
+
+/**
+ * Resuelve el filtro de visibilidad de un usuario. Devuelve null si el usuario ve TODO
+ * (no es CONSULTA, o es CONSULTA sin asignaciones = opt-in). Si tiene asignaciones,
+ * devuelve { plantaIds:Set, areaIds:Set }; la visibilidad es INTERSECCIÓN por dimensión
+ * (ver asistenciaVisible): debe cumplir cada dimensión que tenga restricción.
+ * @param {Object} user req.user (con rol)
+ * @returns {Promise<null | { plantaIds:Set<number>, areaIds:Set<number> }>}
+ */
+export async function getFiltroVisibilidad(user) {
+  const rol = (user?.rol?.Nombre_Rol || '').toUpperCase().replace(/\s+/g, '_');
+  if (rol !== 'CONSULTA') return null; // solo CONSULTA se restringe
+  const idUsuario = user?.ID_Usuario;
+  if (!idUsuario) return null;
+
+  const [plantas, areas] = await Promise.all([
+    prisma.consultor_Plantas.findMany({ where: { ID_Usuario: idUsuario }, select: { ID_Planta: true } }),
+    prisma.consultor_Areas.findMany({ where: { ID_Usuario: idUsuario }, select: { ID_Area: true } })
+  ]);
+  // Sin asignaciones = ve todo (opt-in).
+  if (plantas.length === 0 && areas.length === 0) return null;
+  return {
+    plantaIds: new Set(plantas.map(p => p.ID_Planta)),
+    areaIds: new Set(areas.map(a => a.ID_Area))
+  };
+}
+
+/**
+ * ¿La asistencia es visible bajo el filtro? INTERSECCIÓN (AND) por dimensión: debe cumplir
+ * TODAS las dimensiones que tengan restricción. Una dimensión SIN asignaciones NO restringe.
+ *  - plantas + áreas asignadas → planta permitida Y área permitida.
+ *  - solo plantas → solo restringe por planta.
+ *  - solo áreas → solo restringe por área.
+ * filtro=null => siempre visible.
+ * @param {Object} args { idPlanta, idArea } de la asistencia/empleado
+ * @param {null|{plantaIds:Set,areaIds:Set}} filtro
+ */
+export function asistenciaVisible({ idPlanta, idArea }, filtro) {
+  if (!filtro) return true;
+  if (filtro.plantaIds.size > 0 && !(idPlanta != null && filtro.plantaIds.has(idPlanta))) return false;
+  if (filtro.areaIds.size > 0 && !(idArea != null && filtro.areaIds.has(idArea))) return false;
+  return true;
+}
+
+// ============================================================
 // REGISTRO DE ASISTENCIA
 // ============================================================
 
@@ -300,10 +347,14 @@ export async function obtenerResumenAsistencia({
   };
 
   for (const asistencia of asistencias) {
+    // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
+    const entradaMostrada = entradaPagoDesde(asistencia.Hora_Entrada, empParaRegla) || asistencia.Hora_Entrada;
+    const retardoDia = asistencia.Presente && hayRetardoEnEntrada(entradaMostrada, asistencia.Fecha);
+
     if (asistencia.Presente) {
       resumen.diasPresentes++;
-      
-      if (asistencia.Retardo) {
+
+      if (retardoDia) {
         resumen.retardos++;
         resumen.minutosRetardoTotal += asistencia.Minutos_Retardo || 0;
       }
@@ -335,10 +386,10 @@ export async function obtenerResumenAsistencia({
     resumen.detalle.push({
       fecha: asistencia.Fecha,
       presente: asistencia.Presente,
-      entrada: entradaPagoDesde(asistencia.Hora_Entrada, empParaRegla) || asistencia.Hora_Entrada,
+      entrada: entradaMostrada,
       entradaReal: asistencia.Hora_Entrada,
       salida: asistencia.Hora_Salida,
-      retardo: asistencia.Retardo,
+      retardo: retardoDia,
       minutosRetardo: asistencia.Minutos_Retardo,
       ubicacionEntrada: asistencia.Ubicacion_Entrada,
       ubicacionSalida: asistencia.Ubicacion_Salida
@@ -414,7 +465,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Horas/retardo/entrada desde la BD consolidada (Empleados_Asistencia). Fuente única =
     // BD, igual que la vista global y el Excel. Las checadas crudas son solo auditoría.
     const horas = Number(a.Horas_Trabajadas) || 0;
-    const retardoDia = a.Retardo;
+    const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
+    const retardoDia = a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
     const minRetardoDia = a.Minutos_Retardo || 0;
     if (a.Presente && horas > 0) diasTrabajados++;
     if (retardoDia) { diasRetardo++; minutosRetardoTotal += minRetardoDia; }
@@ -431,7 +483,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       fecha,
       nombreDia: NOMBRES_DIA[fecha.getDay()],
       presente: a.Presente,
-      entrada: entradaPagoDesde(a.Hora_Entrada, empParaRegla),
+      entrada: entradaMostradaDia,
       entradaReal: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
       salida: a.Hora_Salida ? new Date(a.Hora_Salida) : null,
       // El extra ya no es por día: es el excedente semanal sobre 45h (ver totales).
@@ -510,20 +562,46 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
  * @param {Date} fechaInicio
  * @param {Date} fechaFin
  */
-export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
+export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = null) {
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
-  const empleados = await prisma.empleados.findMany({
+  let empleados = await prisma.empleados.findMany({
     where: { ID_Estatus: 1 },
     select: {
-      ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
+      ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },
       puesto: { select: { Nombre_Puesto: true } },
       tipo_horario: { select: { Horas_Jornada: true, Dias_Semana: true } }
     },
     orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
   });
+
+  // Filtro de visibilidad del consultor: por área del empleado (directo). La dimensión
+  // planta se evalúa aparte por asistencia; aquí, si el filtro tiene solo áreas, se
+  // excluyen los empleados de áreas no permitidas salvo que tengan asistencia en planta ok.
+  let plantasPermitidasPorEmp = null;
+  if (filtro) {
+    const asistPlanta = await prisma.empleados_Asistencia.findMany({
+      where: { Fecha: { gte: inicio, lte: fin } },
+      select: { ID_Empleado: true, ID_Checador_Entrada: true, Ubicacion_Entrada: true }
+    });
+    const chks = await prisma.checadores.findMany({ select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true } });
+    const chkAPlanta = new Map(chks.map(c => [c.ID_Checador, c.ID_Planta]));
+    const strAPlanta = new Map();
+    const plantasCat = await prisma.cat_Plantas.findMany({ select: { ID_Planta: true, Nombre: true } });
+    for (const pl of plantasCat) strAPlanta.set(normalizarUbicacion(pl.Nombre), pl.ID_Planta);
+    for (const c of chks) if (c.Ubicacion_Codigo) strAPlanta.set(normalizarUbicacion(c.Ubicacion_Codigo), c.ID_Planta);
+    plantasPermitidasPorEmp = new Set();
+    for (const a of asistPlanta) {
+      let idP = a.ID_Checador_Entrada != null ? chkAPlanta.get(a.ID_Checador_Entrada) : null;
+      if (idP == null) idP = strAPlanta.get(normalizarUbicacion(a.Ubicacion_Entrada));
+      if (idP != null && filtro.plantaIds.has(idP)) plantasPermitidasPorEmp.add(a.ID_Empleado);
+    }
+    empleados = empleados.filter(e =>
+      asistenciaVisible({ idPlanta: null, idArea: e.ID_Area }, filtro) || plantasPermitidasPorEmp.has(e.ID_Empleado)
+    );
+  }
 
   const empReglaMap = new Map(empleados.map(e => [e.ID_Empleado, { area: e.area, puesto: e.puesto }]));
 
@@ -551,8 +629,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
   for (const a of asistencias) {
     const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const h = Number(a.Horas_Trabajadas) || 0;
-    // Retardo persistido en BD. Vista por área = fuente BD.
-    const esRetardo = a.Retardo;
+    // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
+    const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
+    const esRetardo = a.Presente && hayRetardoEnEntrada(entradaCelda, new Date(a.Fecha));
     if (a.Presente && h > 0) acc.dias++;
     if (esRetardo) acc.retardos++;
     if (a.Multi_Planta) acc.multi++;
@@ -571,7 +650,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin) {
     // Celda de matriz
     const key = new Date(a.Fecha).toISOString().slice(0, 10);
     if (!diasEmp.has(a.ID_Empleado)) diasEmp.set(a.ID_Empleado, new Map());
-    const entrada = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
+    const entrada = entradaCelda;
     const salida = a.Hora_Salida ? new Date(a.Hora_Salida) : null;
     const fmt = d => d ? String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0') : null;
     const incompleta = a.Presente && (!entrada || !salida);
@@ -710,7 +789,8 @@ function normalizarUbicacion(str) {
 export async function obtenerReportePorUbicacion({
   fechaInicio,
   fechaFin,
-  plantaId = null
+  plantaId = null,
+  filtro = null
 }) {
   // Catálogo de plantas + checadores (para resolver FK y strings legacy)
   const [plantas, checadores] = await Promise.all([
@@ -780,6 +860,8 @@ export async function obtenerReportePorUbicacion({
   for (const asistencia of asistencias) {
     const idPlanta = resolverPlanta(asistencia);
     if (plantaId && idPlanta !== plantaId) continue;
+    // Filtro de visibilidad del consultor (unión planta/área).
+    if (!asistenciaVisible({ idPlanta, idArea: asistencia.empleado?.ID_Area }, filtro)) continue;
 
     const bucket = buckets.get(idPlanta);
     bucket.empleados.add(asistencia.ID_Empleado);
@@ -808,6 +890,8 @@ export async function obtenerReportePorUbicacion({
   for (const bucket of buckets.values()) {
     if (bucket.id === SIN_PLANTA && bucket.totalChecadas === 0) continue;
     if (plantaId && bucket.id !== plantaId) continue;
+    // Con filtro de consultor: ocultar plantas no permitidas y sin datos visibles.
+    if (filtro && bucket.totalChecadas === 0 && !filtro.plantaIds.has(bucket.id)) continue;
     resultado.push({
       id: bucket.id,
       nombre: bucket.nombre,
@@ -845,13 +929,30 @@ export function entradaPagoDesde(horaEntradaReal, empleado) {
 }
 
 /**
+ * ¿La entrada (ya mostrada/ajustada) implica retardo, según la tolerancia de esa fecha?
+ * Deriva el retardo de la hora mostrada en vivo, para que coincida con lo que ve el usuario
+ * (la entrada ajustada) sin depender del valor persistido en BD.
+ * @param {Date|null} entradaMostrada hora de entrada ya ajustada (salida de entradaPagoDesde)
+ * @param {Date} fecha fecha de la jornada (define la tolerancia aplicable)
+ * @returns {boolean}
+ */
+export function hayRetardoEnEntrada(entradaMostrada, fecha) {
+  if (!entradaMostrada) return false;
+  const HORA_ENTRADA_MIN = 8 * 60; // 08:00
+  const { toleranciaMin } = reglaToleranciaPorFecha(fecha);
+  const d = new Date(entradaMostrada);
+  const min = d.getHours() * 60 + d.getMinutes();
+  return min > HORA_ENTRADA_MIN + toleranciaMin;
+}
+
+/**
  * Presencia EN VIVO por planta para una fecha (default hoy en TZ México).
  * "Presente ahora" = tiene entrada registrada y NO tiene salida ese día.
  *
  * @param {string|Date|null} fecha  YYYY-MM-DD o Date; null = hoy México
  * @returns {Promise<{fecha:string, plantas:Array, totalPresentes:number}>}
  */
-export async function obtenerPresenciaPorPlanta(fecha = null) {
+export async function obtenerPresenciaPorPlanta(fecha = null, filtro = null) {
   const fechaStr = fecha
     ? horaLocalDevice(new Date(`${fecha}T12:00:00`)).fecha
     : horaLocalDevice().fecha;
@@ -895,6 +996,7 @@ export async function obtenerPresenciaPorPlanta(fecha = null) {
       const str = normalizarUbicacion(a.Ubicacion_Entrada || a.Ubicacion_Salida);
       idPlanta = stringAPlanta.has(str) ? stringAPlanta.get(str) : SIN_PLANTA;
     }
+    if (!asistenciaVisible({ idPlanta, idArea: a.empleado?.ID_Area }, filtro)) continue;
     const entradaPago = entradaPagoDesde(a.Hora_Entrada, a.empleado);
     buckets.get(idPlanta).presentes.push({
       id: a.empleado.ID_Empleado,
@@ -903,7 +1005,7 @@ export async function obtenerPresenciaPorPlanta(fecha = null) {
       area: a.empleado.area?.Nombre_Area,
       entrada: entradaPago || a.Hora_Entrada,
       entradaReal: a.Hora_Entrada,
-      retardo: a.Retardo
+      retardo: hayRetardoEnEntrada(entradaPago, new Date(a.Fecha))
     });
     totalPresentes++;
   }
@@ -911,6 +1013,9 @@ export async function obtenerPresenciaPorPlanta(fecha = null) {
   const resultado = [];
   for (const b of buckets.values()) {
     if (b.id === SIN_PLANTA && b.presentes.length === 0) continue;
+    // Con filtro de consultor: ocultar plantas no permitidas que no tengan presentes
+    // visibles (por área). Se muestra la planta si está en su lista O tiene presentes.
+    if (filtro && b.presentes.length === 0 && !filtro.plantaIds.has(b.id)) continue;
     // Ordenar por la hora mostrada (puede venir ajustada) para coherencia visual.
     b.presentes.sort((x, y) => new Date(x.entrada) - new Date(y.entrada));
     // Agrupar los presentes de la planta por área (anidado para el acordeón)
@@ -937,7 +1042,7 @@ export async function obtenerPresenciaPorPlanta(fecha = null) {
  * @param {number|null} plantaId    Filtro opcional por ID_Planta
  * @returns {Promise<{fecha:string, checadas:Array, total:number}>}
  */
-export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
+export async function obtenerChecadasDelDia(fecha = null, plantaId = null, filtro = null) {
   const fechaStr = fecha
     ? horaLocalDevice(new Date(`${fecha}T12:00:00`)).fecha
     : horaLocalDevice().fecha;
@@ -953,7 +1058,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
         include: {
           empleado: {
             select: {
-              ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
+              ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
               area: { select: { Nombre_Area: true } },
               puesto: { select: { Nombre_Puesto: true } }
             }
@@ -989,6 +1094,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
     const idPlanta = c.checador?.ID_Planta ?? null;
     if (plantaId && idPlanta !== plantaId) continue;
     const emp = c.asistencia?.empleado;
+    if (!asistenciaVisible({ idPlanta, idArea: emp?.ID_Area }, filtro)) continue;
     const esEntrada = emp && primeraChecadaPorEmp.get(emp.ID_Empleado) === c.ID_Checada;
     const horaMostrar = esEntrada
       ? (entradaPagoDesde(c.Fecha_Hora, { area: emp.area, puesto: emp.puesto }) || c.Fecha_Hora)
@@ -998,7 +1104,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
       horaReal: c.Fecha_Hora,
       tipo: c.Tipo_Checada,
       estado: c.Estado,
-      jornadaRetardo: c.asistencia?.Retardo || false,
+      jornadaRetardo: esEntrada ? hayRetardoEnEntrada(horaMostrar, new Date(c.Fecha_Hora)) : (c.asistencia?.Retardo || false),
       origen: c.Origen_Sincronizacion,
       dispositivo: c.checador?.Nombre || c.Dispositivo || null,
       planta: c.checador?.planta?.Nombre || c.Ubicacion || 'Sin planta',
@@ -1022,7 +1128,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null) {
 /**
  * Obtiene el resumen diario de asistencia
  */
-export async function obtenerResumenDiario(fecha = new Date()) {
+export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
   const fechaInicio = new Date(fecha);
   fechaInicio.setHours(0, 0, 0, 0);
   
@@ -1049,6 +1155,20 @@ export async function obtenerResumenDiario(fecha = new Date()) {
     }
   });
 
+  // Filtro de visibilidad del consultor (unión planta/área).
+  let asistenciasVisibles = asistencias;
+  if (filtro) {
+    const plantasCat = await prisma.cat_Plantas.findMany({ select: { ID_Planta: true, Nombre: true } });
+    const chks = await prisma.checadores.findMany({ select: { ID_Planta: true, Ubicacion_Codigo: true } });
+    const strAPlanta = new Map();
+    for (const pl of plantasCat) strAPlanta.set(normalizarUbicacion(pl.Nombre), pl.ID_Planta);
+    for (const c of chks) if (c.Ubicacion_Codigo) strAPlanta.set(normalizarUbicacion(c.Ubicacion_Codigo), c.ID_Planta);
+    asistenciasVisibles = asistencias.filter(a => {
+      const idPlanta = strAPlanta.get(normalizarUbicacion(a.Ubicacion_Entrada || a.Ubicacion_Salida)) ?? null;
+      return asistenciaVisible({ idPlanta, idArea: a.empleado?.ID_Area }, filtro);
+    });
+  }
+
   // Obtener total de empleados activos
   const totalEmpleadosActivos = await prisma.empleados.count({
     where: {
@@ -1058,10 +1178,14 @@ export async function obtenerResumenDiario(fecha = new Date()) {
     }
   });
 
-  const presentes = asistencias.filter(a => a.Presente);
-  const conEntrada = asistencias.filter(a => a.Hora_Entrada);
-  const conSalida = asistencias.filter(a => a.Hora_Salida);
-  const conRetardo = asistencias.filter(a => a.Retardo);
+  // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
+  const tieneRetardo = a => a.Presente && hayRetardoEnEntrada(
+    entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada, new Date(a.Fecha)
+  );
+  const presentes = asistenciasVisibles.filter(a => a.Presente);
+  const conEntrada = asistenciasVisibles.filter(a => a.Hora_Entrada);
+  const conSalida = asistenciasVisibles.filter(a => a.Hora_Salida);
+  const conRetardo = asistenciasVisibles.filter(tieneRetardo);
 
   // Conteo por ubicación dinámico (cualquier planta, no solo RAM1/RAM2)
   const porUbicacionMap = new Map();
@@ -1086,7 +1210,7 @@ export async function obtenerResumenDiario(fecha = new Date()) {
     conSalida: conSalida.length,
     conRetardo: conRetardo.length,
     porUbicacion,
-    detalle: asistencias.map(a => ({
+    detalle: asistenciasVisibles.map(a => ({
       empleadoId: a.ID_Empleado,
       nombreCompleto: `${a.empleado.Nombre} ${a.empleado.Apellido_Paterno} ${a.empleado.Apellido_Materno || ''}`.trim(),
       puesto: a.empleado.puesto?.Nombre_Puesto,
@@ -1095,7 +1219,7 @@ export async function obtenerResumenDiario(fecha = new Date()) {
       horaEntrada: entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada,
       horaEntradaReal: a.Hora_Entrada,
       horaSalida: a.Hora_Salida,
-      retardo: a.Retardo,
+      retardo: tieneRetardo(a),
       minutosRetardo: a.Minutos_Retardo,
       ubicacionEntrada: a.Ubicacion_Entrada,
       ubicacionSalida: a.Ubicacion_Salida

@@ -117,9 +117,11 @@
                                                 <tr>
                                                     <td><%= new Date(reg.fecha).toLocaleDateString('es-MX') %></td>
                                                     <td>
+                                                        <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
                                                         <a href="/asistencia/empleado/<%= reg.empleado.id %>">
                                                             <%= reg.empleado.nombre %>
                                                         </a>
+                                                        <% } else { %><%= reg.empleado.nombre %><% } %>
                                                         <% if (reg.multiPlanta) { %>
                                                             <span class="badge bg-warning text-dark ms-1" title="Entrada y salida en plantas distintas">multi</span>
                                                         <% } %>

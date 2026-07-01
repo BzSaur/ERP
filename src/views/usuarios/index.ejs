@@ -155,6 +155,11 @@
                 <% } %>
               </td>
               <td class="text-end">
+                <% if (usr.rol && usr.rol.Nombre_Rol && usr.rol.Nombre_Rol.toUpperCase().replace(/\s+/g,'_') === 'CONSULTA') { %>
+                <a href="/usuarios/<%= usr.ID_Usuario %>/permisos" class="btn btn-sm btn-outline-info" title="Permisos de visibilidad">
+                  <i class="bi bi-shield-lock"></i>
+                </a>
+                <% } %>
                 <a href="/usuarios/<%= usr.ID_Usuario %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
                   <i class="bi bi-pencil"></i>
                 </a>

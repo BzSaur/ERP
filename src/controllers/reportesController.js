@@ -1,8 +1,42 @@
 import prisma from '../config/database.js';
+import { getFiltroVisibilidad } from '../services/asistenciaService.js';
 
 // ============================================================
 // CONTROLADOR DE REPORTES
 // ============================================================
+
+/**
+ * IDs de áreas visibles para el usuario en el reporte por área. null = todas.
+ * Semántica AND por dimensión (dimensión vacía no restringe):
+ *  - áreas asignadas → solo esas.
+ *  - solo plantas (sin áreas) → áreas de empleados que checaron en esas plantas.
+ *  - ambas → áreas asignadas que además tengan presencia en las plantas permitidas.
+ */
+async function areasVisiblesParaUsuario(user) {
+  const filtro = await getFiltroVisibilidad(user);
+  if (!filtro) return null;
+
+  // Áreas presentes en las plantas permitidas (si hay restricción por planta).
+  let areasEnPlantas = null;
+  if (filtro.plantaIds.size > 0) {
+    areasEnPlantas = new Set();
+    const asist = await prisma.empleados_Asistencia.findMany({
+      where: { OR: [{ ID_Checador_Entrada: { not: null } }, { ID_Checador_Salida: { not: null } }] },
+      select: { empleado: { select: { ID_Area: true } }, checador_entrada: { select: { ID_Planta: true } }, checador_salida: { select: { ID_Planta: true } } }
+    });
+    for (const a of asist) {
+      const p = a.checador_entrada?.ID_Planta ?? a.checador_salida?.ID_Planta;
+      if (p != null && filtro.plantaIds.has(p) && a.empleado?.ID_Area != null) areasEnPlantas.add(a.empleado.ID_Area);
+    }
+  }
+
+  if (filtro.areaIds.size > 0 && areasEnPlantas) {
+    // AND: áreas asignadas que además existen en las plantas permitidas.
+    return new Set([...filtro.areaIds].filter(id => areasEnPlantas.has(id)));
+  }
+  if (filtro.areaIds.size > 0) return new Set(filtro.areaIds); // solo áreas
+  return areasEnPlantas; // solo plantas
+}
 
 // GET /reportes - Dashboard de reportes
 export const index = async (req, res, next) => {
@@ -38,7 +72,8 @@ export const index = async (req, res, next) => {
 // GET /reportes/por-area - Reporte de empleados por área
 export const porArea = async (req, res, next) => {
   try {
-    const areas = await prisma.cat_Areas.findMany({
+    const areasVisibles = await areasVisiblesParaUsuario(req.user);
+    let areas = await prisma.cat_Areas.findMany({
       include: {
         empleados: {
           include: {
@@ -52,6 +87,8 @@ export const porArea = async (req, res, next) => {
       },
       orderBy: { Nombre_Area: 'asc' }
     });
+
+    if (areasVisibles) areas = areas.filter(a => areasVisibles.has(a.ID_Area));
 
     // Calcular totales por área
     const reporteAreas = areas.map(area => ({

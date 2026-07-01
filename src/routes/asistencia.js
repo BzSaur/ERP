@@ -5,7 +5,7 @@
 
 import express from 'express';
 import * as asistenciaController from '../controllers/asistenciaController.js';
-import { isAuthenticated, isAdminOrRH } from '../middleware/auth.js';
+import { isAuthenticated, isAdminOrRH, canView } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -64,42 +64,37 @@ router.get('/api/bono-puntualidad/:id', asistenciaController.apiBonoPuntualidad)
 router.get('/api/por-ubicacion', asistenciaController.apiReportePorUbicacion);
 
 // ============================================================
-// Aplicar rol ADMIN/RH a todas las rutas siguientes
-// ============================================================
-router.use(isAdminOrRH);
-
-// ============================================================
-// RUTAS DE VISTAS (Requieren autenticación + ADMIN/RH)
+// RUTAS DE VISTAS DE SOLO LECTURA (ADMIN/RH/CONSULTA)
 // ============================================================
 
 // Dashboard de asistencia
-router.get('/', asistenciaController.index);
+router.get('/', canView, asistenciaController.index);
 
-// Reporte de empleado específico
-router.get('/empleado/:id', asistenciaController.reporteEmpleado);
+// Reporte/desglose de empleado específico (CONSULTA no accede al detalle individual)
+router.get('/empleado/:id', isAdminOrRH, asistenciaController.reporteEmpleado);
 
-// Consultar horas: tabla global (todos) + desglose por empleado + descarga Excel
-router.get('/horas', asistenciaController.horasTodos);
-router.get('/horas/excel', asistenciaController.descargarHorasExcel);
-router.get('/horas/:id', asistenciaController.desgloseHoras);
+// Consultar horas: tabla global (todos) + descarga Excel (CONSULTA sí); desglose individual (solo ADMIN/RH)
+router.get('/horas', canView, asistenciaController.horasTodos);
+router.get('/horas/excel', canView, asistenciaController.descargarHorasExcel);
+router.get('/horas/:id', isAdminOrRH, asistenciaController.desgloseHoras);
 
 // Reporte por ubicación (dinámico por planta)
-router.get('/por-ubicacion', asistenciaController.reporteUbicacion);
+router.get('/por-ubicacion', canView, asistenciaController.reporteUbicacion);
 
 // Desglose completo del día (presencia en vivo + tabla cronológica)
-router.get('/dia', asistenciaController.desgloseDia);
+router.get('/dia', canView, asistenciaController.desgloseDia);
+
+// ============================================================
+// RUTAS DE ESCRITURA (Requieren ADMIN/RH — CONSULTA excluido)
+// ============================================================
 
 // Formulario para checada manual
-router.get('/checada-manual', asistenciaController.formChecadaManual);
+router.get('/checada-manual', isAdminOrRH, asistenciaController.formChecadaManual);
 
 // Registrar checada manual (POST)
-router.post('/checada-manual', asistenciaController.registrarChecadaManual);
-
-// ============================================================
-// API PARA USO INTERNO (Modificación - requiere ADMIN/RH)
-// ============================================================
+router.post('/checada-manual', isAdminOrRH, asistenciaController.registrarChecadaManual);
 
 // Marcar faltas (solo RH/Admin)
-router.post('/api/marcar-faltas', asistenciaController.apiMarcarFaltas);
+router.post('/api/marcar-faltas', isAdminOrRH, asistenciaController.apiMarcarFaltas);
 
 export default router;

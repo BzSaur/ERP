@@ -83,7 +83,8 @@
                                     </div>
                                     <div class="list-group list-group-flush border rounded-bottom">
                                         <% ar.empleados.forEach(p => { %>
-                                            <a href="/asistencia/empleado/<%= p.id %>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
+                                            <% var puedeDetalle = hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador'); %>
+                                            <<%= puedeDetalle ? 'a' : 'div' %> <% if (puedeDetalle) { %>href="/asistencia/empleado/<%= p.id %>"<% } %> class="list-group-item <%= puedeDetalle ? 'list-group-item-action' : '' %> d-flex justify-content-between align-items-center py-2">
                                                 <div>
                                                     <div class="fw-semibold"><%= p.nombre %></div>
                                                     <small class="text-body-secondary"><%= p.puesto || '' %></small>
@@ -95,7 +96,7 @@
                                                     </span>
                                                     <% if (p.retardo) { %><br><small class="text-danger">retardo</small><% } %>
                                                 </div>
-                                            </a>
+                                            </<%= puedeDetalle ? 'a' : 'div' %>>
                                         <% }); %>
                                     </div>
                                 </div>
@@ -142,7 +143,9 @@
                                         </td>
                                         <td>
                                             <% if (c.empleado) { %>
+                                                <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
                                                 <a href="/asistencia/empleado/<%= c.empleado.id %>" class="text-decoration-none"><%= c.empleado.nombre %></a>
+                                                <% } else { %><%= c.empleado.nombre %><% } %>
                                             <% } else { %>
                                                 <span class="text-body-secondary">Desconocido</span>
                                             <% } %>

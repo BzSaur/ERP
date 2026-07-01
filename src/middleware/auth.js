@@ -169,8 +169,13 @@ export const isAdminOrRH = (req, res, next) => {
   return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS')(req, res, next);
 };
 
-// Verificar si puede gestionar empleados (ADMIN, RH, CONSULTA)
+// Verificar si puede gestionar empleados (ADMIN, RH) — CONSULTA es solo lectura
 export const canManageEmployees = (req, res, next) => {
+  return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS')(req, res, next);
+};
+
+// Verificar acceso de solo lectura a Asistencia/Reportes (ADMIN, RH, CONSULTA)
+export const canView = (req, res, next) => {
   return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'CONSULTA')(req, res, next);
 };
 

@@ -51,6 +51,7 @@ model Cat_Areas {
   // Relaciones
   puestos   Cat_Puestos[]
   empleados Empleados[]
+  consultor_areas Consultor_Areas[]
 
   @@map("Cat_Areas")
 }
@@ -233,11 +234,41 @@ model App_Usuarios {
   finiquitos_aprobados   Finiquito_Liquidacion[]       @relation("FiniquitoAprobado")
   incidencias_aprobadas  Empleados_Incidencias[]       @relation("IncidenciaAprobada")
   prestamos_aprobados    Empleados_Prestamos[]         @relation("PrestamoAprobado")
+  consultor_plantas      Consultor_Plantas[]
+  consultor_areas        Consultor_Areas[]
 
   @@index([Email_Office365])
   @@index([ID_Rol])
   @@index([Activo])
   @@map("App_Usuarios")
+}
+
+// Permisos granulares de visibilidad para usuarios CONSULTA (opt-in).
+// Sin filas asignadas = ve todo. Con filas = solo lo asignado.
+model Consultor_Plantas {
+  ID_Usuario Int
+  ID_Planta  Int
+  CreatedAt  DateTime @default(now())
+
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+  planta  Cat_Plantas  @relation(fields: [ID_Planta], references: [ID_Planta], onDelete: Cascade)
+
+  @@id([ID_Usuario, ID_Planta])
+  @@index([ID_Usuario])
+  @@map("Consultor_Plantas")
+}
+
+model Consultor_Areas {
+  ID_Usuario Int
+  ID_Area    Int
+  CreatedAt  DateTime @default(now())
+
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+  area    Cat_Areas    @relation(fields: [ID_Area], references: [ID_Area], onDelete: Cascade)
+
+  @@id([ID_Usuario, ID_Area])
+  @@index([ID_Usuario])
+  @@map("Consultor_Areas")
 }
 
 model Bitacora_Accesos {
@@ -696,6 +727,7 @@ model Cat_Plantas {
 
   // Relaciones
   checadores Checadores[]
+  consultor_plantas Consultor_Plantas[]
 
   @@map("Cat_Plantas")
 }

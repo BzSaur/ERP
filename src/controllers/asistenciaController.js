@@ -17,21 +17,25 @@ import { generarExcelHoras } from '../services/excelHorasService.js';
  */
 export const index = async (req, res, next) => {
   try {
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
     // Obtener resumen del día actual
-    const resumenHoy = await asistenciaService.obtenerResumenDiario();
+    const resumenHoy = await asistenciaService.obtenerResumenDiario(new Date(), filtro);
     
-    // Obtener últimas checadas
+    // Obtener últimas checadas. Con filtro de consultor traemos más y recortamos a 20
+    // tras filtrar por planta/área visibles.
     let ultimasChecadas = [];
     try {
       ultimasChecadas = await prisma.historial_Checadas.findMany({
-        take: 20,
+        take: filtro ? 200 : 20,
         orderBy: { Fecha_Hora: 'desc' },
         include: {
+          checador: { select: { ID_Planta: true } },
           asistencia: {
             include: {
               empleado: {
                 select: {
                   ID_Empleado: true,
+                  ID_Area: true,
                   Nombre: true,
                   Apellido_Paterno: true,
                   Apellido_Materno: true,
@@ -43,6 +47,13 @@ export const index = async (req, res, next) => {
           }
         }
       });
+      // Filtro de visibilidad del consultor (unión planta/área).
+      if (filtro) {
+        ultimasChecadas = ultimasChecadas
+          .filter(c => asistenciaService.asistenciaVisible(
+            { idPlanta: c.checador?.ID_Planta ?? null, idArea: c.asistencia?.empleado?.ID_Area }, filtro))
+          .slice(0, 20);
+      }
       // La checada ENTRADA muestra la hora ajustada; la real se conserva en Fecha_Hora_Real.
       ultimasChecadas = ultimasChecadas.map(c => {
         if (c.Tipo_Checada !== 'ENTRADA') return c;
@@ -123,7 +134,8 @@ export const horasTodos = async (req, res, next) => {
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
-    const datos = await asistenciaService.obtenerHorasSemanalTodos(inicio, fin);
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
+    const datos = await asistenciaService.obtenerHorasSemanalTodos(inicio, fin, filtro);
 
     res.render('asistencia/horas-todos', {
       title: 'Consultar Horas',
@@ -149,7 +161,8 @@ export const descargarHorasExcel = async (req, res, next) => {
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
-    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, redondear: redondear === '1' });
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, redondear: redondear === '1', filtro });
 
     const f1 = inicio.toISOString().slice(0, 10);
     const f2 = fin.toISOString().slice(0, 10);
@@ -210,11 +223,13 @@ export const reporteUbicacion = async (req, res, next) => {
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
-    const [reporte, plantas] = await Promise.all([
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
+    const [reporte, plantasCat] = await Promise.all([
       asistenciaService.obtenerReportePorUbicacion({
         fechaInicio: inicio,
         fechaFin: fin,
-        plantaId
+        plantaId,
+        filtro
       }),
       prisma.cat_Plantas.findMany({
         where: { Activo: true },
@@ -222,6 +237,10 @@ export const reporteUbicacion = async (req, res, next) => {
         select: { ID_Planta: true, Nombre: true }
       })
     ]);
+    // Selector de plantas: con filtro, solo las plantas que el consultor puede ver.
+    const plantas = filtro
+      ? plantasCat.filter(p => filtro.plantaIds.has(p.ID_Planta) || reporte.plantas.some(rp => rp.id === p.ID_Planta))
+      : plantasCat;
 
     res.render('asistencia/por-ubicacion', {
       title: 'Reporte por Ubicación',
@@ -246,15 +265,20 @@ export const desgloseDia = async (req, res, next) => {
     const { fecha, planta } = req.query;
     const plantaId = planta ? parseInt(planta) : null;
 
-    const [presencia, dia, plantas] = await Promise.all([
-      asistenciaService.obtenerPresenciaPorPlanta(fecha || null),
-      asistenciaService.obtenerChecadasDelDia(fecha || null, plantaId),
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
+    const [presencia, dia, plantasCat] = await Promise.all([
+      asistenciaService.obtenerPresenciaPorPlanta(fecha || null, filtro),
+      asistenciaService.obtenerChecadasDelDia(fecha || null, plantaId, filtro),
       prisma.cat_Plantas.findMany({
         where: { Activo: true },
         orderBy: { ID_Planta: 'asc' },
         select: { ID_Planta: true, Nombre: true }
       })
     ]);
+    // Selector de plantas: con filtro, solo las que el consultor puede ver.
+    const plantas = filtro
+      ? plantasCat.filter(p => filtro.plantaIds.has(p.ID_Planta) || (presencia.plantas || []).some(pp => pp.id === p.ID_Planta))
+      : plantasCat;
 
     res.render('asistencia/dia', {
       title: 'Desglose del Día',
@@ -399,8 +423,9 @@ export const apiResumenDiario = async (req, res) => {
   try {
     const { fecha } = req.query;
     const fechaConsulta = fecha ? new Date(fecha) : new Date();
-    
-    const resumen = await asistenciaService.obtenerResumenDiario(fechaConsulta);
+
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
+    const resumen = await asistenciaService.obtenerResumenDiario(fechaConsulta, filtro);
     
     res.json({
       success: true,
@@ -484,10 +509,12 @@ export const apiReportePorUbicacion = async (req, res) => {
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
+    const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
     const reporte = await asistenciaService.obtenerReportePorUbicacion({
       fechaInicio: inicio,
       fechaFin: fin,
-      plantaId: planta ? parseInt(planta) : null
+      plantaId: planta ? parseInt(planta) : null,
+      filtro
     });
     
     res.json({

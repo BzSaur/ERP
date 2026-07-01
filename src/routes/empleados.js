@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as empleadosController from '../controllers/empleadosController.js';
-import { isAuthenticated, canManageEmployees, isRH } from '../middleware/auth.js';
+import { isAuthenticated, canManageEmployees, isRH, isAdminOrRH } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -10,14 +10,16 @@ const router = Router();
 
 // Aplicar autenticación a todas las rutas
 router.use(isAuthenticated);
+// Módulo Empleados: solo ADMIN/RH (CONSULTA no accede)
+router.use(isAdminOrRH);
 
 // GET /empleados - Listar todos los empleados
 router.get('/', empleadosController.index);
 
-// GET /empleados/crear - Mostrar formulario de creación (ADMIN, RH, CONSULTA)
+// GET /empleados/crear - Mostrar formulario de creación (ADMIN, RH)
 router.get('/crear', canManageEmployees, empleadosController.crear);
 
-// POST /empleados - Guardar nuevo empleado (ADMIN, RH, CONSULTA)
+// POST /empleados - Guardar nuevo empleado (ADMIN, RH)
 router.post('/', canManageEmployees, empleadosController.store);
 
 // GET /empleados/:id - Ver detalle de empleado

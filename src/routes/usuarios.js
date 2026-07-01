@@ -29,4 +29,8 @@ router.post('/:id/eliminar', usuariosController.eliminar);
 // POST /usuarios/:id/toggle-activo - Activar/Desactivar usuario
 router.post('/:id/toggle-activo', usuariosController.toggleActivo);
 
+// Permisos de visibilidad para consultores (plantas/áreas)
+router.get('/:id/permisos', usuariosController.permisosConsultor);
+router.post('/:id/permisos', usuariosController.guardarPermisosConsultor);
+
 export default router;

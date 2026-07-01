@@ -15,9 +15,12 @@ import * as horasAdicionalesController from '../controllers/horasAdicionalesCont
 
 const router = Router();
 
-// Aplicar middleware a todas las rutas: ADMIN/RH únicamente
+// Aplicar middleware a todas las rutas: ADMIN/RH únicamente.
+// NOTA: este router se monta en '/' (no en un prefijo propio), así que el
+// gate de rol se limita a los prefijos de este módulo. Un router.use(isAdminOrRH)
+// sin path interceptaría TODO request (incluido /asistencia) y rompería CONSULTA.
 router.use(isAuthenticated);
-router.use(isAdminOrRH);
+router.use(['/nomina', '/vacaciones', '/aguinaldo', '/finiquito', '/horas-adicionales'], isAdminOrRH);
 
 // ============================================================
 // PERÍODOS Y NÓMINA

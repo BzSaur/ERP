@@ -422,6 +422,65 @@ export const toggleActivo = async (req, res) => {
   }
 };
 
+// GET /usuarios/:id/permisos - Config de visibilidad (plantas/áreas) para un consultor
+export const permisosConsultor = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [usuario, plantas, areas, asignPlantas, asignAreas] = await Promise.all([
+      prisma.app_Usuarios.findUnique({ where: { ID_Usuario: id }, include: { rol: true } }),
+      prisma.cat_Plantas.findMany({ where: { Activo: true }, orderBy: { Nombre: 'asc' } }),
+      prisma.cat_Areas.findMany({ orderBy: { Nombre_Area: 'asc' } }),
+      prisma.consultor_Plantas.findMany({ where: { ID_Usuario: id }, select: { ID_Planta: true } }),
+      prisma.consultor_Areas.findMany({ where: { ID_Usuario: id }, select: { ID_Area: true } })
+    ]);
+    if (!usuario) return res.redirect('/usuarios?error=Usuario no encontrado');
+
+    res.render('usuarios/permisos', {
+      title: 'Permisos de Consultor',
+      usuario,
+      plantas,
+      areas,
+      plantasAsignadas: new Set(asignPlantas.map(p => p.ID_Planta)),
+      areasAsignadas: new Set(asignAreas.map(a => a.ID_Area))
+    });
+  } catch (error) {
+    console.error('Error al cargar permisos:', error);
+    res.redirect('/usuarios?error=Error al cargar permisos');
+  }
+};
+
+// POST /usuarios/:id/permisos - Guardar visibilidad (reemplaza las asignaciones)
+export const guardarPermisosConsultor = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const toArr = v => (v == null ? [] : Array.isArray(v) ? v : [v]).map(Number).filter(Number.isInteger);
+    const plantaIds = toArr(req.body.plantas);
+    const areaIds = toArr(req.body.areas);
+
+    await prisma.$transaction([
+      prisma.consultor_Plantas.deleteMany({ where: { ID_Usuario: id } }),
+      prisma.consultor_Areas.deleteMany({ where: { ID_Usuario: id } }),
+      ...(plantaIds.length ? [prisma.consultor_Plantas.createMany({ data: plantaIds.map(ID_Planta => ({ ID_Usuario: id, ID_Planta })) })] : []),
+      ...(areaIds.length ? [prisma.consultor_Areas.createMany({ data: areaIds.map(ID_Area => ({ ID_Usuario: id, ID_Area })) })] : [])
+    ]);
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Consultor_Permisos',
+      idRegistro: String(id),
+      descripcion: `Permisos de consultor: ${plantaIds.length} planta(s), ${areaIds.length} área(s)`,
+      datosNuevos: { plantaIds, areaIds },
+      ip: obtenerIP(req)
+    });
+
+    res.redirect('/usuarios?success=Permisos actualizados');
+  } catch (error) {
+    console.error('Error al guardar permisos:', error);
+    res.redirect(`/usuarios/${req.params.id}/permisos?error=Error al guardar permisos`);
+  }
+};
+
 export default {
   index,
   crear,
@@ -429,5 +488,7 @@ export default {
   editar,
   update,
   eliminar,
-  toggleActivo
+  toggleActivo,
+  permisosConsultor,
+  guardarPermisosConsultor
 };

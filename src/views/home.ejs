@@ -65,6 +65,7 @@
 
 <!-- Quick Actions & Recent Employees -->
 <div class="row g-3">
+  <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
   <!-- Quick Actions -->
   <div class="col-12 col-lg-4 col-xl-3">
     <div class="card h-100">
@@ -145,4 +146,5 @@
       </div>
     </div>
   </div>
+  <% } %>
 </div>

@@ -14,12 +14,15 @@ import * as nacionalidadesController from '../controllers/nacionalidadesControll
 
 const router = Router();
 router.use(isAuthenticated);
+// NOTA: este router se monta en '/' (no en '/catalogos'), por lo que NO se
+// puede usar router.use(isAdminOrRH) global — interceptaría TODO request
+// (incluido /asistencia). El rol se aplica por-ruta en cada listado.
 
 // ============================================================
 // RUTAS DE ÁREAS
 // ============================================================
 
-router.get('/areas', areasController.index);
+router.get('/areas', isAdminOrRH, areasController.index);
 router.get('/areas/crear', isAdminOrRH, areasController.crear);
 router.post('/areas', isAdminOrRH, areasController.store);
 router.get('/areas/:id/editar', isAdminOrRH, areasController.editar);
@@ -32,7 +35,7 @@ router.post('/areas/:id/eliminar', isAdminOrRH, areasController.destroy);
 // RUTAS DE PUESTOS
 // ============================================================
 
-router.get('/puestos', puestosController.index);
+router.get('/puestos', isAdminOrRH, puestosController.index);
 router.get('/puestos/crear', isAdminOrRH, puestosController.crear);
 router.post('/puestos', isAdminOrRH, puestosController.store);
 router.get('/puestos/:id/editar', isAdminOrRH, puestosController.editar);
@@ -48,7 +51,7 @@ router.get('/puestos/api/por-area/:areaId', puestosController.getPuestosByArea);
 // RUTAS DE HORARIOS
 // ============================================================
 
-router.get('/horarios', horariosController.index);
+router.get('/horarios', isAdminOrRH, horariosController.index);
 router.get('/horarios/crear', isAdminOrRH, horariosController.crear);
 router.post('/horarios', isAdminOrRH, horariosController.store);
 router.get('/horarios/:id/editar', isAdminOrRH, horariosController.editar);
@@ -59,7 +62,7 @@ router.delete('/horarios/:id', isAdminOrRH, horariosController.eliminar);
 // RUTAS DE NACIONALIDADES
 // ============================================================
 
-router.get('/nacionalidades', nacionalidadesController.index);
+router.get('/nacionalidades', isAdminOrRH, nacionalidadesController.index);
 router.get('/nacionalidades/crear', isAdminOrRH, nacionalidadesController.crear);
 router.post('/nacionalidades', isAdminOrRH, nacionalidadesController.store);
 router.get('/nacionalidades/:id/editar', isAdminOrRH, nacionalidadesController.editar);

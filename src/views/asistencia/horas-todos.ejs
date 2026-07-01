@@ -98,9 +98,11 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
       <% datos.revisiones.forEach(function(r){ %>
         <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2" data-rev-emp="<%= r.ID_Empleado %>">
           <div>
+            <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
             <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="fw-semibold text-decoration-none">
               <%= r.nombre %>
             </a>
+            <% } else { %><span class="fw-semibold"><%= r.nombre %></span><% } %>
             <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
             <div class="mt-1 d-flex flex-wrap gap-1">
               <% r.dias.forEach(function(d){ %>
@@ -112,9 +114,11 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
             </div>
           </div>
           <div class="d-flex gap-2 align-self-center">
+            <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
             <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="btn btn-sm btn-outline-primary">
               <i class="bi bi-eye me-1"></i>Revisar
             </a>
+            <% } %>
             <button type="button" class="btn btn-sm btn-outline-secondary btn-descartar-rev" data-rev-emp="<%= r.ID_Empleado %>">
               <i class="bi bi-check2 me-1"></i>Descartar
             </button>
@@ -187,9 +191,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <tr data-id="<%= f.ID_Empleado %>" data-nombre="<%= f.nombre.toLowerCase() %>" data-total="<%= f.horas %>">
               <td class="col-id text-center text-body-secondary"><%= f.ID_Empleado %></td>
               <td class="col-emp">
+                <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
                 <a href="/asistencia/horas/<%= f.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="text-decoration-none fw-semibold">
                   <%= f.nombre %>
                 </a>
+                <% } else { %><span class="fw-semibold"><%= f.nombre %></span><% } %>
                 <% if (f.multi > 0) { %><span class="badge bg-info ms-1" style="font-size:.6rem" title="<%= f.multi %> día(s) multi-planta">MP</span><% } %>
               </td>
               <% f.celdas.forEach(function(c){
