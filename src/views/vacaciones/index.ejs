@@ -161,8 +161,8 @@
                 <td>
                   <% if (v.Fecha_Inicio && v.Fecha_Fin) { %>
                     <small>
-                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
-                      <%= v.Fecha_Fin.toLocaleDateString('es-MX') %>
+                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> - 
+                      <%= v.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
                     </small>
                   <% } else { %>
                     <span class="text-body-secondary">-</span>

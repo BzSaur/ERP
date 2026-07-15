@@ -88,6 +88,9 @@
                     <div class="card-body">
                         <h3 class="mb-0 text-danger"><%= resumen.diasAusentes %></h3>
                         <small class="text-body-secondary">Faltas</small>
+                        <% if (resumen.diasJustificados > 0) { %>
+                            <div class="small text-primary">+<%= resumen.diasJustificados %> vac/permiso</div>
+                        <% } %>
                     </div>
                 </div>
             </div>
@@ -182,7 +185,7 @@
                         <tbody>
                             <% if (resumen.detalle && resumen.detalle.length > 0) { %>
                                 <% resumen.detalle.forEach(dia => { %>
-                                    <tr class="<%= !dia.presente ? 'table-danger' : (dia.retardo ? 'table-warning' : '') %>">
+                                    <tr class="<%= !dia.presente ? (dia.ausencia ? 'table-info' : 'table-danger') : (dia.retardo ? 'table-warning' : '') %>">
                                         <td>
                                             <strong><%= new Date(dia.fecha).toLocaleDateString('es-MX') %></strong>
                                         </td>
@@ -192,6 +195,9 @@
                                         <td>
                                             <% if (dia.presente) { %>
                                                 <span class="badge bg-success">Presente</span>
+                                                <% if (dia.ausencia) { %><span class="badge bg-primary ms-1" title="Trabajó durante periodo de <%= dia.ausencia.toLowerCase() %>"><%= dia.ausencia %></span><% } %>
+                                            <% } else if (dia.ausencia) { %>
+                                                <span class="badge bg-primary" title="Ausencia justificada — no cuenta como falta"><%= dia.ausencia %></span>
                                             <% } else { %>
                                                 <span class="badge bg-danger">Falta</span>
                                             <% } %>

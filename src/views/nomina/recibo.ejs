@@ -25,10 +25,10 @@
       <div class="col-md-6 text-md-end">
         <h5 class="mb-1"><%= nomina.periodo.Nombre_Periodo %></h5>
         <p class="mb-0 text-body-secondary">
-          Periodo: <%= nomina.periodo.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
-          <%= nomina.periodo.Fecha_Fin.toLocaleDateString('es-MX') %>
+          Periodo: <%= nomina.periodo.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> - 
+          <%= nomina.periodo.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
         </p>
-        <p class="mb-0 text-body-secondary">Fecha de Pago: <%= nomina.periodo.Fecha_Pago.toLocaleDateString('es-MX') %></p>
+        <p class="mb-0 text-body-secondary">Fecha de Pago: <%= nomina.periodo.Fecha_Pago.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></p>
       </div>
     </div>
     

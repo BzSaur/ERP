@@ -11,7 +11,7 @@
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora } from '../utils/tiempo.js';
+import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB } from '../utils/tiempo.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -72,6 +72,84 @@ export function asistenciaVisible({ idPlanta, idArea }, filtro) {
   if (filtro.plantaIds.size > 0 && !(idPlanta != null && filtro.plantaIds.has(idPlanta))) return false;
   if (filtro.areaIds.size > 0 && !(idArea != null && filtro.areaIds.has(idArea))) return false;
   return true;
+}
+
+// ============================================================
+// AUSENCIAS JUSTIFICADAS (vacaciones / incidencias aprobadas)
+// ============================================================
+
+// Día calendario como número YYYYMMDD, extraído en UTC. Robusto para las dos
+// representaciones que conviven aquí (TZ del proceso = America/Mexico_City):
+//  - columnas @db.Date leídas a medianoche UTC (00:00Z) -> partes UTC = ese día
+//  - fechas construidas a medianoche local (06:00Z)      -> partes UTC = ese día
+// Mismo criterio que las llaves de la matriz (toISOString().slice(0,10)).
+// NO usar partes locales: una @db.Date a 00:00Z se correría -1 día.
+const ymdUTC = d => { const x = new Date(d); return x.getUTCFullYear() * 10000 + (x.getUTCMonth() + 1) * 100 + x.getUTCDate(); };
+
+/**
+ * Periodos de ausencia justificada que se traslapan con el rango:
+ * vacaciones (EN_CURSO/TOMADAS con fechas) e incidencias APROBADAS.
+ * El empleado NO está deshabilitado ni sale del checador: solo se etiquetan
+ * esos días en las vistas de asistencia para no contarlos como falta.
+ *
+ * @param {Date} fechaInicio
+ * @param {Date} fechaFin
+ * @param {number|null} empleadoId  limitar a un empleado (opcional)
+ * @returns {Promise<Map<number, Array<{desde:number, hasta:number, etiqueta:string}>>>}
+ */
+export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, empleadoId = null) {
+  // Margen de 1 día en la query por el desfase UTC/local de @db.Date;
+  // el filtro exacto por día lo hace ausenciaEnFecha con YYYYMMDD.
+  const desde = new Date(new Date(fechaInicio).getTime() - 24 * 3600 * 1000);
+  const hasta = new Date(new Date(fechaFin).getTime() + 24 * 3600 * 1000);
+  const porEmpleado = empleadoId ? { ID_Empleado: empleadoId } : {};
+
+  const [vacaciones, incidencias] = await Promise.all([
+    prisma.vacaciones.findMany({
+      where: {
+        ...porEmpleado,
+        Estado: { in: ['EN_CURSO', 'TOMADAS'] },
+        Fecha_Inicio: { lte: hasta },
+        Fecha_Fin: { gte: desde }
+      },
+      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
+    }),
+    prisma.empleados_Incidencias.findMany({
+      where: {
+        ...porEmpleado,
+        Estado: 'APROBADA',
+        Fecha_Inicio: { lte: hasta },
+        Fecha_Fin: { gte: desde }
+      },
+      select: {
+        ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true,
+        tipo_incidencia: { select: { Nombre: true } }
+      }
+    })
+  ]);
+
+  const mapa = new Map();
+  const agregar = (id, ini, fin, etiqueta) => {
+    if (!ini || !fin) return;
+    if (!mapa.has(id)) mapa.set(id, []);
+    mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta });
+  };
+  for (const v of vacaciones) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones');
+  for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso');
+  return mapa;
+}
+
+/**
+ * Etiqueta de ausencia justificada de un empleado en una fecha, o null.
+ * Acepta Date de @db.Date (medianoche UTC) o construido local (ver ymdUTC).
+ * @param {Map} mapa  salida de obtenerAusenciasJustificadas
+ */
+export function ausenciaEnFecha(mapa, empleadoId, fecha) {
+  const periodos = mapa?.get(empleadoId);
+  if (!periodos) return null;
+  const ymd = ymdUTC(fecha);
+  const p = periodos.find(p => ymd >= p.desde && ymd <= p.hasta);
+  return p ? p.etiqueta : null;
 }
 
 // ============================================================
@@ -312,7 +390,7 @@ export async function obtenerResumenAsistencia({
   fechaInicio,
   fechaFin
 }) {
-  const [asistencias, empleadoInfo] = await Promise.all([
+  const [asistencias, empleadoInfo, ausencias] = await Promise.all([
     prisma.empleados_Asistencia.findMany({
       where: {
         ID_Empleado: empleadoId,
@@ -326,7 +404,8 @@ export async function obtenerResumenAsistencia({
     prisma.empleados.findUnique({
       where: { ID_Empleado: empleadoId },
       select: { area: { select: { Nombre_Area: true } }, puesto: { select: { Nombre_Puesto: true } } }
-    })
+    }),
+    obtenerAusenciasJustificadas(fechaInicio, fechaFin, empleadoId)
   ]);
   const empParaRegla = { area: empleadoInfo?.area, puesto: empleadoInfo?.puesto };
 
@@ -335,6 +414,7 @@ export async function obtenerResumenAsistencia({
     totalDias: asistencias.length,
     diasPresentes: 0,
     diasAusentes: 0,
+    diasJustificados: 0, // vacaciones/incidencia aprobada: no cuentan como falta
     retardos: 0,
     minutosRetardoTotal: 0,
     horasTrabajadas: 0,
@@ -348,8 +428,11 @@ export async function obtenerResumenAsistencia({
 
   for (const asistencia of asistencias) {
     // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
+    // Fecha de BD (@db.Date, medianoche UTC) a local para getDay/regla de tolerancia.
+    const fechaDia = fechaLocalDB(asistencia.Fecha);
     const entradaMostrada = entradaPagoDesde(asistencia.Hora_Entrada, empParaRegla) || asistencia.Hora_Entrada;
-    const retardoDia = asistencia.Presente && hayRetardoEnEntrada(entradaMostrada, asistencia.Fecha);
+    const retardoDia = asistencia.Presente && hayRetardoEnEntrada(entradaMostrada, fechaDia);
+    const etiquetaAusencia = ausenciaEnFecha(ausencias, empleadoId, fechaDia);
 
     if (asistencia.Presente) {
       resumen.diasPresentes++;
@@ -379,13 +462,16 @@ export async function obtenerResumenAsistencia({
           resumen.porUbicacion[asistencia.Ubicacion_Salida] || { entradas: 0, salidas: 0 };
         resumen.porUbicacion[asistencia.Ubicacion_Salida].salidas++;
       }
+    } else if (etiquetaAusencia) {
+      resumen.diasJustificados++; // vacaciones/permiso: no es falta
     } else {
       resumen.diasAusentes++;
     }
-    
+
     resumen.detalle.push({
-      fecha: asistencia.Fecha,
+      fecha: fechaDia,
       presente: asistencia.Presente,
+      ausencia: etiquetaAusencia,
       entrada: entradaMostrada,
       entradaReal: asistencia.Hora_Entrada,
       salida: asistencia.Hora_Salida,
@@ -434,7 +520,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
-  const [asistencias, empleadoInfo] = await Promise.all([
+  const [asistencias, empleadoInfo, ausencias] = await Promise.all([
     prisma.empleados_Asistencia.findMany({
       where: { ID_Empleado: empleadoId, Fecha: { gte: inicio, lte: fin } },
       orderBy: { Fecha: 'asc' },
@@ -448,7 +534,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     prisma.empleados.findUnique({
       where: { ID_Empleado: empleadoId },
       select: { area: { select: { Nombre_Area: true } }, puesto: { select: { Nombre_Puesto: true } } }
-    })
+    }),
+    obtenerAusenciasJustificadas(inicio, fin, empleadoId)
   ]);
   const empParaRegla = { area: empleadoInfo?.area, puesto: empleadoInfo?.puesto };
 
@@ -460,7 +547,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const horasPorPlanta = new Map(); // planta -> horas
 
   for (const a of asistencias) {
-    const fecha = new Date(a.Fecha);
+    // @db.Date a medianoche local: getDay/nombreDia/tolerancia correctos en México.
+    const fecha = fechaLocalDB(a.Fecha);
     const checadas = a.historial_checadas || [];
     // Horas/retardo/entrada desde la BD consolidada (Empleados_Asistencia). Fuente única =
     // BD, igual que la vista global y el Excel. Las checadas crudas son solo auditoría.
@@ -482,6 +570,9 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     dias.push({
       fecha,
       nombreDia: NOMBRES_DIA[fecha.getDay()],
+      // Vacaciones / incidencia aprobada ese día (etiqueta o null). El día no
+      // cuenta como falta; si además hay checadas, se muestran normal.
+      ausencia: ausenciaEnFecha(ausencias, empleadoId, fecha),
       presente: a.Presente,
       entrada: entradaMostradaDia,
       entradaReal: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
@@ -509,6 +600,30 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     });
   }
 
+  // Días de ausencia justificada SIN registro de asistencia: agregar fila
+  // sintética para que la vacación/permiso sea visible en la tabla.
+  const ymdConRegistro = new Set(dias.map(d => ymdUTC(d.fecha)));
+  for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0) continue; // domingo no laborable
+    if (ymdConRegistro.has(ymdUTC(d))) continue;
+    const etiqueta = ausenciaEnFecha(ausencias, empleadoId, d);
+    if (!etiqueta) continue;
+    const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
+    dias.push({
+      fecha,
+      nombreDia: NOMBRES_DIA[fecha.getDay()],
+      ausencia: etiqueta,
+      presente: false,
+      entrada: null, entradaReal: null, salida: null,
+      horas: 0, extras: 0, normales: 0,
+      retardo: false, minutosRetardo: 0,
+      multiPlanta: false, ubicacionEntrada: null, ubicacionSalida: null,
+      minutosComida: 0, totalChecadas: 0, incompleta: false,
+      pares: [], checadas: [], notas: ''
+    });
+  }
+  dias.sort((a, b) => a.fecha - b.fecha);
+
   // ---- KPIs ----
   // Límite semanal FIJO de 45h para todos. El extra es el excedente semanal
   // (incluye sábado en el total); no hay extra por día.
@@ -516,10 +631,19 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const horasRedondeadas = Math.round(totalHoras * 100) / 100;
   const extrasSobreLimite = Math.max(0, Math.round((horasRedondeadas - limiteSemana) * 100) / 100);
   const normalesSemana = Math.round((horasRedondeadas - extrasSobreLimite) * 100) / 100;
-  // Días laborables del rango (L-S, sin domingos)
+  // Días laborables del rango (L-S, sin domingos). Los días de ausencia
+  // justificada (vacaciones/permiso) en que NO trabajó no cuentan como
+  // laborables: no penalizan el % de cumplimiento.
+  const ymdTrabajados = new Set(dias.filter(x => x.presente && x.horas > 0).map(x => ymdUTC(x.fecha)));
   let diasLaborables = 0;
+  let diasAusenciaJustificada = 0;
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() !== 0) diasLaborables++;
+    if (d.getDay() === 0) continue;
+    if (ausenciaEnFecha(ausencias, empleadoId, d) && !ymdTrabajados.has(ymdUTC(d))) {
+      diasAusenciaJustificada++;
+      continue;
+    }
+    diasLaborables++;
   }
   const frecuenciaAsistencia = diasLaborables > 0
     ? Math.round((diasTrabajados / diasLaborables) * 100) : 0;
@@ -545,6 +669,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       minutosRetardoTotal,
       diasRetardo,
       diasLaborables,
+      diasAusenciaJustificada,
       frecuenciaAsistencia,   // % de días laborables con asistencia
       promedioHorasDia,
       diasMultiPlanta,
@@ -577,30 +702,25 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
   });
 
-  // Filtro de visibilidad del consultor: por área del empleado (directo). La dimensión
-  // planta se evalúa aparte por asistencia; aquí, si el filtro tiene solo áreas, se
-  // excluyen los empleados de áreas no permitidas salvo que tengan asistencia en planta ok.
-  let plantasPermitidasPorEmp = null;
+  // Mapa ID_Area por empleado (para filtrar cada jornada por área+planta).
+  const areaPorEmp = new Map(empleados.map(e => [e.ID_Empleado, e.ID_Area]));
+
+  // Resolvedor de planta por asistencia (checador FK -> string legacy). Se usa para
+  // filtrar CADA jornada por planta cuando hay filtro de consultor.
+  let resolverPlantaAsist = null;
   if (filtro) {
-    const asistPlanta = await prisma.empleados_Asistencia.findMany({
-      where: { Fecha: { gte: inicio, lte: fin } },
-      select: { ID_Empleado: true, ID_Checador_Entrada: true, Ubicacion_Entrada: true }
-    });
     const chks = await prisma.checadores.findMany({ select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true } });
     const chkAPlanta = new Map(chks.map(c => [c.ID_Checador, c.ID_Planta]));
     const strAPlanta = new Map();
     const plantasCat = await prisma.cat_Plantas.findMany({ select: { ID_Planta: true, Nombre: true } });
     for (const pl of plantasCat) strAPlanta.set(normalizarUbicacion(pl.Nombre), pl.ID_Planta);
     for (const c of chks) if (c.Ubicacion_Codigo) strAPlanta.set(normalizarUbicacion(c.Ubicacion_Codigo), c.ID_Planta);
-    plantasPermitidasPorEmp = new Set();
-    for (const a of asistPlanta) {
+    resolverPlantaAsist = (a) => {
       let idP = a.ID_Checador_Entrada != null ? chkAPlanta.get(a.ID_Checador_Entrada) : null;
-      if (idP == null) idP = strAPlanta.get(normalizarUbicacion(a.Ubicacion_Entrada));
-      if (idP != null && filtro.plantaIds.has(idP)) plantasPermitidasPorEmp.add(a.ID_Empleado);
-    }
-    empleados = empleados.filter(e =>
-      asistenciaVisible({ idPlanta: null, idArea: e.ID_Area }, filtro) || plantasPermitidasPorEmp.has(e.ID_Empleado)
-    );
+      if (idP == null) idP = a.ID_Checador_Salida != null ? chkAPlanta.get(a.ID_Checador_Salida) : null;
+      if (idP == null) idP = strAPlanta.get(normalizarUbicacion(a.Ubicacion_Entrada || a.Ubicacion_Salida));
+      return idP ?? null;
+    };
   }
 
   const empReglaMap = new Map(empleados.map(e => [e.ID_Empleado, { area: e.area, puesto: e.puesto }]));
@@ -612,9 +732,13 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       ID_Empleado: true, Fecha: true, Presente: true, Retardo: true, Multi_Planta: true,
       Hora_Entrada: true, Hora_Salida: true, Minutos_Retardo: true,
       Horas_Trabajadas: true, Horas_Extras: true,
-      Ubicacion_Entrada: true, Ubicacion_Salida: true
+      Ubicacion_Entrada: true, Ubicacion_Salida: true,
+      ID_Checador_Entrada: true, ID_Checador_Salida: true
     }
   });
+
+  // Vacaciones e incidencias aprobadas del rango (etiqueta por empleado/día).
+  const ausencias = await obtenerAusenciasJustificadas(inicio, fin);
 
   // Lista de fechas del rango (para la matriz)
   const fechas = [];
@@ -626,12 +750,19 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const porEmpleado = new Map();
   const porPlanta = new Map();   // planta -> { horas, dias }
   const diasEmp = new Map();     // ID_Empleado -> (yyyy-mm-dd -> celda)
+  const empConDatos = new Set(); // empleados con al menos una jornada visible
   for (const a of asistencias) {
+    // Filtro por JORNADA (no por empleado): cada día debe cumplir planta+área del filtro.
+    if (filtro) {
+      const idPlanta = resolverPlantaAsist(a);
+      if (!asistenciaVisible({ idPlanta, idArea: areaPorEmp.get(a.ID_Empleado) }, filtro)) continue;
+      empConDatos.add(a.ID_Empleado);
+    }
     const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const h = Number(a.Horas_Trabajadas) || 0;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
     const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
-    const esRetardo = a.Presente && hayRetardoEnEntrada(entradaCelda, new Date(a.Fecha));
+    const esRetardo = a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
     if (a.Presente && h > 0) acc.dias++;
     if (esRetardo) acc.retardos++;
     if (a.Multi_Planta) acc.multi++;
@@ -686,7 +817,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const UMBRAL_REVISION_HORAS = 2;
   const NOMBRES_DIA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-  const filas = empleados.map(e => {
+  // Con filtro: solo empleados con al menos una jornada visible (planta/área permitida).
+  const empleadosVisibles = filtro ? empleados.filter(e => empConDatos.has(e.ID_Empleado)) : empleados;
+
+  const filas = empleadosVisibles.map(e => {
     const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const horas = Math.round(acc.horas * 100) / 100;
     // Extra = excedente sobre 45h semanales (incluye sábado en el total).
@@ -695,16 +829,19 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     const normales = Math.round((horas - extras) * 100) / 100;
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
     const diasSemana = e.tipo_horario?.Dias_Semana || 6;
-    const esperadas = jornada * diasSemana;
 
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
     const revisiones = []; // días <2h que RH debe revisar
+    let diasAusencia = 0; // vacaciones/permiso sin trabajar (no cuentan como falta)
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
       const esDomingo = f.getDay() === 0;
-      if (!c) return { presente: false, vacio: !esDomingo, esDomingo };
+      // Etiqueta de vacaciones/permiso; la celda deja de ser "Falta".
+      const ausencia = ausenciaEnFecha(ausencias, e.ID_Empleado, f);
+      if (ausencia && !esDomingo && !(c && c.presente && c.horas > 0)) diasAusencia++;
+      if (!c) return { presente: false, vacio: !esDomingo && !ausencia, esDomingo, ausencia };
       // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
       const tieneChecada = !!(c.entrada || c.salida);
@@ -719,8 +856,11 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           motivo: !c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')
         });
       }
-      return { ...c, esDomingo, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
+      return { ...c, esDomingo, ausencia, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
+
+    // Horas esperadas: descontar la jornada de los días de vacación/permiso.
+    const esperadas = Math.max(0, jornada * diasSemana - jornada * diasAusencia);
 
     return {
       ID_Empleado: e.ID_Empleado,
@@ -729,6 +869,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       puesto: e.puesto?.Nombre_Puesto || '',
       horas, extras, normales,
       dias: acc.dias, retardos: acc.retardos, multi: acc.multi,
+      diasAusencia,
       esperadas,
       faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100),
       celdas,
@@ -868,7 +1009,7 @@ export async function obtenerReportePorUbicacion({
     bucket.totalChecadas++;
     const entradaMostrar = entradaPagoDesde(asistencia.Hora_Entrada, asistencia.empleado);
     bucket.detalle.push({
-      fecha: asistencia.Fecha,
+      fecha: fechaLocalDB(asistencia.Fecha),
       empleado: {
         id: asistencia.empleado.ID_Empleado,
         nombre: `${asistencia.empleado.Nombre} ${asistencia.empleado.Apellido_Paterno}`,
@@ -1005,7 +1146,7 @@ export async function obtenerPresenciaPorPlanta(fecha = null, filtro = null) {
       area: a.empleado.area?.Nombre_Area,
       entrada: entradaPago || a.Hora_Entrada,
       entradaReal: a.Hora_Entrada,
-      retardo: hayRetardoEnEntrada(entradaPago, new Date(a.Fecha))
+      retardo: hayRetardoEnEntrada(entradaPago, fechaLocalDB(a.Fecha))
     });
     totalPresentes++;
   }
@@ -1180,7 +1321,7 @@ export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
 
   // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
   const tieneRetardo = a => a.Presente && hayRetardoEnEntrada(
-    entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada, new Date(a.Fecha)
+    entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada, fechaLocalDB(a.Fecha)
   );
   const presentes = asistenciasVisibles.filter(a => a.Presente);
   const conEntrada = asistenciasVisibles.filter(a => a.Hora_Entrada);
@@ -1297,18 +1438,34 @@ export async function marcarFaltasAutomaticas(fecha = null) {
 
   // Crear registros de falta
   const faltasCreadas = [];
+  // Columnas @db.Date se leen a medianoche UTC: comparar contra la medianoche
+  // UTC del mismo día calendario (con fechaProcesar local, el último día del
+  // periodo quedaba fuera del gte y generaba falta).
+  const diaUTC = new Date(Date.UTC(
+    fechaProcesar.getFullYear(), fechaProcesar.getMonth(), fechaProcesar.getDate()
+  ));
   for (const empleado of empleadosSinAsistencia) {
-    // Verificar si no tiene incidencia justificada
-    const incidenciaJustificada = await prisma.empleados_Incidencias.findFirst({
-      where: {
-        ID_Empleado: empleado.ID_Empleado,
-        Fecha_Inicio: { lte: fechaProcesar },
-        Fecha_Fin: { gte: fechaProcesar },
-        Estado: 'APROBADA'
-      }
-    });
+    // Sin falta si tiene incidencia aprobada O vacaciones en curso/tomadas ese día.
+    const [incidenciaJustificada, vacacion] = await Promise.all([
+      prisma.empleados_Incidencias.findFirst({
+        where: {
+          ID_Empleado: empleado.ID_Empleado,
+          Fecha_Inicio: { lte: diaUTC },
+          Fecha_Fin: { gte: diaUTC },
+          Estado: 'APROBADA'
+        }
+      }),
+      prisma.vacaciones.findFirst({
+        where: {
+          ID_Empleado: empleado.ID_Empleado,
+          Estado: { in: ['EN_CURSO', 'TOMADAS'] },
+          Fecha_Inicio: { lte: diaUTC },
+          Fecha_Fin: { gte: diaUTC }
+        }
+      })
+    ]);
 
-    if (!incidenciaJustificada) {
+    if (!incidenciaJustificada && !vacacion) {
       const falta = await prisma.empleados_Asistencia.create({
         data: {
           ID_Empleado: empleado.ID_Empleado,
@@ -1350,5 +1507,7 @@ export default {
   calcularHorasDesdeChecadas,
   obtenerDesgloseHoras,
   obtenerHorasSemanalTodos,
+  obtenerAusenciasJustificadas,
+  ausenciaEnFecha,
   UBICACIONES
 };

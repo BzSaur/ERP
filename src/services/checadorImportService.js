@@ -232,8 +232,10 @@ function extraerRangoFechas(datos) {
   }
 
   const partes = rangoStr.split('~').map(s => s.trim());
-  const fechaInicio = new Date(partes[0]);
-  const fechaFin = new Date(partes[1]);
+  // 'YYYY-MM-DD' + T00:00:00 = medianoche LOCAL. Sin sufijo sería medianoche UTC
+  // y los días del import (encabezados, getDay) se correrían -1 en México.
+  const fechaInicio = new Date(`${partes[0]}T00:00:00`);
+  const fechaFin = new Date(`${partes[1]}T00:00:00`);
 
   if (isNaN(fechaInicio.getTime()) || isNaN(fechaFin.getTime())) {
     throw new Error(`Formato de fecha inválido: "${rangoStr}"`);

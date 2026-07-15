@@ -82,11 +82,11 @@
           </div>
           <div class="col-6 col-md-3">
             <small class="text-body-secondary d-block">Fecha de Ingreso</small>
-            <strong><%= finiquito.Fecha_Ingreso ? finiquito.Fecha_Ingreso.toLocaleDateString('es-MX') : 'N/A' %></strong>
+            <strong><%= finiquito.Fecha_Ingreso ? finiquito.Fecha_Ingreso.toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'N/A' %></strong>
           </div>
           <div class="col-6 col-md-3">
             <small class="text-body-secondary d-block">Fecha de Baja</small>
-            <strong><%= finiquito.Fecha_Baja ? finiquito.Fecha_Baja.toLocaleDateString('es-MX') : 'N/A' %></strong>
+            <strong><%= finiquito.Fecha_Baja ? finiquito.Fecha_Baja.toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'N/A' %></strong>
           </div>
           <div class="col-6 col-md-3">
             <small class="text-body-secondary d-block">Antigüedad</small>

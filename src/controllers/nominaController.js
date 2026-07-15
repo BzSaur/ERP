@@ -5,6 +5,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple, calcularNominaSemanal } from '../services/nominaService.js';
+import { obtenerAusenciasJustificadas, ausenciaEnFecha } from '../services/asistenciaService.js';
 
 // ============================================================
 // PERIODOS DE NÓMINA
@@ -224,15 +225,50 @@ export const calcularNomina = async (req, res) => {
     
     let nominasCreadas = 0;
     const diasLaborables = 6; // L-S
-    
+
+    // Vacaciones e incidencias aprobadas del periodo: días CON GOCE que se pagan
+    // aunque no haya checada, y que nunca cuentan como falta.
+    const ausencias = await obtenerAusenciasJustificadas(periodo.Fecha_Inicio, periodo.Fecha_Fin);
+
+    // Días laborables (L-S) del periodo como fechas locales. Fecha_Inicio/Fin son
+    // @db.Date (medianoche UTC): reconstruir con partes UTC para no correr -1 día.
+    const diasPeriodo = [];
+    {
+      const ini = periodo.Fecha_Inicio, fin = periodo.Fecha_Fin;
+      const cur = new Date(ini.getUTCFullYear(), ini.getUTCMonth(), ini.getUTCDate());
+      const end = new Date(fin.getUTCFullYear(), fin.getUTCMonth(), fin.getUTCDate());
+      for (; cur <= end; cur.setDate(cur.getDate() + 1)) {
+        if (cur.getDay() !== 0) diasPeriodo.push(new Date(cur));
+      }
+    }
+    // YYYYMMDD con partes UTC: vale para @db.Date (00:00Z) y para fechas locales
+    // de México (06:00Z) — ver mismo helper en asistenciaService.
+    const ymdDia = d => { const x = new Date(d); return x.getUTCFullYear() * 10000 + (x.getUTCMonth() + 1) * 100 + x.getUTCDate(); };
+
     for (const empleado of empleados) {
-      // Calcular días trabajados (sin contar domingos)
+      // Calcular días trabajados (sin contar domingos).
+      // getUTCDay: Fecha es @db.Date (medianoche UTC); getDay() local en México
+      // corre -1 día y excluía LUNES en lugar de domingos.
       const asistenciasSinDomingo = empleado.asistencia.filter(a => {
         const fecha = new Date(a.Fecha);
-        return fecha.getDay() !== 0; // Excluir domingos
+        return fecha.getUTCDay() !== 0; // Excluir domingos
       });
-      const diasTrabajados = asistenciasSinDomingo.filter(a => a.Presente).length || periodo.Dias_Periodo;
-      const diasFaltas = asistenciasSinDomingo.filter(a => !a.Presente && !a.Justificado).length;
+      // Días con checada real. SIN fallback a Dias_Periodo: cero registros = cero
+      // días trabajados (antes un empleado sin una sola checada cobraba la semana).
+      const diasTrabajados = asistenciasSinDomingo.filter(a => a.Presente).length;
+      const ymdPresente = new Set(
+        asistenciasSinDomingo.filter(a => a.Presente).map(a => ymdDia(a.Fecha))
+      );
+      // Falta = registro no presente, no justificado y SIN vacación/permiso ese día
+      // (defensa contra faltas históricas creadas durante vacaciones).
+      const diasFaltas = asistenciasSinDomingo.filter(a =>
+        !a.Presente && !a.Justificado &&
+        !ausenciaEnFecha(ausencias, empleado.ID_Empleado, new Date(a.Fecha))
+      ).length;
+      // Días de vacación/permiso aprobado sin checada: se pagan (con goce).
+      const diasJustificados = diasPeriodo.filter(d =>
+        ausenciaEnFecha(ausencias, empleado.ID_Empleado, d) && !ymdPresente.has(ymdDia(d))
+      ).length;
       
       // Calcular horas adicionales (todos los tipos que generan pago extra)
       const horasExtra = empleado.horas_adicionales
@@ -267,8 +303,11 @@ export const calcularNomina = async (req, res) => {
       // ============================================================
       let salarioBase;
       let pagoDomingoLFT = 0;
-      const diasEfectivos = Math.max(0, diasTrabajados - diasFaltas);
-      
+      // Días pagados = trabajados + vacación/permiso con goce (tope: días laborables).
+      // Las faltas NO se restan de los trabajados (una falta ya no es día trabajado;
+      // restarla castigaba doble): solo bloquean el pago de semana completa.
+      const diasEfectivos = Math.min(diasLaborables, diasTrabajados + diasJustificados);
+
       if (diasFaltas === 0 && diasEfectivos >= diasLaborables) {
         // Semana completa: 7 días (6 laborales + domingo descanso)
         salarioBase = redondear(salarioDiario * 7);

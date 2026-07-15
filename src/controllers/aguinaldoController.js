@@ -190,8 +190,9 @@ export const calcular = async (req, res) => {
 
         for (const asist of asistencias) {
           const horasTrabajadas = Number(asist.Horas_Trabajadas) || 0;
-          // Determinar horas esperadas para ese día
-          const diaSemana = new Date(asist.Fecha).getDay();
+          // Determinar horas esperadas para ese día.
+          // getUTCDay: Fecha es @db.Date (medianoche UTC); getDay() local corre -1 día.
+          const diaSemana = new Date(asist.Fecha).getUTCDay();
           let horasEsperadas = horasJornada;
 
           // Si es sábado, verificar horas de sábado

@@ -2,9 +2,9 @@
   <div>
     <h2 class="mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i><%= periodo.Nombre_Periodo %></h2>
     <p class="text-body-secondary mb-0">
-      <%= periodo.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
-      <%= periodo.Fecha_Fin.toLocaleDateString('es-MX') %>
-      | Pago: <%= periodo.Fecha_Pago.toLocaleDateString('es-MX') %>
+      <%= periodo.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> - 
+      <%= periodo.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
+      | Pago: <%= periodo.Fecha_Pago.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
     </p>
   </div>
   <div class="d-flex gap-2">

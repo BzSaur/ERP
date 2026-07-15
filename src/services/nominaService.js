@@ -467,9 +467,10 @@ export async function evaluarPuntualidad({
   let horasFaltantes = 0;
 
   for (const asistencia of asistencias) {
-    // Ignorar domingos (día 0)
+    // Ignorar domingos (día 0). getUTCDay: Fecha es @db.Date (medianoche UTC);
+    // getDay() local en México corre -1 día y saltaba lunes en vez de domingo.
     const fecha = new Date(asistencia.Fecha);
-    if (fecha.getDay() === 0) {
+    if (fecha.getUTCDay() === 0) {
       continue;
     }
 

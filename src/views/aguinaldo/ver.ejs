@@ -69,7 +69,7 @@
           </div>
           <div class="col-md-6">
             <small class="text-body-secondary d-block">Fecha de Ingreso</small>
-            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
+            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'N/A' %></strong>
           </div>
           <div class="col-md-6">
             <small class="text-body-secondary d-block">Salario Diario</small>
@@ -211,11 +211,11 @@
         <div class="row g-2">
           <div class="col-6">
             <small class="text-body-secondary d-block">Desde</small>
-            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX') : 'N/A' %></strong>
+            <strong><%= aguinaldo.Fecha_Ingreso ? new Date(aguinaldo.Fecha_Ingreso).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'N/A' %></strong>
           </div>
           <div class="col-6">
             <small class="text-body-secondary d-block">Hasta</small>
-            <strong><%= aguinaldo.Fecha_Corte ? new Date(aguinaldo.Fecha_Corte).toLocaleDateString('es-MX') : 'N/A' %></strong>
+            <strong><%= aguinaldo.Fecha_Corte ? new Date(aguinaldo.Fecha_Corte).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'N/A' %></strong>
           </div>
         </div>
       </div>

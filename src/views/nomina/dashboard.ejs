@@ -64,7 +64,7 @@
             <div>
               <div class="stat-label">Próximo Pago</div>
               <div class="stat-value stat-value-xs">
-                <%= stats.periodoPendiente.Fecha_Pago.toLocaleDateString('es-MX') %>
+                <%= stats.periodoPendiente.Fecha_Pago.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
               </div>
               <small><%= stats.periodoPendiente.Nombre_Periodo %></small>
             </div>
@@ -172,8 +172,8 @@
                 </td>
                 <td>
                   <small>
-                    <%= p.Fecha_Inicio.toLocaleDateString('es-MX') %> - 
-                    <%= p.Fecha_Fin.toLocaleDateString('es-MX') %>
+                    <%= p.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> - 
+                    <%= p.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
                   </small>
                 </td>
                 <td class="text-end"><%= p.empleados %></td>

@@ -172,7 +172,7 @@
                     <span class="badge bg-warning text-dark">Liquidación</span>
                   <% } %>
                 </td>
-                <td><%= f.Fecha_Baja.toLocaleDateString('es-MX') %></td>
+                <td><%= f.Fecha_Baja.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
                 <td><small><%= f.Motivo_Baja %></small></td>
                 <td class="text-center">
                   <strong><%= f.Antiguedad_Anos %></strong>a 

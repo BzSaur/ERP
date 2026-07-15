@@ -58,4 +58,20 @@ export function minutosDelDiaAhora() {
   return h * 60 + m;
 }
 
-export default { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora };
+/**
+ * Convierte un valor de columna @db.Date (Prisma lo devuelve a medianoche UTC,
+ * p.ej. 2026-07-01T00:00:00Z) a un Date a MEDIANOCHE LOCAL del mismo día
+ * calendario. Sin esto, getDay()/getDate()/toLocaleDateString en TZ México
+ * regresan el día ANTERIOR (30-jun 18:00).
+ * Idempotente para fechas ya construidas a medianoche local en México.
+ * @param {Date|string|null} d
+ * @returns {Date|null}
+ */
+export function fechaLocalDB(d) {
+  if (!d) return null;
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return null;
+  return new Date(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate());
+}
+
+export default { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB };

@@ -142,6 +142,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas td.cel-completa { background:#d1e7dd; }
   .matriz-horas td.cel-parcial  { background:#fff3cd; }
   .matriz-horas td.cel-ausente  { background:#f8d7da; }
+  .matriz-horas td.cel-vacacion { background:#cfe2ff; }
   .matriz-horas td.cel-dom      { background:#f1f3f5; }
   .matriz-horas td.cel-revision { background:#ffe0b2; outline:2px solid #fd7e14; outline-offset:-2px; }
   .matriz-horas td.cel-revision .hrs { color:#d63384; }
@@ -201,11 +202,12 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
               <% f.celdas.forEach(function(c){
                    let cls='', tip='';
                    if (c.esDomingo) { cls='cel-dom'; }
+                   else if (!c.presente && c.ausencia) { cls='cel-vacacion'; tip=c.ausencia + ' · no cuenta como falta'; }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + (c.horas||0).toFixed(1) + 'h (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
                    else if (c.incompleta) { cls='cel-parcial'; tip='Incompleta · estimada a 18:00'; }
-                   else if (c.presente) { cls = c.jornadaCompleta ? 'cel-completa' : ''; tip=(c.planta||''); }
+                   else if (c.presente) { cls = c.jornadaCompleta ? 'cel-completa' : ''; tip=(c.planta||'') + (c.ausencia ? ' · trabajó en periodo de ' + c.ausencia.toLowerCase() : ''); }
               %>
                 <td class="text-center <%= cls %> cel-dia"
                     title="<%= tip %>"
@@ -217,6 +219,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
                   <% if (c.esDomingo) { %>
                     <span class="text-body-secondary small">Dom</span>
+                  <% } else if (!c.presente && c.ausencia) { %>
+                    <span class="text-primary fw-bold"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
                   <% } else if (!c.presente && c.vacio) { %>
                     <span class="text-danger fw-bold">Falta</span>
                   <% } else if (c.presente) { %>

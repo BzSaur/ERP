@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha } from './asistenciaService.js';
 
 /**
  * Entrada a MOSTRAR (Date). El redondeo a HH:00 NO se aplica aquí (lo hace, aparte, el
@@ -125,6 +125,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     }
   });
 
+  // Vacaciones / incidencias aprobadas: etiquetar el día en vez de dejarlo vacío.
+  const ausencias = await obtenerAusenciasJustificadas(inicio, fin);
+
   // Index: ID_Empleado -> (yyyy-mm-dd -> asistencia)
   const idx = new Map();
   for (const a of asistencias) {
@@ -179,7 +182,11 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     for (const d of dias) {
       const key = d.toISOString().slice(0, 10);
       const a = idx.get(e.ID_Empleado)?.get(key);
-      if (!a) { fila.push('', '', ''); continue; }
+      if (!a) {
+        const etiqueta = d.getDay() !== 0 ? ausenciaEnFecha(ausencias, e.ID_Empleado, d) : null;
+        fila.push(etiqueta ? etiqueta.toUpperCase() : '', '', '');
+        continue;
+      }
 
       const plantaEnt = a.Ubicacion_Entrada || a.historial_checadas[0]?.checador?.planta?.Nombre || '';
       const ultCheca = a.historial_checadas[a.historial_checadas.length - 1];

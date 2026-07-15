@@ -141,9 +141,9 @@
                     <span class="badge bg-secondary">Mensual</span>
                   <% } %>
                 </td>
-                <td><%= p.Fecha_Inicio.toLocaleDateString('es-MX') %></td>
-                <td><%= p.Fecha_Fin.toLocaleDateString('es-MX') %></td>
-                <td><%= p.Fecha_Pago.toLocaleDateString('es-MX') %></td>
+                <td><%= p.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
+                <td><%= p.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
+                <td><%= p.Fecha_Pago.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
                 <td><%= p.Dias_Periodo %></td>
                 <td>
                   <% if (p.Estado === 'PENDIENTE') { %>

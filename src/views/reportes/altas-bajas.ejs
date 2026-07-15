@@ -79,7 +79,7 @@
               <tr>
                 <td><%= emp.Nombre %> <%= emp.Apellido_Paterno %></td>
                 <td><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
-                <td><%= new Date(emp.Fecha_Ingreso).toLocaleDateString('es-MX') %></td>
+                <td><%= new Date(emp.Fecha_Ingreso).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
               </tr>
               <% }); %>
             </tbody>
@@ -117,7 +117,7 @@
               <tr>
                 <td><%= emp.Nombre %> <%= emp.Apellido_Paterno %></td>
                 <td><%= emp.area ? emp.area.Nombre_Area : '-' %></td>
-                <td><%= new Date(emp.Fecha_Baja).toLocaleDateString('es-MX') %></td>
+                <td><%= new Date(emp.Fecha_Baja).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
               </tr>
               <% }); %>
             </tbody>

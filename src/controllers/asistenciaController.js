@@ -422,7 +422,8 @@ export const apiRegistrarChecada = async (req, res) => {
 export const apiResumenDiario = async (req, res) => {
   try {
     const { fecha } = req.query;
-    const fechaConsulta = fecha ? new Date(fecha) : new Date();
+    // 'YYYY-MM-DD' se parsea con hora local para no desplazarse -1 día por UTC.
+    const fechaConsulta = fecha ? new Date(`${fecha}T00:00:00`) : new Date();
 
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
     const resumen = await asistenciaService.obtenerResumenDiario(fechaConsulta, filtro);
@@ -538,7 +539,7 @@ export const apiMarcarFaltas = async (req, res) => {
     const { fecha } = req.body;
     
     const resultado = await asistenciaService.marcarFaltasAutomaticas(
-      fecha ? new Date(fecha) : null
+      fecha ? new Date(`${fecha}T00:00:00`) : null
     );
     
     res.json({

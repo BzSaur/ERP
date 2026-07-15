@@ -96,7 +96,7 @@
                   <small class="text-body-secondary"><%= emp.area.Nombre_Area %></small>
                 <% } %>
               </td>
-              <td><%= emp.Fecha_Ingreso.toLocaleDateString('es-MX') %></td>
+              <td><%= emp.Fecha_Ingreso.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
               <td class="text-center">
                 <% if (emp.antiguedad.anos > 0) { %>
                   <strong><%= emp.antiguedad.anos %></strong> años

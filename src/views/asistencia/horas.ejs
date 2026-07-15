@@ -76,7 +76,10 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
         <div class="fs-5 fw-bold <%= k.frecuenciaAsistencia >= 90 ? 'text-success' : (k.frecuenciaAsistencia >= 70 ? 'text-warning' : 'text-danger') %>">
           <%= k.frecuenciaAsistencia %>%
         </div>
-        <div class="small text-body-secondary"><%= desglose.totales.diasTrabajados %>/<%= k.diasLaborables %> días</div>
+        <div class="small text-body-secondary">
+          <%= desglose.totales.diasTrabajados %>/<%= k.diasLaborables %> días
+          <% if (k.diasAusenciaJustificada > 0) { %> · <span class="text-primary"><%= k.diasAusenciaJustificada %> vac/permiso</span><% } %>
+        </div>
       </div>
       <div class="col-6 col-md-2">
         <div class="text-body-secondary small">Horas vs límite</div>
@@ -149,8 +152,11 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
                   <% }); %>
                   <% if (d.incompleta) { %><span class="badge bg-warning text-dark" title="Falta marcar salida">⚠ sin salida</span><% } %>
                   <% if (d.retardo) { %><span class="badge bg-danger ms-1" title="Retardo <%= d.minutosRetardo %> min">Retardo</span><% } %>
+                  <% if (d.ausencia) { %><span class="badge bg-primary ms-1" title="Trabajó durante periodo de <%= d.ausencia.toLowerCase() %>"><%= d.ausencia %></span><% } %>
                 <% } else if (d.presente) { %>
                   <span class="badge bg-warning text-dark">Checada incompleta</span>
+                <% } else if (d.ausencia) { %>
+                  <span class="badge bg-primary" title="Ausencia justificada — no cuenta como falta"><%= d.ausencia %></span>
                 <% } else { %>
                   <span class="text-body-secondary">Ausente</span>
                 <% } %>

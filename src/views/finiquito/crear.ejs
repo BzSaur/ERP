@@ -215,8 +215,10 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    const fechaIngreso = new Date(option.dataset.fechaIngreso);
-    const fechaBaja = new Date(fechaBajaInput.value);
+    // 'YYYY-MM-DD' + T00:00:00 => hora local; sin sufijo el navegador lo toma
+    // como UTC y en México se corre al día anterior (antigüedad/fecha mal).
+    const fechaIngreso = new Date(option.dataset.fechaIngreso + 'T00:00:00');
+    const fechaBaja = new Date(fechaBajaInput.value + 'T00:00:00');
     const sueldo = parseFloat(option.dataset.sueldo);
 
     // Calcular antigüedad

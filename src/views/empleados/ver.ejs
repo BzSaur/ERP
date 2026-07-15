@@ -41,7 +41,7 @@
           </tr>
           <tr>
             <td class="text-body-secondary">Fecha de Nacimiento</td>
-            <td><%= empleado.Fecha_Nacimiento ? new Date(empleado.Fecha_Nacimiento).toLocaleDateString('es-MX') : '-' %></td>
+            <td><%= empleado.Fecha_Nacimiento ? new Date(empleado.Fecha_Nacimiento).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : '-' %></td>
           </tr>
           <tr>
             <td class="text-body-secondary">Nacionalidad</td>
@@ -97,11 +97,11 @@
           </tr>
           <tr>
             <td class="text-body-secondary">Fecha de Ingreso</td>
-            <td><%= new Date(empleado.Fecha_Ingreso).toLocaleDateString('es-MX') %></td>
+            <td><%= new Date(empleado.Fecha_Ingreso).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
           </tr>
           <tr>
             <td class="text-body-secondary">Fecha de Baja</td>
-            <td><%= empleado.Fecha_Baja ? new Date(empleado.Fecha_Baja).toLocaleDateString('es-MX') : '-' %></td>
+            <td><%= empleado.Fecha_Baja ? new Date(empleado.Fecha_Baja).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : '-' %></td>
           </tr>
         </table>
       </div>

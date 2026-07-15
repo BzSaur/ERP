@@ -165,7 +165,7 @@
           <% } else { %>
             <% horasAdicionales.forEach(hora => { %>
               <tr>
-                <td><%= hora.Fecha.toLocaleDateString('es-MX') %></td>
+                <td><%= hora.Fecha.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
                 <td>
                   <strong><%= hora.empleado.Nombre %> <%= hora.empleado.Apellido_Paterno %></strong>
                 </td>
