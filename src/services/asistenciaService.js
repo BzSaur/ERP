@@ -104,7 +104,19 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
   const hasta = new Date(new Date(fechaFin).getTime() + 24 * 3600 * 1000);
   const porEmpleado = empleadoId ? { ID_Empleado: empleadoId } : {};
 
-  const [vacaciones, incidencias] = await Promise.all([
+  const [periodos, vacacionesLegacy, incidencias] = await Promise.all([
+    // Fuente principal: histórico de periodos (una fila por solicitud/goce).
+    prisma.vacaciones_Periodos.findMany({
+      where: {
+        ...porEmpleado,
+        Estado: 'APROBADO',
+        Fecha_Inicio: { lte: hasta },
+        Fecha_Fin: { gte: desde }
+      },
+      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
+    }),
+    // Legacy: Vacaciones anual solo guarda el último rango; se mantiene en la
+    // unión por si existen registros previos al backfill de periodos.
     prisma.vacaciones.findMany({
       where: {
         ...porEmpleado,
@@ -134,7 +146,8 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
     if (!mapa.has(id)) mapa.set(id, []);
     mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta });
   };
-  for (const v of vacaciones) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones');
+  for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones');
+  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones');
   for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso');
   return mapa;
 }
@@ -1438,34 +1451,14 @@ export async function marcarFaltasAutomaticas(fecha = null) {
 
   // Crear registros de falta
   const faltasCreadas = [];
-  // Columnas @db.Date se leen a medianoche UTC: comparar contra la medianoche
-  // UTC del mismo día calendario (con fechaProcesar local, el último día del
-  // periodo quedaba fuera del gte y generaba falta).
-  const diaUTC = new Date(Date.UTC(
-    fechaProcesar.getFullYear(), fechaProcesar.getMonth(), fechaProcesar.getDate()
-  ));
+  // Un solo mapa de ausencias justificadas del día (periodos de vacaciones,
+  // legacy e incidencias aprobadas) en vez de 2 queries por empleado.
+  const ausenciasDia = await obtenerAusenciasJustificadas(fechaProcesar, fechaFin);
   for (const empleado of empleadosSinAsistencia) {
-    // Sin falta si tiene incidencia aprobada O vacaciones en curso/tomadas ese día.
-    const [incidenciaJustificada, vacacion] = await Promise.all([
-      prisma.empleados_Incidencias.findFirst({
-        where: {
-          ID_Empleado: empleado.ID_Empleado,
-          Fecha_Inicio: { lte: diaUTC },
-          Fecha_Fin: { gte: diaUTC },
-          Estado: 'APROBADA'
-        }
-      }),
-      prisma.vacaciones.findFirst({
-        where: {
-          ID_Empleado: empleado.ID_Empleado,
-          Estado: { in: ['EN_CURSO', 'TOMADAS'] },
-          Fecha_Inicio: { lte: diaUTC },
-          Fecha_Fin: { gte: diaUTC }
-        }
-      })
-    ]);
+    // Sin falta si tiene vacaciones/incidencia aprobada ese día.
+    const justificada = ausenciaEnFecha(ausenciasDia, empleado.ID_Empleado, fechaProcesar);
 
-    if (!incidenciaJustificada && !vacacion) {
+    if (!justificada) {
       const falta = await prisma.empleados_Asistencia.create({
         data: {
           ID_Empleado: empleado.ID_Empleado,

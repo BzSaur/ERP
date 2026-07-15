@@ -368,7 +368,19 @@ export const calcularNomina = async (req, res) => {
       
       // Total horas extra para registro (EXTRA + PRESENCIAL + EN_LINEA)
       const totalHorasExtraRegistro = horasExtra + horasPresencialRemoto;
-      
+
+      // ¿Recálculo? Si la nómina del periodo ya existía, NO volver a abonar el
+      // préstamo (cada recálculo descontaba otra pago del saldo).
+      const nominaPrevia = await prisma.nomina.findUnique({
+        where: {
+          ID_Periodo_ID_Empleado: {
+            ID_Periodo: periodo.ID_Periodo,
+            ID_Empleado: empleado.ID_Empleado
+          }
+        },
+        select: { ID_Nomina: true }
+      });
+
       // Crear o actualizar nómina
       await prisma.nomina.upsert({
         where: {
@@ -422,8 +434,9 @@ export const calcularNomina = async (req, res) => {
         }
       });
       
-      // Si tiene préstamo, actualizar pagos realizados
-      if (deduccionPrestamo > 0 && empleado.prestamos.length > 0) {
+      // Si tiene préstamo, actualizar pagos realizados — solo la PRIMERA vez
+      // que se calcula el periodo (los recálculos no vuelven a abonar).
+      if (deduccionPrestamo > 0 && empleado.prestamos.length > 0 && !nominaPrevia) {
         const prestamo = empleado.prestamos[0];
         const nuevoSaldo = redondear(Number(prestamo.Monto_Pendiente) - Number(prestamo.Monto_Por_Pago));
         

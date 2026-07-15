@@ -159,9 +159,18 @@
                   </strong>
                 </td>
                 <td>
-                  <% if (v.Fecha_Inicio && v.Fecha_Fin) { %>
+                  <% if (v.periodos && v.periodos.length > 0) { %>
+                    <% v.periodos.forEach(p => { %>
+                      <span class="badge bg-light text-dark border d-inline-block mb-1"
+                            title="<%= p.Dias %> día(s)<%= p.Observaciones ? ' · ' + p.Observaciones : '' %>">
+                        <%= p.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> -
+                        <%= p.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
+                        (<%= p.Dias %>d)
+                      </span>
+                    <% }) %>
+                  <% } else if (v.Fecha_Inicio && v.Fecha_Fin) { %>
                     <small>
-                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> - 
+                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> -
                       <%= v.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
                     </small>
                   <% } else { %>

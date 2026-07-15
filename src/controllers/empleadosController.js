@@ -763,6 +763,14 @@ export const destroy = async (req, res, next) => {
       return res.redirect('/empleados');
     }
 
+    // ADMS: encolar la baja ANTES de borrar; si no, el usuario queda vivo en
+    // los checadores y sus checadas futuras caen como huérfanas.
+    try {
+      await encolarBajaEmpleado(idNum);
+    } catch (err) {
+      logger.warn(`ADMS sync baja al eliminar empleado ${idNum}: ${err.message}`);
+    }
+
     await prisma.empleados.delete({
       where: { ID_Empleado: idNum }
     });

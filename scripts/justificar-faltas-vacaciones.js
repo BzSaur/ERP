@@ -24,7 +24,11 @@ const ymdUTC = d => { const x = new Date(d); return x.getUTCFullYear() * 10000 +
 async function main() {
   console.log(`Modo: ${APLICAR ? 'APLICAR (escribe BD)' : 'DRY-RUN (solo reporte; usa --aplicar para escribir)'}\n`);
 
-  const [vacaciones, incidencias, faltas] = await Promise.all([
+  const [periodosHist, vacaciones, incidencias, faltas] = await Promise.all([
+    prisma.vacaciones_Periodos.findMany({
+      where: { Estado: 'APROBADO' },
+      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
+    }),
     prisma.vacaciones.findMany({
       where: { Estado: { in: ['EN_CURSO', 'TOMADAS'] }, Fecha_Inicio: { not: null }, Fecha_Fin: { not: null } },
       select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
@@ -48,10 +52,11 @@ async function main() {
     if (!periodos.has(id)) periodos.set(id, []);
     periodos.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta });
   };
+  for (const p of periodosHist) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones');
   for (const v of vacaciones) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones');
   for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Incidencia aprobada');
 
-  console.log(`Periodos: ${vacaciones.length} de vacaciones, ${incidencias.length} de incidencias.`);
+  console.log(`Periodos: ${periodosHist.length} historial + ${vacaciones.length} legacy de vacaciones, ${incidencias.length} de incidencias.`);
   console.log(`Faltas sin justificar en BD: ${faltas.length}\n`);
 
   const aJustificar = [];

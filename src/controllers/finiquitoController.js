@@ -18,6 +18,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig } from '../services/nominaService.js';
+import { encolarBajaEmpleado } from '../services/checadorComandosService.js';
 
 // Listar finiquitos
 export const index = async (req, res) => {
@@ -318,6 +319,16 @@ export const pagar = async (req, res) => {
         Fecha_Baja: finiquito.Fecha_Baja
       }
     });
+
+    // ADMS: encolar la baja a los checadores; si no, el empleado dado de baja
+    // seguiría pudiendo checar. Mismo patrón que empleadosController.update.
+    try {
+      const n = await encolarBajaEmpleado(finiquito.ID_Empleado);
+      if (n === 0) req.flash('warning', 'No hay checadores activos: la baja no se sincronizó a ningún dispositivo.');
+    } catch (err) {
+      console.error(`ADMS sync baja por finiquito ${finiquito.ID_Empleado}:`, err.message);
+      req.flash('warning', 'No se pudo sincronizar la baja a los checadores (revisar logs).');
+    }
 
     req.flash('success', 'Finiquito pagado — empleado dado de baja');
     res.redirect(`/finiquito/${id}`);

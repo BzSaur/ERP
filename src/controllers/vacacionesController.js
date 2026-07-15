@@ -87,6 +87,10 @@ export const index = async (req, res) => {
             Apellido_Materno: true,
             Fecha_Ingreso: true
           }
+        },
+        periodos: {
+          where: { Estado: 'APROBADO' },
+          orderBy: { Fecha_Inicio: 'asc' }
         }
       },
       orderBy: [{ Anio: 'desc' }, { empleado: { Nombre: 'asc' } }],
@@ -205,7 +209,11 @@ export const crear = async (req, res) => {
   }
 };
 
-// Guardar solicitud de vacaciones
+// Guardar solicitud de vacaciones.
+// Cada registro crea una fila PERMANENTE en Vacaciones_Periodos (histórico:
+// quién, cuándo, cuántos días). Acepta fechas pasadas para capturar
+// retroactivamente periodos ya gozados. Vacaciones (anual) solo acumula
+// contadores; sus Fecha_Inicio/Fin quedan como legacy del último periodo.
 export const store = async (req, res) => {
   try {
     const { ID_Empleado, Fecha_Inicio, Fecha_Fin, Observaciones } = req.body;
@@ -230,26 +238,47 @@ export const store = async (req, res) => {
       return res.redirect('/vacaciones/crear');
     }
 
-    // Calcular días solicitados
+    // Fechas del periodo ('YYYY-MM-DD' -> medianoche UTC, correcto para @db.Date)
     const inicio = new Date(Fecha_Inicio);
     const fin = new Date(Fecha_Fin);
+    if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin < inicio) {
+      req.flash('error', 'Rango de fechas inválido');
+      return res.redirect('/vacaciones/crear');
+    }
     const diasSolicitados = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+
+    // No permitir traslape con otro periodo aprobado del mismo empleado
+    const traslape = await prisma.vacaciones_Periodos.findFirst({
+      where: {
+        ID_Empleado: parseInt(ID_Empleado),
+        Estado: 'APROBADO',
+        Fecha_Inicio: { lte: fin },
+        Fecha_Fin: { gte: inicio }
+      }
+    });
+    if (traslape) {
+      req.flash('error', 'El rango se traslapa con un periodo de vacaciones ya registrado');
+      return res.redirect('/vacaciones/crear');
+    }
 
     const diasBase = calcularDiasVacaciones(anosAntiguedad);
     const factorJornada = await calcularFactorJornada(empleado);
     const diasProporcionales = Math.round(diasBase * factorJornada);
-    const anioActual = new Date().getFullYear();
+    // Año del PERIODO (no el actual): capturar un periodo de otro año carga
+    // los días al registro anual correcto.
+    const anioPeriodo = inicio.getUTCFullYear();
 
     // Verificar si ya tiene registro de vacaciones
     const vacacionExistente = await prisma.vacaciones.findUnique({
       where: {
         ID_Empleado_Anio: {
           ID_Empleado: parseInt(ID_Empleado),
-          Anio: anioActual
+          Anio: anioPeriodo
         }
       }
     });
 
+    let idVacacion;
     if (vacacionExistente) {
       // Verificar días disponibles
       if (diasSolicitados > vacacionExistente.Dias_Pendientes) {
@@ -269,12 +298,13 @@ export const store = async (req, res) => {
           Observaciones
         }
       });
+      idVacacion = vacacionExistente.ID_Vacacion;
     } else {
       // Crear nuevo registro con proporcionalidad
-      await prisma.vacaciones.create({
+      const creada = await prisma.vacaciones.create({
         data: {
           ID_Empleado: parseInt(ID_Empleado),
-          Anio: anioActual,
+          Anio: anioPeriodo,
           Dias_Correspondientes: diasBase,
           Dias_Proporcionales: diasProporcionales,
           Factor_Jornada: factorJornada,
@@ -286,9 +316,25 @@ export const store = async (req, res) => {
           Observaciones
         }
       });
+      idVacacion = creada.ID_Vacacion;
     }
 
-    req.flash('success', 'Vacaciones registradas exitosamente');
+    // Fila permanente del periodo (histórico y fuente para asistencia/nómina)
+    await prisma.vacaciones_Periodos.create({
+      data: {
+        ID_Vacacion: idVacacion,
+        ID_Empleado: parseInt(ID_Empleado),
+        Fecha_Inicio: inicio,
+        Fecha_Fin: fin,
+        Dias: diasSolicitados,
+        Estado: 'APROBADO',
+        Aprobado_Por: req.user?.ID_Usuario || null,
+        Observaciones: Observaciones || null,
+        CreatedBy: req.session?.user?.Email_Office365 || null
+      }
+    });
+
+    req.flash('success', `Vacaciones registradas: ${diasSolicitados} día(s)`);
     res.redirect('/vacaciones');
   } catch (error) {
     console.error('Error al guardar vacaciones:', error);

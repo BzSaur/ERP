@@ -192,6 +192,7 @@ model Empleados {
   horas_adicionales Empleados_Horas_Adicionales[]
   nominas           Nomina[]
   vacaciones        Vacaciones[]
+  vacaciones_periodos Vacaciones_Periodos[]
   aguinaldos        Aguinaldo[]
   finiquitos        Finiquito_Liquidacion[]
   incidencias       Empleados_Incidencias[]
@@ -230,6 +231,7 @@ model App_Usuarios {
   periodos_cerrados      Periodos_Nomina[]             @relation("PeriodoCerrado")
   nominas_aprobadas      Nomina[]                      @relation("NominaAprobada")
   vacaciones_aprobadas   Vacaciones[]                  @relation("VacacionesAprobadas")
+  periodos_vac_aprobados Vacaciones_Periodos[]         @relation("PeriodosVacAprobados")
   aguinaldos_calculados  Aguinaldo[]                   @relation("AguinaldoCalculado")
   finiquitos_aprobados   Finiquito_Liquidacion[]       @relation("FiniquitoAprobado")
   incidencias_aprobadas  Empleados_Incidencias[]       @relation("IncidenciaAprobada")
@@ -567,11 +569,38 @@ model Vacaciones {
   // Relaciones
   empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
   aprobado_usuario App_Usuarios? @relation("VacacionesAprobadas", fields: [Aprobado_Por], references: [ID_Usuario])
+  periodos         Vacaciones_Periodos[]
 
   @@unique([ID_Empleado, Anio])
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Vacaciones")
+}
+
+// Cada solicitud/goce de vacaciones = una fila permanente (histórico).
+// Vacaciones (anual) conserva los contadores; Fecha_Inicio/Fin de esa tabla
+// quedan como legacy (solo reflejan el último periodo).
+model Vacaciones_Periodos {
+  ID_Periodo_Vac Int      @id @default(autoincrement())
+  ID_Vacacion    Int
+  ID_Empleado    Int
+  Fecha_Inicio   DateTime @db.Date
+  Fecha_Fin      DateTime @db.Date
+  Dias           Int
+  Estado         String   @default("APROBADO") @db.VarChar(20) // APROBADO | CANCELADO
+  Aprobado_Por   Int?
+  Observaciones  String?  @db.VarChar(500)
+  CreatedAt      DateTime @default(now())
+  CreatedBy      String?  @db.VarChar(100)
+
+  vacacion         Vacaciones    @relation(fields: [ID_Vacacion], references: [ID_Vacacion], onDelete: Cascade)
+  empleado         Empleados     @relation(fields: [ID_Empleado], references: [ID_Empleado])
+  aprobado_usuario App_Usuarios? @relation("PeriodosVacAprobados", fields: [Aprobado_Por], references: [ID_Usuario])
+
+  @@index([ID_Empleado])
+  @@index([Fecha_Inicio])
+  @@index([Estado])
+  @@map("Vacaciones_Periodos")
 }
 
 model Aguinaldo {
