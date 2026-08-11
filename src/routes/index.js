@@ -5,6 +5,7 @@ import empleadosRoutes from './empleados.js';
 import usuariosRoutes from './usuarios.js';
 import nominaModuleRoutes from './nominaModule.js';
 import asistenciaRoutes from './asistencia.js';
+import actividadesRoutes from './actividades.js';
 import checadorRoutes from './checador.js';
 import checadoresAdminRoutes from './checadores-admin.js';
 import reportesRoutes from './reportes.js';
@@ -73,6 +74,7 @@ router.use('/empleados', empleadosRoutes);
 router.use('/usuarios', usuariosRoutes);
 router.use('/', nominaModuleRoutes);       // /nomina, /vacaciones, /aguinaldo, /finiquito, /horas-adicionales
 router.use('/asistencia', asistenciaRoutes);
+router.use('/encargado', actividadesRoutes);
 router.use('/checador', checadorRoutes);
 router.use('/checadores', checadoresAdminRoutes); // ADMS: CRUD checadores/plantas, push directo
 router.use('/reportes', reportesRoutes);

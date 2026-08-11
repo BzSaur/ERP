@@ -20,7 +20,10 @@ export const index = async (req, res, next) => {
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
     // Obtener resumen del día actual
     const resumenHoy = await asistenciaService.obtenerResumenDiario(new Date(), filtro);
-    
+
+    // Actividades de campo delegadas hoy (alerta informativa para RH/Admin/SuperAdmin)
+    const actividadesHoy = await asistenciaService.obtenerActividadesDelDia(new Date());
+
     // Obtener últimas checadas. Con filtro de consultor traemos más y recortamos a 20
     // tras filtrar por planta/área visibles.
     let ultimasChecadas = [];
@@ -69,6 +72,7 @@ export const index = async (req, res, next) => {
       title: 'Control de Asistencia',
       resumen: resumenHoy,
       ultimasChecadas,
+      actividadesHoy,
       user: req.user
     });
   } catch (error) {

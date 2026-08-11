@@ -153,10 +153,19 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
                   <% if (d.incompleta) { %><span class="badge bg-warning text-dark" title="Falta marcar salida">⚠ sin salida</span><% } %>
                   <% if (d.retardo) { %><span class="badge bg-danger ms-1" title="Retardo <%= d.minutosRetardo %> min">Retardo</span><% } %>
                   <% if (d.ausencia) { %><span class="badge bg-primary ms-1" title="Trabajó durante periodo de <%= d.ausencia.toLowerCase() %>"><%= d.ausencia %></span><% } %>
+                  <% if (d.actividad) { %>
+                    <span class="badge ms-1" style="background-color:#6f42c1" title="Responsable: <%= d.actividad.responsable %> · Empresa: <%= d.actividad.empresa %>">
+                      <i class="bi bi-signpost-split-fill me-1"></i><%= d.actividad.nombre %>
+                    </span>
+                  <% } %>
                 <% } else if (d.presente) { %>
                   <span class="badge bg-warning text-dark">Checada incompleta</span>
                 <% } else if (d.ausencia) { %>
                   <span class="badge bg-primary" title="Ausencia justificada — no cuenta como falta"><%= d.ausencia %></span>
+                <% } else if (d.actividad) { %>
+                  <span class="badge" style="background-color:#6f42c1" title="Responsable: <%= d.actividad.responsable %> · Empresa: <%= d.actividad.empresa %> · Sin checada — cubierto por la actividad">
+                    <i class="bi bi-signpost-split-fill me-1"></i><%= d.actividad.nombre %>
+                  </span>
                 <% } else { %>
                   <span class="text-body-secondary">Ausente</span>
                 <% } %>

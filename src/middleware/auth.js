@@ -179,4 +179,15 @@ export const canView = (req, res, next) => {
   return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'CONSULTA')(req, res, next);
 };
 
+// Verificar si es ENCARGADO (dueño de sus propias actividades de campo)
+export const isEncargado = (req, res, next) => {
+  return hasRole('SUPER_ADMIN', 'ENCARGADO')(req, res, next);
+};
+
+// Verificar acceso al módulo de Actividades de Campo (ENCARGADO gestiona lo suyo;
+// ADMIN/RH/SUPER_ADMIN tienen supervisión sobre todos los encargados)
+export const canManageActividades = (req, res, next) => {
+  return hasRole('SUPER_ADMIN', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'ENCARGADO')(req, res, next);
+};
+
 export default passport;

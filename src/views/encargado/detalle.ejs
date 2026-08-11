@@ -1,0 +1,139 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/encargado">Actividades de Campo</a></li>
+      <li class="breadcrumb-item active"><%= actividad.Nombre_Actividad %></li>
+    </ol>
+  </nav>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h4 class="mb-0"><%= actividad.Nombre_Actividad %></h4>
+    <span class="badge bg-primary"><i class="bi bi-building me-1"></i><%= actividad.empresa.Nombre_Empresa %></span>
+    <span class="badge bg-secondary"><i class="bi bi-person-badge me-1"></i>Responsable: <%= actividad.responsable.Nombre %> <%= actividad.responsable.Apellido_Paterno %></span>
+  </div>
+  <% if (actividad.Descripcion) { %><p class="text-body-secondary mt-2 mb-0"><%= actividad.Descripcion %></p><% } %>
+</div>
+
+<% if (messages.success) { %>
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<!-- Tabla de empleados de la actividad y su desglose -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="card-title mb-0"><i class="bi bi-table me-2"></i>Empleados y desglose</h5>
+    <% if (hasRole('ENCARGADO') || esSupervisor) { %>
+    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#formAgregar">
+      <i class="bi bi-plus-lg me-1"></i>Agregar días
+    </button>
+    <% } %>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Empleado</th>
+          <th>Días asignados</th>
+          <th class="text-center">Total días</th>
+          <th class="text-center">Selló</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (filas && filas.length > 0) { %>
+          <% filas.forEach(function(fila) { const e = fila.empleado; const sellados = fila.dias.filter(d => d.sello).length; %>
+          <tr>
+            <td>
+              <div class="d-flex align-items-center">
+                <div class="avatar-circle me-2">
+                  <%= e.Nombre ? e.Nombre.charAt(0).toUpperCase() : '?' %><%= e.Apellido_Paterno ? e.Apellido_Paterno.charAt(0).toUpperCase() : '' %>
+                </div>
+                <div>
+                  <div><%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %></div>
+                  <small class="text-body-secondary"><%= e.area ? e.area.Nombre_Area : '' %></small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                <% fila.dias.forEach(function(d) { %>
+                  <span class="badge <%= d.sello ? 'bg-success' : 'bg-light text-dark border' %>" title="<%= d.sello ? 'Selló ese día (checada + actividad combinadas)' : 'Sin checada — cubierto por la actividad' %>">
+                    <%= d.fecha %>
+                    <% if (hasRole('ENCARGADO') || esSupervisor) { %>
+                    <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones/<%= d.ID_Asignacion %>/eliminar" method="POST" class="d-inline"
+                          onsubmit="return confirm('¿Quitar este día de la actividad?')">
+                      <button type="submit" class="btn btn-link p-0 ms-1 text-decoration-none" style="font-size:.75rem; line-height:1; vertical-align:middle;" title="Quitar día">&times;</button>
+                    </form>
+                    <% } %>
+                  </span>
+                <% }); %>
+              </div>
+            </td>
+            <td class="text-center"><span class="badge bg-secondary"><%= fila.dias.length %></span></td>
+            <td class="text-center">
+              <span class="badge <%= sellados > 0 ? 'bg-info' : 'bg-light text-dark border' %>"><%= sellados %> / <%= fila.dias.length %></span>
+            </td>
+          </tr>
+          <% }); %>
+        <% } else { %>
+          <tr><td colspan="4" class="text-center text-body-secondary py-4">Sin empleados asignados</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<% if (hasRole('ENCARGADO') || esSupervisor) { %>
+<div class="collapse mb-4" id="formAgregar">
+  <div class="card">
+    <div class="card-header"><i class="bi bi-calendar-plus me-2"></i>Agregar días a esta actividad</div>
+    <div class="card-body">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+      <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones" method="POST" id="formAsignar">
+        <div class="mb-3">
+          <label class="form-label">Días</label>
+          <input type="text" id="rangoDiasAgregar" class="form-control" placeholder="Selecciona uno o varios días...">
+          <input type="hidden" name="dias" id="diasAgregar">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Empleados</label>
+          <div class="border rounded p-2" style="max-height:200px; overflow-y:auto;">
+            <% filas.forEach(function(fila) { const e = fila.empleado; %>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="subordinados" value="<%= e.ID_Empleado %>" id="agSub<%= e.ID_Empleado %>">
+                <label class="form-check-label" for="agSub<%= e.ID_Empleado %>"><%= e.Nombre %> <%= e.Apellido_Paterno %></label>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Agregar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+<script>
+(function(){
+  const diasInput = document.getElementById('diasAgregar');
+  flatpickr('#rangoDiasAgregar', {
+    mode: 'multiple',
+    locale: 'es',
+    dateFormat: 'Y-m-d',
+    onChange: function(dates) {
+      const f = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      diasInput.value = dates.map(f).join(',');
+    }
+  });
+})();
+</script>
+<% } %>

@@ -1,0 +1,89 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h4 class="mb-1"><i class="bi bi-signpost-split me-2"></i>Actividades de Campo</h4>
+    <p class="text-body-secondary mb-0">
+      <% if (esSupervisor) { %>
+        Actividades de campo de todos los encargados
+      <% } else { %>
+        Delega asistencia por día a tu equipo para trabajo de campo
+      <% } %>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <% if (hasRole('ENCARGADO')) { %>
+    <a href="/encargado/equipo" class="btn btn-outline-secondary">
+      <i class="bi bi-people me-1"></i>Mi Equipo
+    </a>
+    <a href="/encargado/actividades/crear" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>Nueva Actividad
+    </a>
+    <% } %>
+  </div>
+</div>
+
+<% if (messages.success) { %>
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+<% if (messages.info) { %>
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+  <i class="bi bi-info-circle me-2"></i><%= messages.info %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Actividad</th>
+            <th>Empresa</th>
+            <% if (esSupervisor) { %><th>Responsable</th><% } %>
+            <th class="text-center">Empleados</th>
+            <th class="text-center">Días</th>
+            <th>Periodo</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (actividades && actividades.length > 0) { %>
+            <% actividades.forEach(function(a) { %>
+            <tr>
+              <td><strong><%= a.Nombre_Actividad %></strong></td>
+              <td><i class="bi bi-building text-primary me-1"></i><%= a.empresa.Nombre_Empresa %></td>
+              <% if (esSupervisor) { %>
+                <td><%= a.responsable.Nombre %> <%= a.responsable.Apellido_Paterno %></td>
+              <% } %>
+              <td class="text-center"><span class="badge bg-info"><%= a.totalEmpleados %></span></td>
+              <td class="text-center"><span class="badge bg-secondary"><%= a.totalDias %></span></td>
+              <td>
+                <% if (a.fechaMin) { %>
+                  <small><%= a.fechaMin %><% if (a.fechaMax !== a.fechaMin) { %> – <%= a.fechaMax %><% } %></small>
+                <% } else { %>-<% } %>
+              </td>
+              <td class="text-end">
+                <a href="/encargado/actividades/<%= a.ID_Actividad %>" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="<%= esSupervisor ? 7 : 6 %>" class="text-center text-body-secondary py-4">No hay actividades de campo registradas</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

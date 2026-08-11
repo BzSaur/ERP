@@ -166,6 +166,93 @@ export function ausenciaEnFecha(mapa, empleadoId, fecha) {
 }
 
 // ============================================================
+// ACTIVIDADES DE CAMPO (encargados) — cruce con asistencia
+// Delegación de asistencia por día para trabajo de campo donde el
+// empleado no puede sellar. Se combina con la checada real si la hay.
+// ============================================================
+
+/**
+ * Actividades de campo asignadas en un rango, indexadas por "ID_Empleado_YYYY-MM-DD".
+ * @param {number[]|null} empleadoIds  Limita a estos empleados; null/[] = todos.
+ * @param {Date} fechaInicio
+ * @param {Date} fechaFin
+ * @returns {Promise<Map<string, {ID_Actividad:number, nombre:string, empresa:string, responsable:string}>>}
+ */
+export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fechaFin) {
+  const where = { Fecha: { gte: fechaInicio, lte: fechaFin } };
+  if (Array.isArray(empleadoIds) && empleadoIds.length > 0) where.ID_Empleado = { in: empleadoIds };
+
+  const asignaciones = await prisma.actividad_Asignaciones.findMany({
+    where,
+    select: {
+      ID_Empleado: true,
+      Fecha: true,
+      actividad: {
+        select: {
+          ID_Actividad: true,
+          Nombre_Actividad: true,
+          empresa: { select: { Nombre_Empresa: true } },
+          responsable: { select: { Nombre: true, Apellido_Paterno: true } }
+        }
+      }
+    }
+  });
+
+  const mapa = new Map();
+  for (const a of asignaciones) {
+    const key = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
+    mapa.set(key, {
+      ID_Actividad: a.actividad.ID_Actividad,
+      nombre: a.actividad.Nombre_Actividad,
+      empresa: a.actividad.empresa.Nombre_Empresa,
+      responsable: [a.actividad.responsable.Nombre, a.actividad.responsable.Apellido_Paterno].filter(Boolean).join(' ')
+    });
+  }
+  return mapa;
+}
+
+/**
+ * Actividades de campo vigentes en una fecha (dashboard: "hoy"), agrupadas por
+ * actividad con la lista de empleados delegados. Alerta informativa para RH/Admin/SuperAdmin.
+ * @param {Date} fecha
+ */
+export async function obtenerActividadesDelDia(fecha) {
+  const dia = new Date(fecha);
+  dia.setHours(0, 0, 0, 0);
+
+  const asignaciones = await prisma.actividad_Asignaciones.findMany({
+    where: { Fecha: dia },
+    select: {
+      empleado: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true } },
+      actividad: {
+        select: {
+          ID_Actividad: true,
+          Nombre_Actividad: true,
+          empresa: { select: { Nombre_Empresa: true } },
+          responsable: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true } }
+        }
+      }
+    }
+  });
+
+  const porActividad = new Map();
+  for (const a of asignaciones) {
+    const key = a.actividad.ID_Actividad;
+    if (!porActividad.has(key)) {
+      porActividad.set(key, {
+        ID_Actividad: a.actividad.ID_Actividad,
+        nombre: a.actividad.Nombre_Actividad,
+        empresa: a.actividad.empresa.Nombre_Empresa,
+        responsable: [a.actividad.responsable.Nombre, a.actividad.responsable.Apellido_Paterno].filter(Boolean).join(' '),
+        empleados: []
+      });
+    }
+    porActividad.get(key).empleados.push(`${a.empleado.Nombre} ${a.empleado.Apellido_Paterno}`);
+  }
+  return Array.from(porActividad.values());
+}
+
+// ============================================================
 // REGISTRO DE ASISTENCIA
 // ============================================================
 
@@ -533,7 +620,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
-  const [asistencias, empleadoInfo, ausencias] = await Promise.all([
+  const [asistencias, empleadoInfo, ausencias, actividadesMap] = await Promise.all([
     prisma.empleados_Asistencia.findMany({
       where: { ID_Empleado: empleadoId, Fecha: { gte: inicio, lte: fin } },
       orderBy: { Fecha: 'asc' },
@@ -548,7 +635,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       where: { ID_Empleado: empleadoId },
       select: { area: { select: { Nombre_Area: true } }, puesto: { select: { Nombre_Puesto: true } } }
     }),
-    obtenerAusenciasJustificadas(inicio, fin, empleadoId)
+    obtenerAusenciasJustificadas(inicio, fin, empleadoId),
+    obtenerActividadesPorRango([empleadoId], inicio, fin)
   ]);
   const empParaRegla = { area: empleadoInfo?.area, puesto: empleadoInfo?.puesto };
 
@@ -586,6 +674,9 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       // Vacaciones / incidencia aprobada ese día (etiqueta o null). El día no
       // cuenta como falta; si además hay checadas, se muestran normal.
       ausencia: ausenciaEnFecha(ausencias, empleadoId, fecha),
+      // Actividad de campo delegada por un encargado ese día (o null). Si además
+      // hay checada, se muestran combinadas (checada real + actividad).
+      actividad: actividadesMap.get(`${empleadoId}_${fecha.toISOString().slice(0, 10)}`) || null,
       presente: a.Presente,
       entrada: entradaMostradaDia,
       entradaReal: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
@@ -613,19 +704,21 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     });
   }
 
-  // Días de ausencia justificada SIN registro de asistencia: agregar fila
-  // sintética para que la vacación/permiso sea visible en la tabla.
+  // Días de ausencia justificada o de actividad de campo delegada SIN registro de
+  // asistencia: agregar fila sintética para que sean visibles en la tabla.
   const ymdConRegistro = new Set(dias.map(d => ymdUTC(d.fecha)));
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
     if (d.getDay() === 0) continue; // domingo no laborable
     if (ymdConRegistro.has(ymdUTC(d))) continue;
     const etiqueta = ausenciaEnFecha(ausencias, empleadoId, d);
-    if (!etiqueta) continue;
+    const actividadDia = actividadesMap.get(`${empleadoId}_${d.toISOString().slice(0, 10)}`) || null;
+    if (!etiqueta && !actividadDia) continue;
     const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
     dias.push({
       fecha,
       nombreDia: NOMBRES_DIA[fecha.getDay()],
       ausencia: etiqueta,
+      actividad: actividadDia,
       presente: false,
       entrada: null, entradaReal: null, salida: null,
       horas: 0, extras: 0, normales: 0,
@@ -753,6 +846,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   // Vacaciones e incidencias aprobadas del rango (etiqueta por empleado/día).
   const ausencias = await obtenerAusenciasJustificadas(inicio, fin);
 
+  // Actividades de campo (encargados) del rango: días delegados sin checada
+  // no cuentan como falta; si además hay checada, se muestran combinadas.
+  const actividadesMap = await obtenerActividadesPorRango(empleados.map(e => e.ID_Empleado), inicio, fin);
+
   // Lista de fechas del rango (para la matriz)
   const fechas = [];
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
@@ -846,15 +943,25 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
     const revisiones = []; // días <2h que RH debe revisar
+    const actividadesEmp = []; // actividades de campo delegadas en el rango (para el panel de alerta)
     let diasAusencia = 0; // vacaciones/permiso sin trabajar (no cuentan como falta)
+    let diasActividadSinSello = 0; // actividad de campo delegada, sin checada (no cuenta como falta)
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
       const esDomingo = f.getDay() === 0;
+      const actividad = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
+      if (actividad) {
+        actividadesEmp.push({ fecha: key, nombreDia: NOMBRES_DIA_CORTO[f.getDay()], ...actividad });
+      }
       // Etiqueta de vacaciones/permiso; la celda deja de ser "Falta".
       const ausencia = ausenciaEnFecha(ausencias, e.ID_Empleado, f);
       if (ausencia && !esDomingo && !(c && c.presente && c.horas > 0)) diasAusencia++;
-      if (!c) return { presente: false, vacio: !esDomingo && !ausencia, esDomingo, ausencia };
+      if (!c) {
+        // Actividad de campo delegada sin checada: no cuenta como falta.
+        if (actividad && !esDomingo && !ausencia) diasActividadSinSello++;
+        return { presente: false, vacio: !esDomingo && !ausencia && !actividad, esDomingo, ausencia, actividad };
+      }
       // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
       const tieneChecada = !!(c.entrada || c.salida);
@@ -869,11 +976,12 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           motivo: !c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')
         });
       }
-      return { ...c, esDomingo, ausencia, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
+      return { ...c, esDomingo, ausencia, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
 
-    // Horas esperadas: descontar la jornada de los días de vacación/permiso.
-    const esperadas = Math.max(0, jornada * diasSemana - jornada * diasAusencia);
+    // Horas esperadas: descontar la jornada de los días de vacación/permiso y de
+    // actividad de campo delegada sin checada.
+    const esperadas = Math.max(0, jornada * diasSemana - jornada * (diasAusencia + diasActividadSinSello));
 
     return {
       ID_Empleado: e.ID_Empleado,
@@ -887,7 +995,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100),
       celdas,
       revisiones,
-      requiereRevision: revisiones.length > 0
+      requiereRevision: revisiones.length > 0,
+      actividades: actividadesEmp
     };
   });
 
@@ -902,6 +1011,17 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     }));
   const totalRevisiones = resumenRevisiones.reduce((s, r) => s + r.dias.length, 0);
 
+  // Resumen global de actividades de campo delegadas (alerta informativa RH/Admin/SuperAdmin)
+  const resumenActividades = filas
+    .filter(f => f.actividades && f.actividades.length > 0)
+    .map(f => ({
+      ID_Empleado: f.ID_Empleado,
+      nombre: f.nombre,
+      area: f.area,
+      dias: f.actividades
+    }));
+  const totalActividades = resumenActividades.reduce((s, r) => s + r.dias.length, 0);
+
   const plantas = Array.from(porPlanta.entries())
     .map(([nombre, v]) => ({ nombre, horas: Math.round(v.horas * 100) / 100, dias: v.dias }))
     .sort((a, b) => b.horas - a.horas);
@@ -911,7 +1031,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     filas, plantas, fechas,
     revisiones: resumenRevisiones,
     totalRevisiones,
-    umbralRevision: UMBRAL_REVISION_HORAS
+    umbralRevision: UMBRAL_REVISION_HORAS,
+    actividades: resumenActividades,
+    totalActividades
   };
 }
 
@@ -1203,6 +1325,9 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null, filtr
   const inicio = new Date(`${fechaStr}T00:00:00`); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(`${fechaStr}T00:00:00`); fin.setHours(23, 59, 59, 999);
 
+  // Actividades de campo delegadas ese día (para combinar con la checada real, si la hay).
+  const actividadesDia = await obtenerActividadesPorRango(null, inicio, fin);
+
   const checadas = await prisma.historial_Checadas.findMany({
     where: { Fecha_Hora: { gte: inicio, lte: fin } },
     orderBy: { Fecha_Hora: 'asc' },
@@ -1264,6 +1389,7 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null, filtr
       planta: c.checador?.planta?.Nombre || c.Ubicacion || 'Sin planta',
       plantaId: idPlanta,
       ignoradaDoble: dobles.has(c.ID_Checada),
+      actividad: emp ? (actividadesDia.get(`${emp.ID_Empleado}_${fechaStr}`) || null) : null,
       empleado: emp ? {
         id: emp.ID_Empleado,
         nombre: `${emp.Nombre} ${emp.Apellido_Paterno} ${emp.Apellido_Materno || ''}`.trim(),

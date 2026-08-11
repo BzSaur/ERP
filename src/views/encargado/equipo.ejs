@@ -1,0 +1,109 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h4 class="mb-1"><i class="bi bi-people me-2"></i>Mi Equipo</h4>
+    <p class="text-body-secondary mb-0">Empleados que puedes asignar a tus actividades de campo</p>
+  </div>
+  <a href="/encargado" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Mis Actividades
+  </a>
+</div>
+
+<% if (messages.success) { %>
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-table me-2"></i>Mi equipo
+          <span class="badge bg-secondary ms-2"><%= equipoActual.length %></span>
+        </h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Empleado</th>
+              <th>Área</th>
+              <th>Puesto</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (equipoActual.length > 0) { %>
+              <% equipoActual.forEach(function(rel) { const s = rel.subordinado; %>
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="avatar-circle me-2">
+                      <%= s.Nombre ? s.Nombre.charAt(0).toUpperCase() : '?' %><%= s.Apellido_Paterno ? s.Apellido_Paterno.charAt(0).toUpperCase() : '' %>
+                    </div>
+                    <div>
+                      <div><%= s.Nombre %> <%= s.Apellido_Paterno %> <%= s.Apellido_Materno || '' %></div>
+                      <small class="text-body-secondary">ID <%= s.ID_Empleado %></small>
+                    </div>
+                  </div>
+                </td>
+                <td><%= s.area ? s.area.Nombre_Area : '-' %></td>
+                <td><%= s.puesto ? s.puesto.Nombre_Puesto : '-' %></td>
+                <td class="text-end">
+                  <form action="/encargado/equipo/<%= s.ID_Empleado %>/eliminar" method="POST" class="d-inline"
+                        onsubmit="return confirm('¿Quitar a este empleado de tu equipo?')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Quitar">
+                      <i class="bi bi-person-dash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              <% }); %>
+            <% } else { %>
+              <tr><td colspan="4" class="text-center text-body-secondary py-4">Aún no tienes empleados en tu equipo</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-person-plus me-2"></i>Agregar empleado</h5>
+      </div>
+      <div class="card-body">
+        <% if (disponibles.length > 0) { %>
+        <form action="/encargado/equipo" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Empleado</label>
+            <select class="form-select" name="ID_Subordinado" required>
+              <option value="">Seleccionar...</option>
+              <% disponibles.forEach(function(e) { %>
+                <option value="<%= e.ID_Empleado %>">
+                  <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %> (ID <%= e.ID_Empleado %>)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Agregar a mi equipo
+          </button>
+        </form>
+        <% } else { %>
+          <p class="text-body-secondary mb-0">No hay más empleados activos disponibles para agregar.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>

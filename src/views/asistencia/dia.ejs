@@ -149,6 +149,13 @@
                                             <% } else { %>
                                                 <span class="text-body-secondary">Desconocido</span>
                                             <% } %>
+                                            <% if (c.actividad) { %>
+                                                <br>
+                                                <span class="badge mt-1" style="background-color:#6f42c1"
+                                                      title="Responsable: <%= c.actividad.responsable %> · Empresa: <%= c.actividad.empresa %>">
+                                                    <i class="bi bi-signpost-split-fill me-1"></i><%= c.actividad.nombre %>
+                                                </span>
+                                            <% } %>
                                         </td>
                                         <td><small><%= c.empleado && c.empleado.area || '-' %></small></td>
                                         <td>

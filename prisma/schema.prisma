@@ -101,6 +101,19 @@ model Cat_Puestos {
   @@map("Cat_Puestos")
 }
 
+model Cat_Empresas {
+  ID_Empresa     Int      @id @default(autoincrement())
+  Nombre_Empresa String   @unique @db.VarChar(150)
+  Descripcion    String?  @db.VarChar(255)
+  Activo         Boolean  @default(true)
+  CreatedAt      DateTime @default(now())
+
+  // Relaciones
+  actividades Actividades_Campo[]
+
+  @@map("Cat_Empresas")
+}
+
 model Cat_Tipo_Incidencia {
   ID_Tipo_Incidencia Int      @id @default(autoincrement())
   Codigo             String   @unique @db.VarChar(20)
@@ -197,6 +210,10 @@ model Empleados {
   finiquitos        Finiquito_Liquidacion[]
   incidencias       Empleados_Incidencias[]
   prestamos         Empleados_Prestamos[]
+  equipo_como_encargado    Encargado_Subordinados[] @relation("EncargadoEquipo")
+  equipo_como_subordinado  Encargado_Subordinados[] @relation("SubordinadoDe")
+  actividades_responsable  Actividades_Campo[]
+  actividad_asignaciones   Actividad_Asignaciones[]
 
   @@index([ID_Nacionalidad])
   @@index([ID_Puesto])
@@ -741,6 +758,71 @@ model Empleados_Prestamos {
   @@index([ID_Empleado])
   @@index([Estado])
   @@map("Empleados_Prestamos")
+}
+
+// ============================================================
+// ENCARGADOS Y ACTIVIDADES DE CAMPO
+// Delegación de asistencia por día para trabajo de campo donde
+// el personal no puede sellar (obra/cliente externo).
+// ============================================================
+
+// Equipo fijo de cada encargado (patrón idéntico a Consultor_Plantas):
+// el encargado gestiona su propia lista de subordinados.
+model Encargado_Subordinados {
+  ID_Relacion   Int      @id @default(autoincrement())
+  ID_Encargado  Int
+  ID_Subordinado Int
+  CreatedAt     DateTime @default(now())
+  CreatedBy     String?  @db.VarChar(100)
+
+  encargado    Empleados @relation("EncargadoEquipo", fields: [ID_Encargado], references: [ID_Empleado], onDelete: Cascade)
+  subordinado  Empleados @relation("SubordinadoDe", fields: [ID_Subordinado], references: [ID_Empleado], onDelete: Cascade)
+
+  @@unique([ID_Encargado, ID_Subordinado])
+  @@index([ID_Encargado])
+  @@index([ID_Subordinado])
+  @@map("Encargado_Subordinados")
+}
+
+// Actividad de campo creada por un encargado (Nombre + Empresa cliente).
+model Actividades_Campo {
+  ID_Actividad     Int      @id @default(autoincrement())
+  Nombre_Actividad String   @db.VarChar(150)
+  ID_Empresa       Int
+  ID_Responsable   Int      // Empleado encargado, dueño de la actividad
+  Descripcion      String?  @db.VarChar(255)
+  Activo           Boolean  @default(true)
+  CreatedAt        DateTime @default(now())
+  CreatedBy        String?  @db.VarChar(100)
+
+  empresa      Cat_Empresas @relation(fields: [ID_Empresa], references: [ID_Empresa])
+  responsable  Empleados    @relation(fields: [ID_Responsable], references: [ID_Empleado])
+  asignaciones Actividad_Asignaciones[]
+
+  @@index([ID_Empresa])
+  @@index([ID_Responsable])
+  @@map("Actividades_Campo")
+}
+
+// Día concreto de una actividad asignado a un subordinado. Un empleado solo
+// puede tener una actividad de campo por día (se cruza con Empleados_Asistencia
+// por ID_Empleado+Fecha para combinarse con la checada real si la hay).
+model Actividad_Asignaciones {
+  ID_Asignacion Int      @id @default(autoincrement())
+  ID_Actividad  Int
+  ID_Empleado   Int
+  Fecha         DateTime @db.Date
+  CreatedAt     DateTime @default(now())
+  CreatedBy     String?  @db.VarChar(100)
+
+  actividad Actividades_Campo @relation(fields: [ID_Actividad], references: [ID_Actividad], onDelete: Cascade)
+  empleado  Empleados         @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+
+  @@unique([ID_Empleado, Fecha])
+  @@index([ID_Actividad])
+  @@index([ID_Empleado])
+  @@index([Fecha])
+  @@map("Actividad_Asignaciones")
 }
 
 // ============================================================

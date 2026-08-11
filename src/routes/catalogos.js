@@ -11,6 +11,7 @@ import * as areasController from '../controllers/areasController.js';
 import * as puestosController from '../controllers/puestosController.js';
 import * as horariosController from '../controllers/horariosController.js';
 import * as nacionalidadesController from '../controllers/nacionalidadesController.js';
+import * as empresasController from '../controllers/empresasController.js';
 
 const router = Router();
 router.use(isAuthenticated);
@@ -68,5 +69,18 @@ router.post('/nacionalidades', isAdminOrRH, nacionalidadesController.store);
 router.get('/nacionalidades/:id/editar', isAdminOrRH, nacionalidadesController.editar);
 router.put('/nacionalidades/:id', isAdminOrRH, nacionalidadesController.update);
 router.delete('/nacionalidades/:id', isAdminOrRH, nacionalidadesController.eliminar);
+
+// ============================================================
+// RUTAS DE EMPRESAS (clientes externos para actividades de campo)
+// ============================================================
+
+router.get('/empresas', isAdminOrRH, empresasController.index);
+router.get('/empresas/crear', isAdminOrRH, empresasController.crear);
+router.post('/empresas', isAdminOrRH, empresasController.store);
+router.get('/empresas/:id/editar', isAdminOrRH, empresasController.editar);
+router.put('/empresas/:id', isAdminOrRH, empresasController.update);
+router.post('/empresas/:id', isAdminOrRH, empresasController.update);
+router.delete('/empresas/:id', isAdminOrRH, empresasController.destroy);
+router.post('/empresas/:id/eliminar', isAdminOrRH, empresasController.destroy);
 
 export default router;

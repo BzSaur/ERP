@@ -1,0 +1,130 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/encargado">Actividades de Campo</a></li>
+      <li class="breadcrumb-item active">Nueva</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Nueva Actividad de Campo</h4>
+  <p class="text-body-secondary mb-0">Asigna días de trabajo de campo a empleados de tu equipo. No sellan, pero su asistencia mostrará Responsable, Actividad y Empresa.</p>
+</div>
+
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-body">
+        <form action="/encargado/actividades" method="POST" id="formActividad">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">Nombre de la Actividad <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Nombre_Actividad" required
+                     placeholder="Ej: Instalación de cableado, Supervisión de obra...">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Empresa <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Empresa" id="selEmpresa">
+                <option value="">Seleccionar...</option>
+                <% empresas.forEach(function(emp) { %>
+                  <option value="<%= emp.ID_Empresa %>"><%= emp.Nombre_Empresa %></option>
+                <% }); %>
+                <option value="">+ Nueva empresa...</option>
+              </select>
+              <input type="text" class="form-control mt-2 d-none" name="Nueva_Empresa" id="txtNuevaEmpresa" placeholder="Nombre de la nueva empresa">
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="2" placeholder="Descripción opcional..."></textarea>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Días de la actividad <span class="text-danger">*</span></label>
+            <input type="text" id="rangoDias" class="form-control" placeholder="Selecciona uno o varios días...">
+            <input type="hidden" name="dias" id="diasSeleccionados">
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Empleados de mi equipo <span class="text-danger">*</span></label>
+            <% if (equipoActual.length > 0) { %>
+              <div class="border rounded p-2" style="max-height:260px; overflow-y:auto;">
+                <% equipoActual.forEach(function(rel) { const s = rel.subordinado; %>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="subordinados" value="<%= s.ID_Empleado %>" id="sub<%= s.ID_Empleado %>">
+                    <label class="form-check-label" for="sub<%= s.ID_Empleado %>">
+                      <%= s.Nombre %> <%= s.Apellido_Paterno %> <%= s.Apellido_Materno || '' %>
+                      <small class="text-body-secondary">(ID <%= s.ID_Empleado %>)</small>
+                    </label>
+                  </div>
+                <% }); %>
+              </div>
+            <% } else { %>
+              <div class="alert alert-warning mb-0">
+                No tienes empleados en tu equipo. <a href="/encargado/equipo">Agrégalos aquí</a> antes de crear una actividad.
+              </div>
+            <% } %>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <a href="/encargado" class="btn btn-outline-secondary">
+              <i class="bi bi-x-lg me-1"></i> Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary" <%= equipoActual.length === 0 ? 'disabled' : '' %>>
+              <i class="bi bi-check-lg me-1"></i> Crear Actividad
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+<script>
+(function(){
+  const diasInput = document.getElementById('diasSeleccionados');
+  flatpickr('#rangoDias', {
+    mode: 'multiple',
+    locale: 'es',
+    dateFormat: 'Y-m-d',
+    minDate: 'today',
+    onChange: function(dates) {
+      const f = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      diasInput.value = dates.map(f).join(',');
+    }
+  });
+
+  const selEmpresa = document.getElementById('selEmpresa');
+  const txtNueva = document.getElementById('txtNuevaEmpresa');
+  selEmpresa.addEventListener('change', function(){
+    const esNueva = this.selectedOptions[0] && this.selectedOptions[0].text.startsWith('+ Nueva');
+    txtNueva.classList.toggle('d-none', !esNueva);
+    txtNueva.required = esNueva;
+    if (!esNueva) txtNueva.value = '';
+  });
+
+  document.getElementById('formActividad').addEventListener('submit', function(ev){
+    if (!diasInput.value) {
+      ev.preventDefault();
+      alert('Selecciona al menos un día para la actividad');
+      return;
+    }
+    const algunoMarcado = document.querySelector('input[name="subordinados"]:checked');
+    if (!algunoMarcado) {
+      ev.preventDefault();
+      alert('Selecciona al menos un empleado de tu equipo');
+    }
+  });
+})();
+</script>

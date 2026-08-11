@@ -15,6 +15,46 @@
             </div>
         </div>
 
+        <!-- Alerta: Actividades de campo de hoy (encargados) -->
+        <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador') && typeof actividadesHoy !== 'undefined' && actividadesHoy && actividadesHoy.length > 0) { %>
+        <div class="card border-primary mb-4" id="panelActividadesHoy">
+            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-signpost-split-fill text-primary me-2"></i>
+                    <%= actividadesHoy.length %> actividad(es) de campo hoy
+                    <small class="text-body-secondary ms-1">(asistencia delegada por un encargado — no sellan)</small>
+                </span>
+                <div class="d-flex gap-2 align-items-center">
+                    <a href="/encargado" class="btn btn-sm btn-outline-primary">Ver todas</a>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaActividadesHoy">
+                        Ver / ocultar
+                    </button>
+                </div>
+            </div>
+            <div class="collapse show" id="listaActividadesHoy">
+                <div class="list-group list-group-flush">
+                    <% actividadesHoy.forEach(function(act) { %>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <strong><%= act.nombre %></strong>
+                                    <span class="badge bg-secondary ms-1"><i class="bi bi-building me-1"></i><%= act.empresa %></span>
+                                    <div class="small text-body-secondary mt-1">
+                                        Responsable: <strong><%= act.responsable %></strong> ·
+                                        Empleados: <%= act.empleados.join(', ') %>
+                                    </div>
+                                </div>
+                                <a href="/encargado/actividades/<%= act.ID_Actividad %>" class="btn btn-sm btn-outline-primary align-self-center">
+                                    <i class="bi bi-eye me-1"></i>Ver
+                                </a>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+        </div>
+        <% } %>
+
         <!-- Tarjetas de resumen -->
         <div class="row mb-4">
             <div class="col-md-3 col-sm-6 mb-3">

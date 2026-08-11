@@ -14,7 +14,8 @@ async function main() {
       { Nombre_Rol: 'SUPER_ADMIN', Descripcion: 'Acceso total al sistema' },
       { Nombre_Rol: 'ADMIN', Descripcion: 'Administrador de sistemas' },
       { Nombre_Rol: 'RH', Descripcion: 'Recursos Humanos' },
-      { Nombre_Rol: 'CONSULTA', Descripcion: 'Solo lectura' }
+      { Nombre_Rol: 'CONSULTA', Descripcion: 'Solo lectura' },
+      { Nombre_Rol: 'ENCARGADO', Descripcion: 'Encargado de actividades de campo — delegación de asistencia por día' }
     ],
     skipDuplicates: true
   });

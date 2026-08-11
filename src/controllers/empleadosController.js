@@ -472,9 +472,28 @@ export const show = async (req, res, next) => {
       });
     }
 
+    // Actividades de campo delegadas (recientes y próximas) para mostrar
+    // Responsable/Actividad/Empresa en la ficha del empleado.
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const desde = new Date(hoy); desde.setDate(desde.getDate() - 14);
+    const hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 30);
+    const actividadesAsignadas = await prisma.actividad_Asignaciones.findMany({
+      where: { ID_Empleado: idNum, Fecha: { gte: desde, lte: hasta } },
+      include: {
+        actividad: {
+          include: {
+            empresa: { select: { Nombre_Empresa: true } },
+            responsable: { select: { Nombre: true, Apellido_Paterno: true } }
+          }
+        }
+      },
+      orderBy: { Fecha: 'asc' }
+    });
+
     res.render('empleados/ver', {
       title: `${empleado.Nombre} ${empleado.Apellido_Paterno}`,
-      empleado
+      empleado,
+      actividadesAsignadas
     });
   } catch (error) {
     next(error);
