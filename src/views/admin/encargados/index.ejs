@@ -1,0 +1,69 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h4 class="mb-1">Encargados</h4>
+    <p class="text-body-secondary mb-0">Empleados designados como responsables de grupos</p>
+  </div>
+  <a href="/admin/encargados/crear" class="btn btn-primary">
+    <i class="bi bi-person-badge me-2"></i>
+    Designar Encargado
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Empleado</th>
+            <th>Área / Puesto</th>
+            <th class="text-center">Grupos</th>
+            <th>Rol de acceso</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (encargados && encargados.length > 0) { %>
+            <% encargados.forEach(function(e) { %>
+            <tr>
+              <td>
+                <i class="bi bi-person-badge text-primary me-2"></i>
+                <strong><%= [e.empleado.Nombre, e.empleado.Apellido_Paterno].filter(Boolean).join(' ') %></strong>
+              </td>
+              <td><%= e.empleado.area?.Nombre_Area || '-' %> / <%= e.empleado.puesto?.Nombre_Puesto || '-' %></td>
+              <td class="text-center"><span class="badge bg-info"><%= e._count.grupos %></span></td>
+              <td>
+                <% if (e.sinAcceso) { %>
+                  <span class="badge bg-warning text-dark" title="No tiene rol de acceso ENCARGADO/ADMIN/RH/SUPER_ADMIN">
+                    <i class="bi bi-exclamation-triangle"></i> Sin rol de acceso
+                  </span>
+                <% } else { %>
+                  <span class="badge bg-success"><%= e.empleado.app_usuario?.rol?.Nombre_Rol || '—' %></span>
+                <% } %>
+              </td>
+              <td class="text-end">
+                <% if (e.sinAcceso) { %>
+                <a href="/usuarios" class="btn btn-sm btn-outline-warning" title="Editar rol en Usuarios">
+                  <i class="bi bi-shield-lock"></i>
+                </a>
+                <% } %>
+                <% if (e._count.grupos === 0) { %>
+                <form action="/admin/encargados/<%= e.ID_Encargado_Cat %>/eliminar" method="POST" class="d-inline"
+                      onsubmit="return confirm('¿Revocar designación de encargado?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Revocar">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="5" class="text-center text-body-secondary py-4">No hay encargados designados</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

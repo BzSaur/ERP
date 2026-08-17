@@ -1,0 +1,74 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h4 class="mb-1">Tipos de Actividad</h4>
+    <p class="text-body-secondary mb-0">Catálogo de tipos para clasificar actividades delegadas (Campo, Home Office, Venta, Capacitación, etc.)</p>
+  </div>
+  <a href="/admin/tipos-actividad/crear" class="btn btn-primary">
+    <i class="bi bi-tag-fill me-2"></i>
+    Nuevo Tipo
+  </a>
+</div>
+
+<!-- Tabla de Tipos -->
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th class="text-center">Color</th>
+            <th class="text-center">Actividades</th>
+            <th class="text-center">Recurrencias</th>
+            <th class="text-center">Estatus</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (tipos && tipos.length > 0) { %>
+            <% tipos.forEach(function(tipo) { %>
+            <tr>
+              <td>
+                <i class="bi bi-tag me-2" style="color:<%= tipo.Color %>"></i>
+                <strong><%= tipo.Nombre %></strong>
+              </td>
+              <td class="text-center">
+                <span class="badge px-3" style="background-color:<%= tipo.Color %>"><%= tipo.Color %></span>
+              </td>
+              <td class="text-center">
+                <span class="badge bg-info"><%= tipo._count.actividades %></span>
+              </td>
+              <td class="text-center">
+                <span class="badge bg-info"><%= tipo._count.recurrencias %></span>
+              </td>
+              <td class="text-center">
+                <% if (tipo.Activo) { %>
+                  <span class="badge bg-success">Activo</span>
+                <% } else { %>
+                  <span class="badge bg-secondary">Inactivo</span>
+                <% } %>
+              </td>
+              <td class="text-end">
+                <a href="/admin/tipos-actividad/<%= tipo.ID_Tipo_Actividad %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <% if (tipo._count.actividades === 0 && tipo._count.recurrencias === 0) { %>
+                <form action="/admin/tipos-actividad/<%= tipo.ID_Tipo_Actividad %>/eliminar" method="POST" class="d-inline"
+                      onsubmit="return confirm('¿Eliminar este tipo de actividad?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="6" class="text-center text-body-secondary py-4">No hay tipos de actividad registrados</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

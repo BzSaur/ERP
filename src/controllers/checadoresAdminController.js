@@ -380,7 +380,10 @@ export const huerfanas = async (req, res, next) => {
         take: 200
       }),
       prisma.empleados.findMany({
-        where: { ID_Estatus: 1 },
+        // Igual que el resto de picks de ADMS: solo BAJA real se excluye —
+        // VACACIONES/INCAPACIDAD/SUSPENDIDO deben poder recibir la atribución
+        // manual de una checada huérfana.
+        where: { estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } } },
         select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true },
         orderBy: { Nombre: 'asc' }
       })

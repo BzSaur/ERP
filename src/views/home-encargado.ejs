@@ -1,0 +1,163 @@
+<!-- Welcome Header -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
+  <div>
+    <h2 class="fw-bold mb-1">¡Bienvenido, <%= user ? user.Nombre_Completo.split(' ')[0] : 'Usuario' %>!</h2>
+    <p class="text-body-secondary mb-0 small">Resumen de tu equipo y actividades — VITA</p>
+  </div>
+  <div class="d-none d-md-block">
+    <span class="text-body-secondary small">
+      <i class="bi bi-calendar3 me-1"></i>
+      <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+    </span>
+  </div>
+</div>
+
+<% if (sinVincular) { %>
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Tu usuario no está vinculado a un empleado. Contacta a un administrador para poder gestionar tu equipo.
+</div>
+<% } else { %>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card bg-primary h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Mis Grupos</div>
+          <div class="stat-value"><%= grupos.length %></div>
+        </div>
+        <i class="bi bi-diagram-3-fill stat-icon"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card bg-success h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Mi Equipo</div>
+          <div class="stat-value"><%= equipoSize %></div>
+        </div>
+        <i class="bi bi-people-fill stat-icon"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card bg-info h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Días esta semana</div>
+          <div class="stat-value"><%= actividadesSemana.length %></div>
+        </div>
+        <i class="bi bi-calendar-week-fill stat-icon"></i>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card stat-card bg-warning h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Vencen en 7 días</div>
+          <div class="stat-value"><%= porVencer.length %></div>
+        </div>
+        <i class="bi bi-hourglass-split stat-icon"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Quick Actions -->
+  <div class="col-12 col-lg-4 col-xl-3">
+    <div class="card h-100">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-lightning-fill text-warning me-2"></i>
+          Acciones Rápidas
+        </h5>
+      </div>
+      <div class="card-body d-grid gap-2">
+        <a href="/encargado" class="btn btn-outline-primary">
+          <i class="bi bi-calendar3"></i> Calendario de Actividades
+        </a>
+        <a href="/encargado/asistencia" class="btn btn-outline-info">
+          <i class="bi bi-table"></i> Asistencia de mi Equipo
+        </a>
+        <a href="/encargado/actividades/crear" class="btn btn-outline-secondary">
+          <i class="bi bi-plus-lg"></i> Alta masiva (varios días)
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actividades de la semana -->
+  <div class="col-12 col-lg-8 col-xl-9">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-calendar-week text-primary me-2"></i>
+          Actividades de mi equipo esta semana
+        </h5>
+        <a href="/encargado" class="btn btn-sm btn-primary">Ver todas</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Día</th>
+                <th>Tipo</th>
+                <th>Actividad</th>
+                <th>Empresa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (actividadesSemana && actividadesSemana.length > 0) { %>
+                <% actividadesSemana.forEach(function(a) { %>
+                <tr>
+                  <td class="fw-semibold"><%= a.nombreEmpleado %></td>
+                  <td><%= a.nombreDia %> <%= a.fecha.slice(5).split('-').reverse().join('/') %></td>
+                  <td>
+                    <span class="badge" style="background-color:#6f42c1"><i class="bi bi-signpost-split-fill"></i> <%= a.tipo %></span>
+                    <% if (a.esRecurrente) { %><i class="bi bi-arrow-repeat text-body-secondary ms-1" title="Recurrente"></i><% } %>
+                  </td>
+                  <td><%= a.nombre %></td>
+                  <td class="text-body-secondary"><%= a.empresa || '-' %></td>
+                </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="5" class="text-center text-body-secondary py-5">
+                    <i class="bi bi-calendar-x d-block mb-2 fs-3"></i>
+                    Sin actividades esta semana
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% if (porVencer && porVencer.length > 0) { %>
+<div class="card mt-3 border-warning">
+  <div class="card-header bg-warning bg-opacity-10">
+    <i class="bi bi-hourglass-split text-warning me-2"></i>
+    Membresías de grupo por vencer (próximos 7 días)
+  </div>
+  <div class="list-group list-group-flush">
+    <% porVencer.forEach(function(m) { %>
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <span><%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %> — <%= m.grupo.Nombre_Grupo %></span>
+      <span class="text-body-secondary small">vence <%= new Date(m.Fecha_Fin).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></span>
+    </div>
+    <% }); %>
+  </div>
+</div>
+<% } %>
+
+<% } %>

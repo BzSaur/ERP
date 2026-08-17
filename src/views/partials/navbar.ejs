@@ -11,28 +11,23 @@
   <!-- Right side -->
   <div class="d-flex align-items-center gap-2 ms-auto">
     <!-- Notifications -->
-    <div class="dropdown">
-      <button class="btn-icon" data-bs-toggle="dropdown" title="Notificaciones">
+    <div class="dropdown" id="notifDropdownWrap">
+      <button class="btn-icon" data-bs-toggle="dropdown" title="Notificaciones" id="notifBtn">
         <i class="bi bi-bell"></i>
-        <span class="badge-dot"></span>
+        <span class="badge-dot d-none" id="notifBadgeDot"></span>
       </button>
-      <div class="dropdown-menu dropdown-menu-end notification-dropdown">
-        <h6 class="dropdown-header">Notificaciones</h6>
+      <div class="dropdown-menu dropdown-menu-end notification-dropdown" id="notifDropdownMenu">
+        <h6 class="dropdown-header d-flex justify-content-between align-items-center">
+          Notificaciones
+          <button type="button" class="btn btn-sm btn-link p-0" id="notifMarcarTodas">Marcar todas leídas</button>
+        </h6>
         <div class="dropdown-divider"></div>
-        <a href="#" class="dropdown-item">
-          <div class="notification-item">
-            <i class="bi bi-info-circle text-info"></i>
-            <div>
-              <p class="mb-0">Sistema actualizado</p>
-              <small class="text-body-secondary">Hace 5 minutos</small>
-            </div>
-          </div>
-        </a>
-        <div class="dropdown-divider"></div>
-        <a href="#" class="dropdown-item text-center">Ver todas</a>
+        <div id="notifLista">
+          <div class="dropdown-item text-body-secondary text-center small py-3">Cargando...</div>
+        </div>
       </div>
     </div>
-    
+
     <!-- User Dropdown -->
     <% if (user) { %>
     <div class="dropdown">
@@ -62,3 +57,74 @@
     <% } %>
   </div>
 </nav>
+
+<% if (user) { %>
+<script>
+(function(){
+  const lista = document.getElementById('notifLista');
+  const badgeDot = document.getElementById('notifBadgeDot');
+  const btn = document.getElementById('notifBtn');
+  const btnMarcarTodas = document.getElementById('notifMarcarTodas');
+  let cargado = false;
+
+  function tiempoRelativo(iso) {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diffMs / 60000);
+    if (min < 1) return 'Justo ahora';
+    if (min < 60) return `Hace ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `Hace ${h} h`;
+    return `Hace ${Math.floor(h / 24)} d`;
+  }
+
+  function render(data) {
+    badgeDot.classList.toggle('d-none', !data.noLeidas || data.noLeidas === 0);
+    if (!data.notificaciones || data.notificaciones.length === 0) {
+      lista.innerHTML = '<div class="dropdown-item text-body-secondary text-center small py-3">Sin notificaciones</div>';
+      return;
+    }
+    lista.innerHTML = data.notificaciones.map(function(n){
+      return `<a href="#" class="dropdown-item notif-item" data-id="${n.ID_Notificacion}" data-url="${n.Url || ''}">
+        <div class="notification-item">
+          <i class="bi bi-${n.Leida ? 'check-circle text-body-secondary' : 'bell-fill text-primary'}"></i>
+          <div>
+            <p class="mb-0 ${n.Leida ? '' : 'fw-semibold'}">${n.Titulo}</p>
+            <small class="text-body-secondary d-block">${n.Mensaje}</small>
+            <small class="text-body-secondary">${tiempoRelativo(n.CreatedAt)}</small>
+          </div>
+        </div>
+      </a>`;
+    }).join('<div class="dropdown-divider"></div>');
+  }
+
+  function cargar() {
+    fetch('/notificaciones').then(r => r.json()).then(render).catch(() => {});
+  }
+
+  btn.addEventListener('click', function(){
+    if (!cargado) { cargar(); cargado = true; }
+  });
+
+  lista.addEventListener('click', function(ev){
+    const item = ev.target.closest('.notif-item');
+    if (!item) return;
+    ev.preventDefault();
+    const id = item.dataset.id;
+    const url = item.dataset.url;
+    fetch(`/notificaciones/${id}/leer`, { method: 'POST' }).finally(function(){
+      cargar();
+      if (url) window.location.href = url;
+    });
+  });
+
+  btnMarcarTodas.addEventListener('click', function(ev){
+    ev.preventDefault();
+    fetch('/notificaciones/leer-todas', { method: 'POST' }).finally(cargar);
+  });
+
+  // Poll cada 60s para el badge, sin abrir el dropdown.
+  cargar();
+  setInterval(cargar, 60000);
+})();
+</script>
+<% } %>

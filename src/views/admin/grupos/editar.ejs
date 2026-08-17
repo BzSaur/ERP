@@ -1,0 +1,266 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/admin/grupos">Grupos</a></li>
+        <li class="breadcrumb-item active">Editar</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">Editar Grupo: <%= grupo.Nombre_Grupo %></h4>
+  </div>
+  <a href="/asistencia/horas<%= grupo.miembros && grupo.miembros.length > 0 ? '?ids=' + grupo.miembros.map(m => m.ID_Empleado).join(',') : '' %>" class="btn btn-sm btn-outline-primary" target="_blank">
+    <i class="bi bi-table me-1"></i>Ver tabla de asistencia del grupo
+  </a>
+</div>
+
+<div class="row">
+  <!-- Datos del grupo -->
+  <div class="col-lg-5">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Datos del Grupo</strong></div>
+      <div class="card-body">
+        <form action="/admin/grupos/<%= grupo.ID_Grupo %>" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Nombre del Grupo <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre_Grupo" value="<%= grupo.Nombre_Grupo %>" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Encargado responsable <span class="text-danger">*</span></label>
+            <select class="form-select" name="ID_Encargado" required>
+              <% encargados.forEach(function(e) { %>
+              <option value="<%= e.ID_Encargado_Cat %>" <%= e.ID_Encargado_Cat === grupo.ID_Encargado ? 'selected' : '' %>>
+                <%= [e.empleado.Nombre, e.empleado.Apellido_Paterno].filter(Boolean).join(' ') %>
+              </option>
+              <% }); %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="2"><%= grupo.Descripcion || '' %></textarea>
+          </div>
+
+          <div class="form-check form-switch mb-4">
+            <input class="form-check-input" type="checkbox" name="Activo" id="chkActivo" <%= grupo.Activo ? 'checked' : '' %>>
+            <label class="form-check-label" for="chkActivo">Grupo activo</label>
+          </div>
+
+          <div class="d-flex gap-2">
+            <a href="/admin/grupos" class="btn btn-outline-secondary">
+              <i class="bi bi-x-lg me-1"></i> Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Miembros -->
+  <div class="col-lg-7">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Agregar Miembro</strong></div>
+      <div class="card-body">
+        <form action="/admin/grupos/<%= grupo.ID_Grupo %>/miembros" method="POST" class="row g-2 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label small">Empleado</label>
+            <select class="form-select form-select-sm" name="ID_Empleado" required>
+              <option value="">Seleccionar...</option>
+              <% disponibles.forEach(function(e) { %>
+              <option value="<%= e.ID_Empleado %>">
+                <%= [e.Nombre, e.Apellido_Paterno].filter(Boolean).join(' ') %>
+              </option>
+              <% }); %>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Desde</label>
+            <input type="date" class="form-control form-control-sm" name="Fecha_Inicio" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small">Hasta (opcional)</label>
+            <input type="date" class="form-control form-control-sm" name="Fecha_Fin">
+          </div>
+          <div class="col-md-1">
+            <button type="submit" class="btn btn-sm btn-primary w-100" title="Agregar">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+        </form>
+        <% if (!disponibles || disponibles.length === 0) { %>
+          <small class="text-body-secondary d-block mt-2">Todos los empleados activos ya están vigentes en este grupo.</small>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>Miembros</strong></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 small">
+            <thead class="table-light">
+              <tr>
+                <th>Empleado</th>
+                <th>Vigencia</th>
+                <th class="text-center">Estatus</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (grupo.miembros && grupo.miembros.length > 0) { %>
+                <% grupo.miembros.forEach(function(m) { %>
+                <tr>
+                  <td><%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %></td>
+                  <td>
+                    <%= new Date(m.Fecha_Inicio).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
+                    &ndash;
+                    <%= m.Fecha_Fin ? new Date(m.Fecha_Fin).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : 'indefinida' %>
+                  </td>
+                  <td class="text-center">
+                    <% if (m.Activo) { %>
+                      <span class="badge bg-success">Activo</span>
+                    <% } else { %>
+                      <span class="badge bg-secondary">Inactivo</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end">
+                    <a href="/asistencia/horas/<%= m.ID_Empleado %>" class="btn btn-sm btn-outline-secondary" title="Ver su asistencia" target="_blank">
+                      <i class="bi bi-table"></i>
+                    </a>
+                    <% if (m.Activo) { %>
+                    <form action="/admin/grupos/<%= grupo.ID_Grupo %>/miembros/<%= m.ID_Miembro %>/eliminar" method="POST" class="d-inline"
+                          onsubmit="return confirm('¿Quitar a este empleado del grupo?')">
+                      <button type="submit" class="btn btn-sm btn-outline-danger" title="Quitar">
+                        <i class="bi bi-person-dash"></i>
+                      </button>
+                    </form>
+                    <% } %>
+                  </td>
+                </tr>
+                <% }); %>
+              <% } else { %>
+                <tr><td colspan="4" class="text-center text-body-secondary py-3">Sin miembros aún</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recurrencias de los miembros: calendario clic-para-alternar -->
+    <div class="card mt-4">
+      <div class="card-header"><strong>Recurrencias (Lun&ndash;S&aacute;b)</strong></div>
+      <div class="card-body">
+        <% const miembrosActivos = (grupo.miembros || []).filter(m => m.Activo); %>
+        <% if (miembrosActivos.length === 0) { %>
+          <p class="text-body-secondary mb-0">Agrega miembros activos al grupo para configurar sus recurrencias.</p>
+        <% } else { %>
+          <div class="row g-2 mb-3" id="defaultsRecurrencia">
+            <div class="col-md-5">
+              <label class="form-label small mb-1">Nombre de la actividad (por defecto al activar una celda)</label>
+              <input type="text" class="form-control form-control-sm" id="defNombreActividad" placeholder="Ej: Home Office recurrente">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">Tipo</label>
+              <select class="form-select form-select-sm" id="defTipoActividad">
+                <option value="">Seleccionar...</option>
+                <% tiposActividad.forEach(function(t) { %>
+                <option value="<%= t.ID_Tipo_Actividad %>"><%= t.Nombre %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Empresa</label>
+              <select class="form-select form-select-sm" id="defEmpresa">
+                <option value="">Seleccionar...</option>
+                <% empresas.forEach(function(emp) { %>
+                <option value="<%= emp.ID_Empresa %>"><%= emp.Nombre_Empresa %></option>
+                <% }); %>
+              </select>
+            </div>
+          </div>
+          <small class="text-body-secondary d-block mb-2">
+            Clic en una celda para activar/desactivar esa recurrencia (empieza mañana). Los valores por defecto de arriba solo se usan al ACTIVAR una celda nueva.
+          </small>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle" id="tablaRecurrenciasCalendario">
+              <thead class="table-light">
+                <tr>
+                  <th>Empleado</th>
+                  <% [1,2,3,4,5,6].forEach(function(dia) { %>
+                  <th class="text-center"><%= nombresDiaCorto[dia] %></th>
+                  <% }); %>
+                </tr>
+              </thead>
+              <tbody>
+                <% miembrosActivos.forEach(function(m) { %>
+                <tr>
+                  <td><%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %></td>
+                  <% [1,2,3,4,5,6].forEach(function(dia) { %>
+                  <% const activo = recurrenciasKeys.has(m.ID_Empleado + '_' + dia); %>
+                  <td class="text-center">
+                    <button type="button"
+                            class="btn btn-sm rounded-circle btn-celda-recurrencia <%= activo ? 'btn-primary' : 'btn-outline-secondary' %>"
+                            style="width:32px;height:32px;padding:0;"
+                            data-empleado="<%= m.ID_Empleado %>"
+                            data-dia="<%= dia %>"
+                            data-activo="<%= activo ? '1' : '0' %>"
+                            title="<%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %> — <%= nombresDiaCorto[dia] %>">
+                      <% if (activo) { %><i class="bi bi-check-lg"></i><% } %>
+                    </button>
+                  </td>
+                  <% }); %>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const idGrupo = <%= grupo.ID_Grupo %>;
+  document.querySelectorAll('.btn-celda-recurrencia').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const activo = btn.dataset.activo === '1';
+      const body = {
+        ID_Empleado: parseInt(btn.dataset.empleado),
+        Dia_Semana: parseInt(btn.dataset.dia)
+      };
+      if (!activo) {
+        body.Nombre_Actividad = document.getElementById('defNombreActividad').value.trim();
+        body.ID_Tipo_Actividad = document.getElementById('defTipoActividad').value;
+        body.ID_Empresa = document.getElementById('defEmpresa').value;
+        if (!body.Nombre_Actividad || !body.ID_Tipo_Actividad || !body.ID_Empresa) {
+          alert('Completa nombre, tipo y empresa por defecto antes de activar una celda');
+          return;
+        }
+      }
+      btn.disabled = true;
+      fetch(`/admin/grupos/${idGrupo}/recurrencias/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+        .then(r => r.json())
+        .then(function(res){
+          if (!res.ok) { alert(res.error || 'No se pudo actualizar la recurrencia'); return; }
+          btn.dataset.activo = res.activo ? '1' : '0';
+          btn.classList.toggle('btn-primary', res.activo);
+          btn.classList.toggle('btn-outline-secondary', !res.activo);
+          btn.innerHTML = res.activo ? '<i class="bi bi-check-lg"></i>' : '';
+        })
+        .catch(function(){ alert('Error de conexión al actualizar la recurrencia'); })
+        .finally(function(){ btn.disabled = false; });
+    });
+  });
+})();
+</script>

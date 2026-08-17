@@ -149,6 +149,18 @@ async function main() {
     console.log('✅ Usuario Super Admin creado');
   }
 
+  // ============================================================
+  // 8. CREAR TIPOS DE ACTIVIDAD BASE (catálogo abierto, SuperAdmin gestiona más)
+  // ============================================================
+  await prisma.cat_Tipo_Actividad.createMany({
+    data: [
+      { Nombre: 'Campo', Color: '#6f42c1' },
+      { Nombre: 'Home Office', Color: '#20c997' }
+    ],
+    skipDuplicates: true
+  });
+  console.log('✅ Tipos de actividad creados');
+
   console.log('');
   console.log('✅✅✅ Seed completado exitosamente ✅✅✅');
   console.log('');

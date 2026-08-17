@@ -3,11 +3,17 @@
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-1">
       <li class="breadcrumb-item"><a href="/encargado">Actividades de Campo</a></li>
-      <li class="breadcrumb-item active">Nueva</li>
+      <li class="breadcrumb-item active"><%= duplicarDe ? 'Duplicar' : 'Nueva' %></li>
     </ol>
   </nav>
-  <h4 class="mb-0">Nueva Actividad de Campo</h4>
-  <p class="text-body-secondary mb-0">Asigna días de trabajo de campo a empleados de tu equipo. No sellan, pero su asistencia mostrará Responsable, Actividad y Empresa.</p>
+  <h4 class="mb-0"><%= duplicarDe ? 'Duplicar Actividad' : 'Nueva Actividad' %></h4>
+  <p class="text-body-secondary mb-0">
+    <% if (duplicarDe) { %>
+      Mismo tipo, nombre, empresa y empleados que la actividad original — solo elige los días nuevos.
+    <% } else { %>
+      Asigna días de campo u home office a empleados de tu equipo. No sellan, pero su asistencia mostrará Encargado, Actividad y Empresa.
+    <% } %>
+  </p>
 </div>
 
 <% if (messages.error) { %>
@@ -19,102 +25,345 @@
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
-<div class="row">
-  <div class="col-lg-8">
-    <div class="card">
-      <div class="card-body">
-        <form action="/encargado/actividades" method="POST" id="formActividad">
-          <div class="row g-3">
-            <div class="col-md-7">
-              <label class="form-label">Nombre de la Actividad <span class="text-danger">*</span></label>
-              <input type="text" class="form-control" name="Nombre_Actividad" required
-                     placeholder="Ej: Instalación de cableado, Supervisión de obra...">
-            </div>
-            <div class="col-md-5">
-              <label class="form-label">Empresa <span class="text-danger">*</span></label>
-              <select class="form-select" name="ID_Empresa" id="selEmpresa">
-                <option value="">Seleccionar...</option>
-                <% empresas.forEach(function(emp) { %>
-                  <option value="<%= emp.ID_Empresa %>"><%= emp.Nombre_Empresa %></option>
-                <% }); %>
-                <option value="">+ Nueva empresa...</option>
-              </select>
-              <input type="text" class="form-control mt-2 d-none" name="Nueva_Empresa" id="txtNuevaEmpresa" placeholder="Nombre de la nueva empresa">
-            </div>
+<% if (esSupervisorParaDelegar) { %>
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" action="/encargado/actividades/crear" class="row g-2 align-items-end" id="formEncargado">
+      <div class="col-auto">
+        <label class="form-label mb-1">Crear a nombre de</label>
+        <select class="form-select" name="encargado" id="selEncargado" style="min-width:280px;">
+          <option value="">Selecciona un encargado...</option>
+          <% encargadosDisponibles.forEach(function(e) { %>
+            <option value="<%= e.empleado.ID_Empleado %>" <%= idEncargadoPreseleccionado === e.empleado.ID_Empleado ? 'selected' : '' %>>
+              <%= e.empleado.Nombre %> <%= e.empleado.Apellido_Paterno %> <%= e.empleado.Apellido_Materno || '' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-arrow-right me-1"></i>Continuar
+        </button>
+      </div>
+      <div class="col-auto text-body-secondary small pb-2">
+        <i class="bi bi-info-circle me-1"></i>Como SuperAdmin puedes delegar la creación a nombre de cualquier encargado.
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<script>
+(function(){
+  const sel = document.getElementById('selEncargado');
+  const form = document.getElementById('formEncargado');
+  if (!sel || !form) return;
+  // Auto-envío al cambiar. El botón "Continuar" cubre el caso en que el
+  // navegador ya restauró la opción y 'change' nunca dispara.
+  sel.addEventListener('change', function(){ if (sel.value) form.submit(); });
+})();
+</script>
+
+<% if (esSupervisorParaDelegar && !idEncargadoPreseleccionado) { %>
+<div class="alert alert-info">
+  Elige un encargado arriba y pulsa <strong>Continuar</strong>.
+</div>
+<% } else { %>
+<div class="card">
+  <div class="card-body">
+    <form action="/encargado/actividades" method="POST" id="formActividad">
+      <input type="hidden" name="Modo" id="inputModo" value="PUNTUAL">
+      <% if (esSupervisorParaDelegar) { %>
+        <input type="hidden" name="ID_Encargado_Empleado" value="<%= idEncargadoPreseleccionado %>">
+      <% } %>
+
+      <div class="row g-4">
+        <!-- Columna izquierda: datos de la actividad -->
+        <div class="col-lg-4">
+          <div class="mb-3">
+            <label class="form-label d-block">Tipo <span class="text-danger">*</span></label>
+            <select class="form-select" name="ID_Tipo_Actividad" required>
+              <option value="">Seleccionar...</option>
+              <% tiposActividad.forEach(function(t) { %>
+                <option value="<%= t.ID_Tipo_Actividad %>" <%= (duplicarDe && duplicarDe.ID_Tipo_Actividad === t.ID_Tipo_Actividad) ? 'selected' : '' %>><%= t.Nombre %></option>
+              <% }); %>
+            </select>
           </div>
 
-          <div class="mt-3">
+          <div class="mb-3">
+            <label class="form-label">Nombre de la Actividad <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="Nombre_Actividad" required
+                   value="<%= duplicarDe ? duplicarDe.Nombre_Actividad : '' %>"
+                   placeholder="Ej: Instalación de cableado...">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Empresa <span class="text-danger">*</span></label>
+            <% const empresaPreseleccionada = duplicarDe ? duplicarDe.ID_Empresa : ultimaEmpresaId; %>
+            <select class="form-select" name="ID_Empresa" id="selEmpresa">
+              <option value="">Seleccionar...</option>
+              <% empresas.forEach(function(emp) { %>
+                <option value="<%= emp.ID_Empresa %>" <%= empresaPreseleccionada === emp.ID_Empresa ? 'selected' : '' %>><%= emp.Nombre_Empresa %></option>
+              <% }); %>
+              <option value="__nueva__">+ Nueva empresa...</option>
+            </select>
+            <input type="text" class="form-control mt-2 d-none" name="Nueva_Empresa" id="txtNuevaEmpresa" placeholder="Nombre de la nueva empresa">
+            <% if (!duplicarDe && ultimaEmpresaId) { %>
+            <small class="text-body-secondary">Preseleccionada tu última empresa usada.</small>
+            <% } %>
+          </div>
+
+          <div class="mb-0">
             <label class="form-label">Descripción</label>
-            <textarea class="form-control" name="Descripcion" rows="2" placeholder="Descripción opcional..."></textarea>
+            <textarea class="form-control" name="Descripcion" rows="2" placeholder="Descripción opcional..."><%= duplicarDe ? (duplicarDe.Descripcion || '') : '' %></textarea>
+          </div>
+        </div>
+
+        <!-- Columna derecha: modo + tabla de empleados/días -->
+        <div class="col-lg-8">
+          <div class="mb-3">
+            <label class="form-label d-block">¿Cuándo? <span class="text-danger">*</span></label>
+            <div class="btn-group" role="group">
+              <input type="radio" class="btn-check" name="ModoUI" id="modoPuntual" value="PUNTUAL" checked>
+              <label class="btn btn-outline-primary" for="modoPuntual"><i class="bi bi-calendar-check me-1"></i>Días específicos</label>
+              <input type="radio" class="btn-check" name="ModoUI" id="modoRecurrente" value="RECURRENTE">
+              <label class="btn btn-outline-primary" for="modoRecurrente"><i class="bi bi-arrow-repeat me-1"></i>Recurrente (cada semana)</label>
+            </div>
           </div>
 
-          <div class="mt-3">
-            <label class="form-label">Días de la actividad <span class="text-danger">*</span></label>
+          <!-- MODO PUNTUAL -->
+          <div id="panelPuntual">
+            <label class="form-label">Días <span class="text-danger">*</span></label>
             <input type="text" id="rangoDias" class="form-control" placeholder="Selecciona uno o varios días...">
             <input type="hidden" name="dias" id="diasSeleccionados">
-          </div>
+            <div class="mt-2 d-flex flex-wrap gap-1" id="chipsDias"></div>
+            <div class="mt-2 d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary btn-dia-rapido" data-dias="1">Mañana</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary btn-dia-rapido" data-dias="5">Próx. 5 días hábiles</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnEstaSemana">Resto de esta semana</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="btnLimpiarDias">Limpiar</button>
+            </div>
 
-          <div class="mt-3">
-            <label class="form-label">Empleados de mi equipo <span class="text-danger">*</span></label>
+            <label class="form-label mt-3">Empleados de mi equipo <span class="text-danger">*</span></label>
             <% if (equipoActual.length > 0) { %>
-              <div class="border rounded p-2" style="max-height:260px; overflow-y:auto;">
-                <% equipoActual.forEach(function(rel) { const s = rel.subordinado; %>
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="subordinados" value="<%= s.ID_Empleado %>" id="sub<%= s.ID_Empleado %>">
-                    <label class="form-check-label" for="sub<%= s.ID_Empleado %>">
-                      <%= s.Nombre %> <%= s.Apellido_Paterno %> <%= s.Apellido_Materno || '' %>
-                      <small class="text-body-secondary">(ID <%= s.ID_Empleado %>)</small>
-                    </label>
-                  </div>
-                <% }); %>
+              <div class="d-flex gap-2 mb-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnMarcarTodos">Marcar todos</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDesmarcarTodos">Desmarcar todos</button>
               </div>
-            <% } else { %>
-              <div class="alert alert-warning mb-0">
-                No tienes empleados en tu equipo. <a href="/encargado/equipo">Agrégalos aquí</a> antes de crear una actividad.
+              <div class="table-responsive border rounded" style="max-height:260px; overflow-y:auto;">
+                <table class="table table-hover table-sm mb-0">
+                  <thead class="table-light" style="position:sticky; top:0; z-index:1;">
+                    <tr>
+                      <th style="width:40px;"></th>
+                      <th>Empleado</th>
+                      <th>Área</th>
+                      <th>Puesto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% equipoActual.forEach(function(s) { %>
+                      <% const marcado = duplicarDe && duplicarDe.empleadosIds.includes(s.ID_Empleado); %>
+                      <tr class="fila-clic" style="cursor:pointer;">
+                        <td><input class="form-check-input" type="checkbox" name="subordinados" value="<%= s.ID_Empleado %>" id="sub<%= s.ID_Empleado %>" <%= marcado ? 'checked' : '' %>></td>
+                        <td><label for="sub<%= s.ID_Empleado %>" class="mb-0" onclick="event.stopPropagation()"><%= s.Nombre %> <%= s.Apellido_Paterno %> <%= s.Apellido_Materno || '' %></label></td>
+                        <td class="text-body-secondary small"><%= s.area?.Nombre_Area || '-' %></td>
+                        <td class="text-body-secondary small"><%= s.puesto?.Nombre_Puesto || '-' %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
               </div>
             <% } %>
           </div>
 
-          <div class="d-flex gap-2 mt-4">
-            <a href="/encargado" class="btn btn-outline-secondary">
-              <i class="bi bi-x-lg me-1"></i> Cancelar
-            </a>
-            <button type="submit" class="btn btn-primary" <%= equipoActual.length === 0 ? 'disabled' : '' %>>
-              <i class="bi bi-check-lg me-1"></i> Crear Actividad
-            </button>
+          <!-- MODO RECURRENTE -->
+          <div id="panelRecurrente" class="d-none">
+            <small class="text-body-secondary d-block mb-2">
+              Marca el/los días de la semana de cada empleado — se repite automáticamente cada semana a partir de mañana. Si más adelante asignas un día puntual a alguien, ese día puntual manda; la recurrencia sigue aplicando el resto de las semanas.
+            </small>
+            <% if (equipoActual.length > 0) { %>
+              <div class="table-responsive border rounded" style="max-height:340px; overflow-y:auto;">
+                <table class="table table-sm mb-0 align-middle">
+                  <thead class="table-light" style="position:sticky; top:0; z-index:1;">
+                    <tr>
+                      <th>Empleado</th>
+                      <th class="text-center">L</th>
+                      <th class="text-center">M</th>
+                      <th class="text-center">M</th>
+                      <th class="text-center">J</th>
+                      <th class="text-center">V</th>
+                      <th class="text-center">S</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% equipoActual.forEach(function(s) { %>
+                      <tr>
+                        <td><%= s.Nombre %> <%= s.Apellido_Paterno %></td>
+                        <% [1,2,3,4,5,6].forEach(function(dia) { %>
+                        <td class="text-center">
+                          <input type="checkbox" class="btn-check dia-semana-chk" name="dias_<%= s.ID_Empleado %>" value="<%= dia %>" id="d<%= s.ID_Empleado %>_<%= dia %>" autocomplete="off">
+                          <label class="btn btn-sm btn-outline-primary rounded-circle p-0 dia-semana-lbl" for="d<%= s.ID_Empleado %>_<%= dia %>" style="width:32px;height:32px;line-height:30px;"></label>
+                        </td>
+                        <% }); %>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
           </div>
-        </form>
+
+          <% if (equipoActual.length === 0) { %>
+            <div class="alert alert-warning mb-0">
+              No tienes empleados vigentes en tu equipo. Un SuperAdmin debe agregarte miembros en Grupos.
+            </div>
+          <% } %>
+        </div>
       </div>
-    </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <a href="/encargado" class="btn btn-outline-secondary">
+          <i class="bi bi-x-lg me-1"></i> Cancelar
+        </a>
+        <button type="submit" class="btn btn-primary" <%= equipoActual.length === 0 ? 'disabled' : '' %>>
+          <i class="bi bi-check-lg me-1"></i> Crear Actividad
+        </button>
+      </div>
+    </form>
   </div>
 </div>
+<% } %>
 
+<% if (!esSupervisorParaDelegar || idEncargadoPreseleccionado) { %>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 <script>
 (function(){
   const diasInput = document.getElementById('diasSeleccionados');
-  flatpickr('#rangoDias', {
+  const chipsDias = document.getElementById('chipsDias');
+  const fmtDia = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const fmtCorto = d => d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+
+  let fechasActuales = [];
+
+  function renderChips() {
+    chipsDias.innerHTML = fechasActuales.map(function(d, i){
+      return '<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle d-inline-flex align-items-center gap-1 py-2 px-2">' +
+        fmtCorto(d) +
+        '<i class="bi bi-x-circle-fill" style="cursor:pointer" data-idx="' + i + '"></i>' +
+        '</span>';
+    }).join(' ');
+  }
+  chipsDias.addEventListener('click', function(ev){
+    const icon = ev.target.closest('[data-idx]');
+    if (!icon) return;
+    const idx = parseInt(icon.dataset.idx);
+    fechasActuales.splice(idx, 1);
+    setDias(fechasActuales);
+  });
+
+  const fp = flatpickr('#rangoDias', {
     mode: 'multiple',
     locale: 'es',
     dateFormat: 'Y-m-d',
-    minDate: 'today',
+    // Sin minDate: se permite registrar actividad retroactiva (fecha pasada).
     onChange: function(dates) {
-      const f = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      diasInput.value = dates.map(f).join(',');
+      fechasActuales = dates;
+      diasInput.value = dates.map(fmtDia).join(',');
+      renderChips();
     }
+  });
+
+  function diasHabilesDesde(inicio, cantidad) {
+    const out = [];
+    const d = new Date(inicio);
+    while (out.length < cantidad) {
+      if (d.getDay() !== 0) out.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+  function setDias(dates) {
+    fp.setDate(dates, false);
+    fechasActuales = dates;
+    diasInput.value = dates.map(fmtDia).join(',');
+    renderChips();
+  }
+
+  document.querySelectorAll('.btn-dia-rapido').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const n = parseInt(btn.dataset.dias);
+      const manana = new Date(); manana.setDate(manana.getDate() + 1);
+      setDias(n === 1 ? [manana] : diasHabilesDesde(manana, n));
+    });
+  });
+  document.getElementById('btnEstaSemana').addEventListener('click', function(){
+    const hoy = new Date();
+    const finSemana = new Date(hoy);
+    finSemana.setDate(hoy.getDate() + (6 - hoy.getDay()));
+    const dias = [];
+    for (let d = new Date(hoy); d <= finSemana; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0) dias.push(new Date(d));
+    }
+    setDias(dias);
+  });
+  document.getElementById('btnLimpiarDias').addEventListener('click', function(){
+    setDias([]);
+  });
+
+  document.getElementById('btnMarcarTodos')?.addEventListener('click', function(){
+    document.querySelectorAll('input[name="subordinados"]').forEach(c => c.checked = true);
+  });
+  document.getElementById('btnDesmarcarTodos')?.addEventListener('click', function(){
+    document.querySelectorAll('input[name="subordinados"]').forEach(c => c.checked = false);
+  });
+  document.querySelectorAll('.fila-clic').forEach(function(row){
+    row.addEventListener('click', function(ev){
+      if (ev.target.tagName === 'INPUT') return;
+      const c = row.querySelector('input[type="checkbox"]');
+      c.checked = !c.checked;
+    });
+  });
+
+  // Letra L/M/M/J/V/S dentro de cada círculo de día de semana (recurrente).
+  document.querySelectorAll('.dia-semana-lbl').forEach(function(lbl){
+    const letras = { 1:'L', 2:'M', 3:'M', 4:'J', 5:'V', 6:'S' };
+    const chk = document.getElementById(lbl.getAttribute('for'));
+    lbl.textContent = letras[chk.value];
   });
 
   const selEmpresa = document.getElementById('selEmpresa');
   const txtNueva = document.getElementById('txtNuevaEmpresa');
   selEmpresa.addEventListener('change', function(){
-    const esNueva = this.selectedOptions[0] && this.selectedOptions[0].text.startsWith('+ Nueva');
+    const esNueva = this.value === '__nueva__';
     txtNueva.classList.toggle('d-none', !esNueva);
     txtNueva.required = esNueva;
-    if (!esNueva) txtNueva.value = '';
+    if (esNueva) this.removeAttribute('name');
+    else { this.setAttribute('name', 'ID_Empresa'); txtNueva.value = ''; }
+  });
+
+  // Toggle Puntual / Recurrente
+  const inputModo = document.getElementById('inputModo');
+  const panelPuntual = document.getElementById('panelPuntual');
+  const panelRecurrente = document.getElementById('panelRecurrente');
+  document.querySelectorAll('input[name="ModoUI"]').forEach(function(radio){
+    radio.addEventListener('change', function(){
+      const esRecurrente = this.value === 'RECURRENTE';
+      inputModo.value = this.value;
+      panelPuntual.classList.toggle('d-none', esRecurrente);
+      panelRecurrente.classList.toggle('d-none', !esRecurrente);
+    });
   });
 
   document.getElementById('formActividad').addEventListener('submit', function(ev){
+    if (inputModo.value === 'RECURRENTE') {
+      const algunDia = document.querySelector('.dia-semana-chk:checked');
+      if (!algunDia) {
+        ev.preventDefault();
+        alert('Marca al menos un día de la semana para al menos un empleado');
+      }
+      return;
+    }
     if (!diasInput.value) {
       ev.preventDefault();
       alert('Selecciona al menos un día para la actividad');
@@ -128,3 +377,4 @@
   });
 })();
 </script>
+<% } %>

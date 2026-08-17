@@ -82,8 +82,10 @@ export async function sincronizarTodos(idChecador = null) {
 
   if (destinos.length === 0) return { encolados: 0, eliminados: 0, checadores: 0 };
 
+  // "Activo para el checador" = cualquier estatus salvo BAJA real (VACACIONES/
+  // INCAPACIDAD/SUSPENDIDO deben permanecer sincronizados en el device).
   const activos = await prisma.empleados.findMany({
-    where: { ID_Estatus: 1 },
+    where: { estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } } },
     select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
   });
   const activosSet = new Set(activos.map(e => e.ID_Empleado));

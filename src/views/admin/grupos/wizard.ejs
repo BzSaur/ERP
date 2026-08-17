@@ -1,0 +1,239 @@
+<!-- Header -->
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/admin/grupos">Grupos</a></li>
+        <li class="breadcrumb-item active">Alta rápida</li>
+      </ol>
+    </nav>
+    <h4 class="mb-1">Alta rápida de grupo</h4>
+    <p class="text-body-secondary mb-0">Encargado, grupo y miembros iniciales en un solo paso.</p>
+  </div>
+  <a href="/admin/grupos/crear" class="btn btn-sm btn-outline-secondary">Prefiero el formulario clásico</a>
+</div>
+
+<div class="row">
+  <div class="col-lg-9">
+    <form action="/admin/grupos/wizard" method="POST" id="formWizard">
+      <!-- Paso 1: Encargado -->
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center gap-2">
+          <span class="badge bg-primary">1</span>
+          <strong>Encargado</strong>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Encargado responsable <span class="text-danger">*</span></label>
+            <select class="form-select" name="ID_Encargado" id="selEncargado">
+              <option value="">Seleccionar existente...</option>
+              <% encargados.forEach(function(e) { %>
+              <option value="<%= e.ID_Encargado_Cat %>">
+                <%= [e.empleado.Nombre, e.empleado.Apellido_Paterno].filter(Boolean).join(' ') %>
+              </option>
+              <% }); %>
+              <option value="__nuevo__">+ Designar un empleado nuevo como encargado...</option>
+            </select>
+          </div>
+          <div class="mb-0 d-none" id="wrapNuevoEncargado">
+            <label class="form-label">Empleado a designar</label>
+            <select class="form-select" name="Nuevo_Encargado_Empleado" id="selNuevoEncargado">
+              <option value="">Seleccionar...</option>
+              <% empleados.forEach(function(e) { %>
+              <option value="<%= e.ID_Empleado %>"
+                      data-tiene-cuenta="<%= e.app_usuario ? '1' : '0' %>"
+                      data-email="<%= e.app_usuario ? e.app_usuario.Email_Office365 : '' %>"
+                      data-rol="<%= e.app_usuario ? e.app_usuario.rol.Nombre_Rol : '' %>">
+                <%= [e.Nombre, e.Apellido_Paterno].filter(Boolean).join(' ') %><%= e.app_usuario ? ' (ya tiene cuenta: ' + e.app_usuario.rol.Nombre_Rol + ')' : '' %>
+              </option>
+              <% }); %>
+            </select>
+
+            <!-- Sin cuenta: crear correo+contraseña aquí mismo -->
+            <div class="mt-2 p-2 border rounded d-none" id="wrapCuentaNueva">
+              <small class="text-body-secondary d-block mb-2">Este empleado no tiene cuenta de acceso — créala aquí para que pueda entrar como encargado:</small>
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <input type="email" class="form-control form-control-sm" name="Nueva_Cuenta_Email" id="txtNuevaCuentaEmail" placeholder="correo@empresa.com">
+                </div>
+                <div class="col-md-6">
+                  <input type="password" class="form-control form-control-sm" name="Nueva_Cuenta_Password" id="txtNuevaCuentaPassword" placeholder="Contraseña (mín. 8 caracteres)" minlength="8">
+                </div>
+              </div>
+            </div>
+
+            <!-- Ya tiene cuenta con otro rol: se avisa que se sube a ENCARGADO -->
+            <div class="mt-2 alert alert-info py-2 px-3 mb-0 d-none" id="wrapRolSubir">
+              <small><i class="bi bi-info-circle me-1"></i>Ya tiene cuenta (<span id="rolActualTexto"></span>) — su rol se subirá a <strong>ENCARGADO</strong> al crear el grupo.</small>
+            </div>
+
+            <!-- Ya es ENCARGADO -->
+            <div class="mt-2 alert alert-success py-2 px-3 mb-0 d-none" id="wrapYaEncargado">
+              <small><i class="bi bi-check-circle me-1"></i>Ya tiene cuenta con rol ENCARGADO — puede entrar sin cambios.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 2: Grupo -->
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center gap-2">
+          <span class="badge bg-primary">2</span>
+          <strong>Datos del grupo</strong>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">Nombre del grupo <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Nombre_Grupo" required placeholder="Ej: Turno Matutino, Cuadrilla Norte...">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Miembros vigentes desde</label>
+              <input type="date" class="form-control" name="Fecha_Inicio" id="fechaInicioMiembros">
+              <small class="text-body-secondary">Aplica a todos los miembros que marques abajo. Ajusta vigencias individuales después si hace falta.</small>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="Descripcion" rows="2" placeholder="Descripción opcional..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 3: Miembros -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary">3</span>
+            <strong>Miembros iniciales</strong>
+            <span class="text-body-secondary small">(opcional, puedes agregar después)</span>
+          </span>
+          <input type="text" class="form-control form-control-sm" style="width:200px" id="filtroMiembros" placeholder="Buscar empleado...">
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive" style="max-height:380px; overflow-y:auto;">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light" style="position:sticky; top:0; z-index:1;">
+                <tr>
+                  <th style="width:40px;"></th>
+                  <th>Empleado</th>
+                  <th>Área</th>
+                  <th>Puesto</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% empleados.forEach(function(e) { %>
+                <tr class="miembro-row" style="cursor:pointer;" data-nombre="<%= (e.Nombre + ' ' + e.Apellido_Paterno).toLowerCase() %>" onclick="if(event.target.tagName!=='INPUT'){const c=this.querySelector('input');c.checked=!c.checked;c.dispatchEvent(new Event('change'));}">
+                  <td><input class="form-check-input" type="checkbox" name="miembros" value="<%= e.ID_Empleado %>" id="mie<%= e.ID_Empleado %>"></td>
+                  <td><label for="mie<%= e.ID_Empleado %>" class="mb-0" onclick="event.stopPropagation()"><%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %></label></td>
+                  <td class="text-body-secondary small"><%= e.area?.Nombre_Area || '-' %></td>
+                  <td class="text-body-secondary small"><%= e.puesto?.Nombre_Puesto || '-' %></td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer text-body-secondary small">
+          <span id="contadorMiembros">0</span> seleccionado(s)
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="/admin/grupos" class="btn btn-outline-secondary">
+          <i class="bi bi-x-lg me-1"></i> Cancelar
+        </a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-lightning-fill me-1"></i> Crear grupo completo
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Fecha default: hoy, en formato local (no UTC-shift).
+  const hoy = new Date();
+  document.getElementById('fechaInicioMiembros').value =
+    hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+
+  const selEncargado = document.getElementById('selEncargado');
+  const wrapNuevo = document.getElementById('wrapNuevoEncargado');
+  const selNuevo = document.getElementById('selNuevoEncargado');
+  const wrapCuentaNueva = document.getElementById('wrapCuentaNueva');
+  const txtEmail = document.getElementById('txtNuevaCuentaEmail');
+  const txtPassword = document.getElementById('txtNuevaCuentaPassword');
+  const wrapRolSubir = document.getElementById('wrapRolSubir');
+  const rolActualTexto = document.getElementById('rolActualTexto');
+  const wrapYaEncargado = document.getElementById('wrapYaEncargado');
+
+  selEncargado.addEventListener('change', function(){
+    const esNuevo = this.value === '__nuevo__';
+    wrapNuevo.classList.toggle('d-none', !esNuevo);
+    selNuevo.required = esNuevo;
+    if (esNuevo) this.removeAttribute('name'); // no mandar "__nuevo__" como ID_Encargado
+    else { this.setAttribute('name', 'ID_Encargado'); selNuevo.value = ''; actualizarEstadoCuenta(); }
+  });
+
+  function actualizarEstadoCuenta() {
+    wrapCuentaNueva.classList.add('d-none');
+    wrapRolSubir.classList.add('d-none');
+    wrapYaEncargado.classList.add('d-none');
+    txtEmail.required = false;
+    txtPassword.required = false;
+
+    const opt = selNuevo.selectedOptions[0];
+    if (!opt || !opt.value) return;
+
+    const tieneCuenta = opt.dataset.tieneCuenta === '1';
+    if (!tieneCuenta) {
+      wrapCuentaNueva.classList.remove('d-none');
+      txtEmail.required = true;
+      txtPassword.required = true;
+    } else if (opt.dataset.rol === 'ENCARGADO') {
+      wrapYaEncargado.classList.remove('d-none');
+    } else {
+      rolActualTexto.textContent = opt.dataset.rol;
+      wrapRolSubir.classList.remove('d-none');
+    }
+  }
+  selNuevo.addEventListener('change', actualizarEstadoCuenta);
+
+  const filtro = document.getElementById('filtroMiembros');
+  filtro.addEventListener('input', function(){
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.miembro-row').forEach(function(row){
+      row.classList.toggle('d-none', q && !row.dataset.nombre.includes(q));
+    });
+  });
+
+  const contador = document.getElementById('contadorMiembros');
+  document.querySelectorAll('input[name="miembros"]').forEach(function(chk){
+    chk.addEventListener('change', function(){
+      contador.textContent = document.querySelectorAll('input[name="miembros"]:checked').length;
+    });
+  });
+
+  document.getElementById('formWizard').addEventListener('submit', function(ev){
+    if (!selEncargado.value) {
+      ev.preventDefault();
+      alert('Selecciona un encargado existente o marca "Designar un empleado nuevo"');
+      return;
+    }
+    if (selEncargado.value === '__nuevo__') {
+      if (!selNuevo.value) {
+        ev.preventDefault();
+        alert('Selecciona el empleado a designar como nuevo encargado');
+        return;
+      }
+      if (!wrapCuentaNueva.classList.contains('d-none')) {
+        if (!txtEmail.value || !txtPassword.value || txtPassword.value.length < 8) {
+          ev.preventDefault();
+          alert('Completa el correo y una contraseña de al menos 8 caracteres para la nueva cuenta');
+        }
+      }
+    }
+  });
+})();
+</script>

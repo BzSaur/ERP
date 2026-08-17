@@ -13,7 +13,11 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasActividadHastaEntrada } from './asistenciaService.js';
+
+// Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
+// completa), consistente con la misma regla usada en las vistas HTML.
+const HORAS_FIJAS_ACTIVIDAD = 9;
 
 /**
  * Entrada a MOSTRAR (Date). El redondeo a HH:00 NO se aplica aquí (lo hace, aparte, el
@@ -99,7 +103,10 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const dias = rangoDias(inicio, fin);
 
   let empleados = await prisma.empleados.findMany({
-    where: { ID_Estatus: 1 },
+    where: {
+      ID_Estatus: 1,
+      ...(filtro?.idsPermitidos ? { ID_Empleado: { in: filtro.idsPermitidos } } : {})
+    },
     select: {
       ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },
@@ -128,6 +135,11 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   // Vacaciones / incidencias aprobadas: etiquetar el día en vez de dejarlo vacío.
   const ausencias = await obtenerAusenciasJustificadas(inicio, fin);
 
+  // Actividades (campo/home office, puntuales + recurrencia resuelta): días
+  // delegados sin checada se etiquetan y cuentan 9h fijas, igual que en las
+  // vistas HTML de horas.
+  const actividadesMap = await resolverActividadesPorRango(empleados.map(e => e.ID_Empleado), inicio, fin);
+
   // Index: ID_Empleado -> (yyyy-mm-dd -> asistencia)
   const idx = new Map();
   for (const a of asistencias) {
@@ -137,8 +149,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   }
 
   // Filtro de visibilidad del consultor (unión planta/área). Empleado visible si su área
-  // está permitida, o si tuvo alguna asistencia en una planta permitida.
-  if (filtro) {
+  // está permitida, o si tuvo alguna asistencia en una planta permitida. idsPermitidos
+  // (equipo de un encargado) es independiente y ya se aplicó en la query de empleados.
+  if (filtro && (filtro.plantaIds || filtro.areaIds)) {
     const plantasCat = await prisma.cat_Plantas.findMany({ select: { ID_Planta: true, Nombre: true } });
     const norm = s => (s || '').toString().trim().toUpperCase().replace(/\s+/g, '');
     const strAPlanta = new Map();
@@ -183,8 +196,20 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const key = d.toISOString().slice(0, 10);
       const a = idx.get(e.ID_Empleado)?.get(key);
       if (!a) {
-        const etiqueta = d.getDay() !== 0 ? ausenciaEnFecha(ausencias, e.ID_Empleado, d) : null;
-        fila.push(etiqueta ? etiqueta.toUpperCase() : '', '', '');
+        if (d.getDay() === 0) { fila.push('', '', ''); continue; }
+        const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, d);
+        const actividadRaw = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
+        if (!periodoAus && !actividadRaw) { fila.push('', '', ''); continue; }
+
+        // Ausencia y actividad el mismo día: gana la asignada al último.
+        // En ambos casos el día cuenta 9h fijas (jornada cumplida).
+        if (ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
+          const empresaTxt = actividadRaw.empresa ? ` (${actividadRaw.empresa})` : '';
+          fila.push(`${actividadRaw.tipo.toUpperCase()}: ${actividadRaw.nombre}${empresaTxt}`, '', HORAS_FIJAS_ACTIVIDAD);
+        } else {
+          fila.push(periodoAus.etiqueta.toUpperCase(), '', HORAS_FIJAS_ACTIVIDAD);
+        }
+        totalHoras += HORAS_FIJAS_ACTIVIDAD;
         continue;
       }
 
@@ -206,6 +231,14 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         entMostrar = `${entR}${plantaEnt ? ' (' + plantaEnt + ')' : ''}`;
         salMostrar = `${salR}${plantaSal ? ' (' + plantaSal + ')' : ''}`;
         horas = horasEntreRedondeadas(entR, salR);
+      }
+
+      // Actividad delegada Y checada real el mismo día: se suman (tramo virtual
+      // 8am-primera entrada, con descuento de comida, + horas reales) — mismo
+      // criterio que la vista HTML /asistencia/horas.
+      const actividadConChecada = d.getDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
+      if (actividadConChecada) {
+        horas += horasActividadHastaEntrada(a.Hora_Entrada);
       }
 
       totalHoras += horas;

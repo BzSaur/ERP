@@ -113,7 +113,7 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
         Fecha_Inicio: { lte: hasta },
         Fecha_Fin: { gte: desde }
       },
-      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
+      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true, CreatedAt: true }
     }),
     // Legacy: Vacaciones anual solo guarda el último rango; se mantiene en la
     // unión por si existen registros previos al backfill de periodos.
@@ -134,21 +134,23 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
         Fecha_Fin: { gte: desde }
       },
       select: {
-        ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true,
+        ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true, CreatedAt: true,
         tipo_incidencia: { select: { Nombre: true } }
       }
     })
   ]);
 
   const mapa = new Map();
-  const agregar = (id, ini, fin, etiqueta) => {
+  // creadaEn permite resolver el empate cuando el mismo día tiene ausencia Y
+  // actividad delegada: gana la que se asignó al último (ver ausenciaEnFecha).
+  const agregar = (id, ini, fin, etiqueta, creadaEn) => {
     if (!ini || !fin) return;
     if (!mapa.has(id)) mapa.set(id, []);
-    mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta });
+    mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta, creadaEn: creadaEn || null });
   };
-  for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones');
-  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones');
-  for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso');
+  for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones', p.CreatedAt);
+  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones', null);
+  for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso', i.CreatedAt);
   return mapa;
 }
 
@@ -158,11 +160,42 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
  * @param {Map} mapa  salida de obtenerAusenciasJustificadas
  */
 export function ausenciaEnFecha(mapa, empleadoId, fecha) {
+  const p = periodoAusenciaEnFecha(mapa, empleadoId, fecha);
+  return p ? p.etiqueta : null;
+}
+
+/**
+ * Igual que ausenciaEnFecha pero devuelve el periodo completo
+ * ({etiqueta, creadaEn, ...}), necesario para resolver la precedencia contra
+ * una actividad delegada el mismo día.
+ */
+export function periodoAusenciaEnFecha(mapa, empleadoId, fecha) {
   const periodos = mapa?.get(empleadoId);
   if (!periodos) return null;
   const ymd = ymdUTC(fecha);
-  const p = periodos.find(p => ymd >= p.desde && ymd <= p.hasta);
-  return p ? p.etiqueta : null;
+  return periodos.find(p => ymd >= p.desde && ymd <= p.hasta) || null;
+}
+
+// Horas fijas de una jornada cubierta sin checada (actividad delegada o
+// ausencia justificada). Vacaciones/permiso también cuentan 9h: el día se
+// paga completo, no como 0.
+export const HORAS_FIJAS_JORNADA = 9;
+
+/**
+ * Resuelve qué manda un día que tiene ausencia justificada Y actividad
+ * delegada: gana la que se ASIGNÓ AL ÚLTIMO (CreatedAt más reciente). Si
+ * alguna no tiene timestamp comparable (vacaciones legacy), gana la actividad,
+ * que es el registro con fecha de creación confiable.
+ * @returns {'ACTIVIDAD'|'AUSENCIA'}
+ */
+export function ganadorDelDia(periodoAusencia, actividad) {
+  if (!periodoAusencia) return 'ACTIVIDAD';
+  if (!actividad) return 'AUSENCIA';
+  const tAus = periodoAusencia.creadaEn ? new Date(periodoAusencia.creadaEn).getTime() : null;
+  const tAct = actividad.creadaEn ? new Date(actividad.creadaEn).getTime() : null;
+  if (tAus == null) return 'ACTIVIDAD';
+  if (tAct == null) return 'AUSENCIA';
+  return tAct >= tAus ? 'ACTIVIDAD' : 'AUSENCIA';
 }
 
 // ============================================================
@@ -172,11 +205,13 @@ export function ausenciaEnFecha(mapa, empleadoId, fecha) {
 // ============================================================
 
 /**
- * Actividades de campo asignadas en un rango, indexadas por "ID_Empleado_YYYY-MM-DD".
+ * Actividades PUNTUALES (Actividad_Asignaciones) en un rango, indexadas por
+ * "ID_Empleado_YYYY-MM-DD". No incluye recurrencia — usar resolverActividadesPorRango
+ * para la vista combinada (puntual gana, recurrencia rellena lo demás).
  * @param {number[]|null} empleadoIds  Limita a estos empleados; null/[] = todos.
  * @param {Date} fechaInicio
  * @param {Date} fechaFin
- * @returns {Promise<Map<string, {ID_Actividad:number, nombre:string, empresa:string, responsable:string}>>}
+ * @returns {Promise<Map<string, {ID_Actividad:number, ID_Recurrencia:null, nombre:string, empresa:string, responsable:string, tipo:string, esRecurrente:false}>>}
  */
 export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fechaFin) {
   const where = { Fecha: { gte: fechaInicio, lte: fechaFin } };
@@ -187,10 +222,12 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
     select: {
       ID_Empleado: true,
       Fecha: true,
+      CreatedAt: true,
       actividad: {
         select: {
           ID_Actividad: true,
           Nombre_Actividad: true,
+          tipo_actividad: { select: { Nombre: true, Color: true } },
           empresa: { select: { Nombre_Empresa: true } },
           responsable: { select: { Nombre: true, Apellido_Paterno: true } }
         }
@@ -203,53 +240,144 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
     const key = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
     mapa.set(key, {
       ID_Actividad: a.actividad.ID_Actividad,
+      ID_Recurrencia: null,
       nombre: a.actividad.Nombre_Actividad,
       empresa: a.actividad.empresa.Nombre_Empresa,
-      responsable: [a.actividad.responsable.Nombre, a.actividad.responsable.Apellido_Paterno].filter(Boolean).join(' ')
+      responsable: [a.actividad.responsable.Nombre, a.actividad.responsable.Apellido_Paterno].filter(Boolean).join(' '),
+      tipo: a.actividad.tipo_actividad.Nombre,
+      color: a.actividad.tipo_actividad.Color,
+      creadaEn: a.CreatedAt,
+      esRecurrente: false
     });
   }
   return mapa;
 }
 
 /**
- * Actividades de campo vigentes en una fecha (dashboard: "hoy"), agrupadas por
- * actividad con la lista de empleados delegados. Alerta informativa para RH/Admin/SuperAdmin.
+ * Resuelve la actividad EFECTIVA por día para un conjunto de empleados en un
+ * rango, combinando asignaciones PUNTUALES (siempre ganan) con reglas de
+ * RECURRENCIA (Actividad_Recurrencias) cuando no hay puntual ese día. No
+ * materializa filas: la recurrencia se calcula en memoria, día por día.
+ * @param {number[]|null} empleadoIds  Limita a estos empleados; null/[] = todos
+ *   los que tengan puntual o alguna regla de recurrencia en el rango.
+ * @param {Date} fechaInicio
+ * @param {Date} fechaFin
+ * @returns {Promise<Map<string, {ID_Actividad:number|null, ID_Recurrencia:number|null, nombre:string, empresa:string, responsable:string, tipo:string, esRecurrente:boolean}>>}
+ */
+export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fechaFin) {
+  const resultado = await obtenerActividadesPorRango(empleadoIds, fechaInicio, fechaFin);
+
+  const whereRec = {
+    Activo: true,
+    Fecha_Inicio: { lte: fechaFin },
+    OR: [{ Fecha_Fin: null }, { Fecha_Fin: { gte: fechaInicio } }]
+  };
+  if (Array.isArray(empleadoIds) && empleadoIds.length > 0) whereRec.ID_Empleado = { in: empleadoIds };
+
+  const reglas = await prisma.actividad_Recurrencias.findMany({
+    where: whereRec,
+    include: {
+      empresa: { select: { Nombre_Empresa: true } },
+      tipo_actividad: { select: { Nombre: true, Color: true } },
+      grupo: { include: { encargado: { include: { empleado: { select: { Nombre: true, Apellido_Paterno: true } } } } } }
+    }
+  });
+  if (reglas.length === 0) return resultado;
+
+  // Índice por (ID_Empleado, Dia_Semana) para lookup O(1) día a día.
+  const reglasPorEmpDia = new Map();
+  for (const r of reglas) {
+    const k = `${r.ID_Empleado}_${r.Dia_Semana}`;
+    if (!reglasPorEmpDia.has(k)) reglasPorEmpDia.set(k, []);
+    reglasPorEmpDia.get(k).push(r);
+  }
+
+  // Universo de empleados a evaluar: los pasados explícitamente, o (si null/[])
+  // todos los que tengan al menos una regla en el rango.
+  const empleadosAEvaluar = (Array.isArray(empleadoIds) && empleadoIds.length > 0)
+    ? empleadoIds
+    : [...new Set(reglas.map(r => r.ID_Empleado))];
+
+  for (let d = new Date(fechaInicio); d <= fechaFin; d.setDate(d.getDate() + 1)) {
+    const dia = fechaLocalDB(d);
+    const diaSemana = dia.getDay();
+    const ymd = dia.toISOString().slice(0, 10);
+
+    for (const empId of empleadosAEvaluar) {
+      const key = `${empId}_${ymd}`;
+      if (resultado.has(key)) continue; // puntual ya cubre este día: gana, sin tocar
+
+      const candidatas = reglasPorEmpDia.get(`${empId}_${diaSemana}`);
+      if (!candidatas) continue;
+      const regla = candidatas.find(r => {
+        const desde = fechaLocalDB(r.Fecha_Inicio);
+        const hasta = r.Fecha_Fin ? fechaLocalDB(r.Fecha_Fin) : null;
+        return dia >= desde && (!hasta || dia <= hasta);
+      });
+      if (!regla) continue;
+
+      resultado.set(key, {
+        ID_Actividad: null,
+        ID_Recurrencia: regla.ID_Recurrencia,
+        nombre: regla.Nombre_Actividad,
+        empresa: regla.empresa?.Nombre_Empresa || '',
+        responsable: regla.grupo?.encargado?.empleado
+          ? [regla.grupo.encargado.empleado.Nombre, regla.grupo.encargado.empleado.Apellido_Paterno].filter(Boolean).join(' ')
+          : '',
+        tipo: regla.tipo_actividad.Nombre,
+        color: regla.tipo_actividad.Color,
+        creadaEn: regla.CreatedAt,
+        esRecurrente: true
+      });
+    }
+  }
+
+  return resultado;
+}
+
+/**
+ * Actividades (puntuales + recurrentes resueltas) vigentes en una fecha
+ * (dashboard: "hoy"), agrupadas por actividad/regla con la lista de empleados
+ * delegados. Alerta informativa para RH/Admin/SuperAdmin y para el dashboard
+ * del propio encargado.
  * @param {Date} fecha
  */
 export async function obtenerActividadesDelDia(fecha) {
   const dia = new Date(fecha);
   dia.setHours(0, 0, 0, 0);
 
-  const asignaciones = await prisma.actividad_Asignaciones.findMany({
-    where: { Fecha: dia },
-    select: {
-      empleado: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true } },
-      actividad: {
-        select: {
-          ID_Actividad: true,
-          Nombre_Actividad: true,
-          empresa: { select: { Nombre_Empresa: true } },
-          responsable: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true } }
-        }
-      }
-    }
-  });
+  const mapa = await resolverActividadesPorRango(null, dia, dia);
 
-  const porActividad = new Map();
-  for (const a of asignaciones) {
-    const key = a.actividad.ID_Actividad;
-    if (!porActividad.has(key)) {
-      porActividad.set(key, {
-        ID_Actividad: a.actividad.ID_Actividad,
-        nombre: a.actividad.Nombre_Actividad,
-        empresa: a.actividad.empresa.Nombre_Empresa,
-        responsable: [a.actividad.responsable.Nombre, a.actividad.responsable.Apellido_Paterno].filter(Boolean).join(' '),
+  // Traer nombre de empleado para cada entrada resuelta ese día.
+  const empIds = [...mapa.keys()].map(k => parseInt(k.split('_')[0]));
+  const empleados = empIds.length
+    ? await prisma.empleados.findMany({
+        where: { ID_Empleado: { in: [...new Set(empIds)] } },
+        select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true }
+      })
+    : [];
+  const empPorId = new Map(empleados.map(e => [e.ID_Empleado, e]));
+
+  const porGrupo = new Map(); // key = ID_Actividad real, o "rec_<ID_Recurrencia>" sintética
+  for (const [key, info] of mapa) {
+    const empId = parseInt(key.split('_')[0]);
+    const grupoKey = info.ID_Actividad != null ? info.ID_Actividad : `rec_${info.ID_Recurrencia}`;
+    if (!porGrupo.has(grupoKey)) {
+      porGrupo.set(grupoKey, {
+        ID_Actividad: info.ID_Actividad,
+        ID_Recurrencia: info.ID_Recurrencia,
+        nombre: info.nombre,
+        empresa: info.empresa,
+        responsable: info.responsable,
+        tipo: info.tipo,
+        esRecurrente: info.esRecurrente,
         empleados: []
       });
     }
-    porActividad.get(key).empleados.push(`${a.empleado.Nombre} ${a.empleado.Apellido_Paterno}`);
+    const emp = empPorId.get(empId);
+    if (emp) porGrupo.get(grupoKey).empleados.push(`${emp.Nombre} ${emp.Apellido_Paterno}`);
   }
-  return Array.from(porActividad.values());
+  return Array.from(porGrupo.values());
 }
 
 // ============================================================
@@ -607,6 +735,26 @@ function paresDesdeChecadas(checadas, empleadoRegla) {
   return pares;
 }
 
+// Tramo virtual de actividad delegada cuando SÍ hubo checada real ese mismo
+// día: desde las 8:00am hasta la primera checada de entrada, con descuento de
+// comida (14:00-15:00) si el tramo la cruza — mismo criterio de overlap que
+// calcularHorasPorPares (checadorImportService.js). Se SUMA a las horas reales
+// ya calculadas (no las reemplaza). Si no hubo checada, no aplica: ese caso
+// sigue usando las 9h fijas simples (bloques ya existentes, sin cambio).
+export function horasActividadHastaEntrada(horaEntrada) {
+  if (!horaEntrada) return 0;
+  const entrada = new Date(horaEntrada);
+  const entMin = entrada.getHours() * 60 + entrada.getMinutes();
+  const INICIO_ACTIVIDAD = 8 * 60; // 8:00am
+  if (entMin <= INICIO_ACTIVIDAD) return 0; // checó antes de las 8, no hay tramo previo
+  const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
+  let netos = entMin - INICIO_ACTIVIDAD;
+  if (INICIO_ACTIVIDAD < COMIDA_FIN) {
+    netos -= Math.max(0, Math.min(entMin, COMIDA_FIN) - Math.max(INICIO_ACTIVIDAD, COMIDA_INI));
+  }
+  return Math.round((netos / 60) * 100) / 100;
+}
+
 /**
  * Desglose de horas por día y total semanal de un empleado. Horas/retardo/entrada
  * vienen de la BD consolidada (Empleados_Asistencia); las checadas crudas se incluyen
@@ -636,7 +784,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       select: { area: { select: { Nombre_Area: true } }, puesto: { select: { Nombre_Puesto: true } } }
     }),
     obtenerAusenciasJustificadas(inicio, fin, empleadoId),
-    obtenerActividadesPorRango([empleadoId], inicio, fin)
+    resolverActividadesPorRango([empleadoId], inicio, fin)
   ]);
   const empParaRegla = { area: empleadoInfo?.area, puesto: empleadoInfo?.puesto };
 
@@ -651,9 +799,13 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // @db.Date a medianoche local: getDay/nombreDia/tolerancia correctos en México.
     const fecha = fechaLocalDB(a.Fecha);
     const checadas = a.historial_checadas || [];
+    const actividadDelDia = actividadesMap.get(`${empleadoId}_${fecha.toISOString().slice(0, 10)}`) || null;
     // Horas/retardo/entrada desde la BD consolidada (Empleados_Asistencia). Fuente única =
     // BD, igual que la vista global y el Excel. Las checadas crudas son solo auditoría.
-    const horas = Number(a.Horas_Trabajadas) || 0;
+    // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: tramo
+    // virtual 8am-primera entrada (con descuento de comida) + horas reales ya
+    // calculadas por admsService.
+    const horas = (Number(a.Horas_Trabajadas) || 0) + (actividadDelDia ? horasActividadHastaEntrada(a.Hora_Entrada) : 0);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     const retardoDia = a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
     const minRetardoDia = a.Minutos_Retardo || 0;
@@ -675,8 +827,8 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       // cuenta como falta; si además hay checadas, se muestran normal.
       ausencia: ausenciaEnFecha(ausencias, empleadoId, fecha),
       // Actividad de campo delegada por un encargado ese día (o null). Si además
-      // hay checada, se muestran combinadas (checada real + actividad).
-      actividad: actividadesMap.get(`${empleadoId}_${fecha.toISOString().slice(0, 10)}`) || null,
+      // hay checada, las horas ya vienen sumadas (ver cálculo de `horas` arriba).
+      actividad: actividadDelDia,
       presente: a.Presente,
       entrada: entradaMostradaDia,
       entradaReal: a.Hora_Entrada ? new Date(a.Hora_Entrada) : null,
@@ -704,24 +856,32 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     });
   }
 
-  // Días de ausencia justificada o de actividad de campo delegada SIN registro de
-  // asistencia: agregar fila sintética para que sean visibles en la tabla.
+  // Días SIN registro de asistencia cubiertos por ausencia justificada o por
+  // actividad delegada: fila sintética con 9h fijas (jornada cumplida) en
+  // ambos casos — vacaciones/permiso también se pagan completos.
   const ymdConRegistro = new Set(dias.map(d => ymdUTC(d.fecha)));
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
     if (d.getDay() === 0) continue; // domingo no laborable
     if (ymdConRegistro.has(ymdUTC(d))) continue;
-    const etiqueta = ausenciaEnFecha(ausencias, empleadoId, d);
-    const actividadDia = actividadesMap.get(`${empleadoId}_${d.toISOString().slice(0, 10)}`) || null;
-    if (!etiqueta && !actividadDia) continue;
+    const periodoAus = periodoAusenciaEnFecha(ausencias, empleadoId, d);
+    const actividadRaw = actividadesMap.get(`${empleadoId}_${d.toISOString().slice(0, 10)}`) || null;
+    if (!periodoAus && !actividadRaw) continue;
+    // Ausencia y actividad el mismo día: gana la asignada al último.
+    const gana = ganadorDelDia(periodoAus, actividadRaw);
+    const actividadDia = gana === 'ACTIVIDAD' ? actividadRaw : null;
+    const etiqueta = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
     const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
+    const horasDia = HORAS_FIJAS_JORNADA;
+    totalHoras += horasDia;
     dias.push({
       fecha,
       nombreDia: NOMBRES_DIA[fecha.getDay()],
       ausencia: etiqueta,
+      ausenciaDesplazada: gana === 'ACTIVIDAD' && periodoAus ? periodoAus.etiqueta : null,
       actividad: actividadDia,
       presente: false,
       entrada: null, entradaReal: null, salida: null,
-      horas: 0, extras: 0, normales: 0,
+      horas: horasDia, extras: 0, normales: horasDia,
       retardo: false, minutosRetardo: 0,
       multiPlanta: false, ubicacionEntrada: null, ubicacionSalida: null,
       minutosComida: 0, totalChecadas: 0, incompleta: false,
@@ -798,7 +958,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
   let empleados = await prisma.empleados.findMany({
-    where: { ID_Estatus: 1 },
+    where: {
+      ID_Estatus: 1,
+      ...(filtro?.idsPermitidos ? { ID_Empleado: { in: filtro.idsPermitidos } } : {})
+    },
     select: {
       ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },
@@ -812,9 +975,11 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const areaPorEmp = new Map(empleados.map(e => [e.ID_Empleado, e.ID_Area]));
 
   // Resolvedor de planta por asistencia (checador FK -> string legacy). Se usa para
-  // filtrar CADA jornada por planta cuando hay filtro de consultor.
+  // filtrar CADA jornada por planta cuando hay filtro de consultor (plantaIds/areaIds).
+  // idsPermitidos (equipo de un encargado) es independiente y ya se aplicó arriba.
+  const filtroVisibilidad = filtro && (filtro.plantaIds || filtro.areaIds) ? filtro : null;
   let resolverPlantaAsist = null;
-  if (filtro) {
+  if (filtroVisibilidad) {
     const chks = await prisma.checadores.findMany({ select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true } });
     const chkAPlanta = new Map(chks.map(c => [c.ID_Checador, c.ID_Planta]));
     const strAPlanta = new Map();
@@ -846,9 +1011,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   // Vacaciones e incidencias aprobadas del rango (etiqueta por empleado/día).
   const ausencias = await obtenerAusenciasJustificadas(inicio, fin);
 
-  // Actividades de campo (encargados) del rango: días delegados sin checada
-  // no cuentan como falta; si además hay checada, se muestran combinadas.
-  const actividadesMap = await obtenerActividadesPorRango(empleados.map(e => e.ID_Empleado), inicio, fin);
+  // Actividades (campo/home office, puntuales + recurrencia resuelta) del
+  // rango: días delegados sin checada no cuentan como falta y suman 9h fijas
+  // al total; si además hay checada, se muestran combinadas.
+  const actividadesMap = await resolverActividadesPorRango(empleados.map(e => e.ID_Empleado), inicio, fin);
 
   // Lista de fechas del rango (para la matriz)
   const fechas = [];
@@ -863,13 +1029,18 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const empConDatos = new Set(); // empleados con al menos una jornada visible
   for (const a of asistencias) {
     // Filtro por JORNADA (no por empleado): cada día debe cumplir planta+área del filtro.
-    if (filtro) {
+    if (filtroVisibilidad) {
       const idPlanta = resolverPlantaAsist(a);
-      if (!asistenciaVisible({ idPlanta, idArea: areaPorEmp.get(a.ID_Empleado) }, filtro)) continue;
+      if (!asistenciaVisible({ idPlanta, idArea: areaPorEmp.get(a.ID_Empleado) }, filtroVisibilidad)) continue;
       empConDatos.add(a.ID_Empleado);
     }
     const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
-    const h = Number(a.Horas_Trabajadas) || 0;
+    // Si hubo actividad delegada Y checada real el mismo día, se SUMAN (tramo
+    // virtual 8am-primera entrada, con descuento de comida, + horas reales).
+    const keyActividad = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
+    const actividadDelDia = actividadesMap.get(keyActividad) || null;
+    const horasActividadDia = actividadDelDia ? horasActividadHastaEntrada(a.Hora_Entrada) : 0;
+    const h = (Number(a.Horas_Trabajadas) || 0) + horasActividadDia;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
     const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
     const esRetardo = a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
@@ -927,40 +1098,51 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const UMBRAL_REVISION_HORAS = 2;
   const NOMBRES_DIA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-  // Con filtro: solo empleados con al menos una jornada visible (planta/área permitida).
-  const empleadosVisibles = filtro ? empleados.filter(e => empConDatos.has(e.ID_Empleado)) : empleados;
+  // Con filtro de planta/área: solo empleados con al menos una jornada visible.
+  // idsPermitidos ya se aplicó en la query de empleados — no requiere jornada visible.
+  const empleadosVisibles = filtroVisibilidad ? empleados.filter(e => empConDatos.has(e.ID_Empleado)) : empleados;
+
 
   const filas = empleadosVisibles.map(e => {
     const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
-    const horas = Math.round(acc.horas * 100) / 100;
-    // Extra = excedente sobre 45h semanales (incluye sábado en el total).
-    // Normal = lo trabajado hasta el tope de 45h.
-    const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
-    const normales = Math.round((horas - extras) * 100) / 100;
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
     const diasSemana = e.tipo_horario?.Dias_Semana || 6;
 
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
     const revisiones = []; // días <2h que RH debe revisar
-    const actividadesEmp = []; // actividades de campo delegadas en el rango (para el panel de alerta)
-    let diasAusencia = 0; // vacaciones/permiso sin trabajar (no cuentan como falta)
-    let diasActividadSinSello = 0; // actividad de campo delegada, sin checada (no cuenta como falta)
+    const actividadesEmp = []; // actividades delegadas en el rango (para el panel de alerta)
+    let diasAusencia = 0; // vacaciones/permiso sin trabajar (cuentan 9h, no falta)
+    let diasCubiertosSinSello = 0; // días sin checada cubiertos por actividad o ausencia (9h fijas c/u)
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
       const esDomingo = f.getDay() === 0;
-      const actividad = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
+      const actividadRaw = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
+      const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, f);
+
+      // Ausencia y actividad el mismo día: gana la asignada al último.
+      const gana = ganadorDelDia(periodoAus, actividadRaw);
+      const actividad = gana === 'ACTIVIDAD' ? actividadRaw : null;
+      const ausencia = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
+      // La etiqueta desplazada se conserva solo como dato informativo.
+      const ausenciaDesplazada = gana === 'ACTIVIDAD' && periodoAus ? periodoAus.etiqueta : null;
+
       if (actividad) {
         actividadesEmp.push({ fecha: key, nombreDia: NOMBRES_DIA_CORTO[f.getDay()], ...actividad });
       }
-      // Etiqueta de vacaciones/permiso; la celda deja de ser "Falta".
-      const ausencia = ausenciaEnFecha(ausencias, e.ID_Empleado, f);
       if (ausencia && !esDomingo && !(c && c.presente && c.horas > 0)) diasAusencia++;
       if (!c) {
-        // Actividad de campo delegada sin checada: no cuenta como falta.
-        if (actividad && !esDomingo && !ausencia) diasActividadSinSello++;
-        return { presente: false, vacio: !esDomingo && !ausencia && !actividad, esDomingo, ausencia, actividad };
+        // Día sin checada cubierto por actividad delegada O por ausencia
+        // justificada: en ambos casos son 9h fijas de jornada cumplida.
+        if (!esDomingo && (actividad || ausencia)) {
+          diasCubiertosSinSello++;
+          return {
+            presente: false, vacio: false, esDomingo, ausencia, ausenciaDesplazada, actividad,
+            horas: HORAS_FIJAS_JORNADA, jornadaCompleta: true
+          };
+        }
+        return { presente: false, vacio: !esDomingo && !ausencia && !actividad, esDomingo, ausencia, ausenciaDesplazada, actividad };
       }
       // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
@@ -976,12 +1158,20 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           motivo: !c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')
         });
       }
-      return { ...c, esDomingo, ausencia, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
+      return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
 
-    // Horas esperadas: descontar la jornada de los días de vacación/permiso y de
-    // actividad de campo delegada sin checada.
-    const esperadas = Math.max(0, jornada * diasSemana - jornada * (diasAusencia + diasActividadSinSello));
+    // Horas fijas de los días sin checada cubiertos (actividad o ausencia)
+    // suman al total, igual que si hubiera trabajado.
+    const horas = Math.round((acc.horas + diasCubiertosSinSello * HORAS_FIJAS_JORNADA) * 100) / 100;
+    // Extra = excedente sobre 45h semanales (incluye sábado en el total).
+    // Normal = lo trabajado hasta el tope de 45h.
+    const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
+    const normales = Math.round((horas - extras) * 100) / 100;
+
+    // Horas esperadas: la jornada completa del periodo. Los días de ausencia o
+    // actividad sin checada YA aportan sus 9h al total, así que no se descuentan.
+    const esperadas = jornada * diasSemana;
 
     return {
       ID_Empleado: e.ID_Empleado,
@@ -1325,8 +1515,9 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null, filtr
   const inicio = new Date(`${fechaStr}T00:00:00`); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(`${fechaStr}T00:00:00`); fin.setHours(23, 59, 59, 999);
 
-  // Actividades de campo delegadas ese día (para combinar con la checada real, si la hay).
-  const actividadesDia = await obtenerActividadesPorRango(null, inicio, fin);
+  // Actividades (campo/home office, puntuales + recurrencia) delegadas ese día
+  // (para combinar con la checada real, si la hay).
+  const actividadesDia = await resolverActividadesPorRango(null, inicio, fin);
 
   const checadas = await prisma.historial_Checadas.findMany({
     where: { Fecha_Hora: { gte: inicio, lte: fin } },

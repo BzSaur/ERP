@@ -71,12 +71,12 @@
       <!-- Actividades de Campo (Encargados) -->
       <% if (hasRole('ENCARGADO', 'ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
       <li class="nav-item has-submenu">
-        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/encargado') ? 'active' : '' %>">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= (currentPath.startsWith('/encargado') || currentPath.startsWith('/admin/encargados') || currentPath.startsWith('/admin/grupos') || currentPath.startsWith('/admin/tipos-actividad')) ? 'active' : '' %>">
           <i class="bi bi-signpost-split"></i>
           <span>Actividades de Campo</span>
           <i class="bi bi-chevron-down submenu-arrow"></i>
         </a>
-        <ul class="sidebar-submenu <%= currentPath.startsWith('/encargado') ? 'show' : '' %>">
+        <ul class="sidebar-submenu <%= (currentPath.startsWith('/encargado') || currentPath.startsWith('/admin/encargados') || currentPath.startsWith('/admin/grupos') || currentPath.startsWith('/admin/tipos-actividad')) ? 'show' : '' %>">
           <li>
             <a href="/encargado" class="<%= currentPath === '/encargado' ? 'active' : '' %>">
               <i class="bi bi-list-check"></i> Mis Actividades
@@ -84,13 +84,30 @@
           </li>
           <% if (hasRole('ENCARGADO')) { %>
           <li>
-            <a href="/encargado/equipo" class="<%= currentPath === '/encargado/equipo' ? 'active' : '' %>">
-              <i class="bi bi-people"></i> Mi Equipo
+            <a href="/encargado/asistencia" class="<%= currentPath.startsWith('/encargado/asistencia') ? 'active' : '' %>">
+              <i class="bi bi-table"></i> Asistencia de mi Equipo
             </a>
           </li>
           <li>
             <a href="/encargado/actividades/crear" class="<%= currentPath === '/encargado/actividades/crear' ? 'active' : '' %>">
-              <i class="bi bi-plus-lg"></i> Nueva Actividad
+              <i class="bi bi-plus-lg"></i> Alta masiva (varios días)
+            </a>
+          </li>
+          <% } %>
+          <% if (hasRole('SuperAdministrador', 'SUPER_ADMIN')) { %>
+          <li>
+            <a href="/admin/encargados" class="<%= currentPath.startsWith('/admin/encargados') ? 'active' : '' %>">
+              <i class="bi bi-person-badge"></i> Encargados
+            </a>
+          </li>
+          <li>
+            <a href="/admin/grupos" class="<%= currentPath.startsWith('/admin/grupos') ? 'active' : '' %>">
+              <i class="bi bi-diagram-3"></i> Grupos
+            </a>
+          </li>
+          <li>
+            <a href="/admin/tipos-actividad" class="<%= currentPath.startsWith('/admin/tipos-actividad') ? 'active' : '' %>">
+              <i class="bi bi-tags"></i> Tipos de Actividad
             </a>
           </li>
           <% } %>
@@ -235,12 +252,12 @@
       <!-- Administración -->
       <% if (hasRole('SuperAdministrador', 'SUPER_ADMIN')) { %>
       <li class="nav-item has-submenu">
-        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') ? 'active' : '' %>">
+        <a href="javascript:void(0)" class="nav-link submenu-toggle <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') || currentPath.startsWith('/bitacora') ? 'active' : '' %>">
           <i class="bi bi-gear"></i>
           <span>Administración</span>
           <i class="bi bi-chevron-down submenu-arrow"></i>
         </a>
-        <ul class="sidebar-submenu <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') ? 'show' : '' %>">
+        <ul class="sidebar-submenu <%= currentPath.startsWith('/usuarios') || currentPath.startsWith('/configuracion') || currentPath.startsWith('/auditoria') || currentPath.startsWith('/bitacora') ? 'show' : '' %>">
           <li>
             <a href="/usuarios" class="<%= currentPath.startsWith('/usuarios') ? 'active' : '' %>">
               <i class="bi bi-person-gear"></i> Usuarios

@@ -191,7 +191,8 @@ async function procesarChecadaIndividual(checador, ch, empleadoCache, opts = {})
 
   // 5. Empleado dado de baja: registrar en historial (auditoría) pero NO tocar asistencia.
   //    Se inserta una checada "suelta" en un registro de asistencia para no perder trazabilidad.
-  const dadoDeBaja = empleado.ID_Estatus !== 1;
+  //    Solo BAJA real cuenta — VACACIONES/INCAPACIDAD/SUSPENDIDO siguen consolidando jornada normal.
+  const dadoDeBaja = empleado.estatus?.Nombre_Estatus === 'BAJA';
 
   // 6. Persistencia (transacción): upsert asistencia + insert historial idempotente
   const fechaDia = new Date(fechaHora);
@@ -255,7 +256,7 @@ async function resolverEmpleado(pin, cache) {
   if (!isNaN(idEmpleado)) {
     empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: idEmpleado },
-      select: { ID_Empleado: true, ID_Estatus: true }
+      select: { ID_Empleado: true, ID_Estatus: true, estatus: { select: { Nombre_Estatus: true } } }
     });
   }
   cache.set(pin, empleado);

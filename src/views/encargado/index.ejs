@@ -3,22 +3,13 @@
   <div>
     <h4 class="mb-1"><i class="bi bi-signpost-split me-2"></i>Actividades de Campo</h4>
     <p class="text-body-secondary mb-0">
-      <% if (esSupervisor) { %>
-        Actividades de campo de todos los encargados
-      <% } else { %>
-        Delega asistencia por día a tu equipo para trabajo de campo
-      <% } %>
+      Clic en una celda para asignar o quitar la actividad de ese día — o <strong>arrastra</strong> sobre varias celdas para hacerlo en bloque. Los días con recurrencia se marcan con <i class="bi bi-arrow-repeat"></i>.
     </p>
   </div>
   <div class="d-flex gap-2">
-    <% if (hasRole('ENCARGADO')) { %>
-    <a href="/encargado/equipo" class="btn btn-outline-secondary">
-      <i class="bi bi-people me-1"></i>Mi Equipo
+    <a href="/encargado/asistencia" class="btn btn-outline-primary">
+      <i class="bi bi-table me-1"></i>Asistencia de mi Equipo
     </a>
-    <a href="/encargado/actividades/crear" class="btn btn-primary">
-      <i class="bi bi-plus-lg me-1"></i>Nueva Actividad
-    </a>
-    <% } %>
   </div>
 </div>
 
@@ -41,49 +32,337 @@
 </div>
 <% } %>
 
+<% if (esSupervisorParaDelegar) { %>
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" action="/encargado" class="row g-2 align-items-end" id="formEncargado">
+      <div class="col-auto">
+        <label class="form-label mb-1 small">Ver el equipo de</label>
+        <select class="form-select form-select-sm" name="encargado" id="selEncargado" style="min-width:280px;">
+          <option value="">Selecciona un encargado...</option>
+          <% encargadosDisponibles.forEach(function(e) { %>
+            <option value="<%= e.empleado.ID_Empleado %>" <%= idEncargadoPreseleccionado === e.empleado.ID_Empleado ? 'selected' : '' %>>
+              <%= e.empleado.Nombre %> <%= e.empleado.Apellido_Paterno %> <%= e.empleado.Apellido_Materno || '' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-arrow-right me-1"></i>Ver equipo
+        </button>
+      </div>
+      <div class="col-auto text-body-secondary small pb-2">
+        <i class="bi bi-info-circle me-1"></i>Como SuperAdmin puedes delegar a nombre de cualquier encargado.
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<script>
+(function(){
+  const sel = document.getElementById('selEncargado');
+  const form = document.getElementById('formEncargado');
+  if (!sel || !form) return;
+  sel.addEventListener('change', function(){ if (sel.value) form.submit(); });
+})();
+</script>
+
+<% if (esSupervisorParaDelegar && !idEncargadoPreseleccionado) { %>
+<div class="alert alert-info">Elige un encargado arriba y pulsa <strong>Ver equipo</strong>.</div>
+<% } else if (!equipo || equipo.length === 0) { %>
+<div class="alert alert-warning">
+  No hay empleados vigentes en este equipo. Un SuperAdmin debe agregar miembros en <a href="/admin/grupos">Grupos</a>.
+</div>
+<% } else { %>
+
+<!-- Filtro de rango + valores por defecto de la actividad -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<form method="GET" action="/encargado" class="card mb-3" id="formRango">
+  <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+    <% if (esSupervisorParaDelegar) { %>
+      <input type="hidden" name="encargado" value="<%= idEncargadoPreseleccionado %>">
+    <% } %>
+    <div style="min-width:250px">
+      <label class="form-label small mb-1">Rango de fechas</label>
+      <input type="text" id="rango" class="form-control form-control-sm" placeholder="Selecciona rango...">
+      <input type="hidden" name="fechaInicio" id="fechaInicio" value="<%= fechaInicio %>">
+      <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Ver rango</button>
+    <span class="text-body-secondary small ms-auto align-self-center">
+      <%= fechas.length %> día(s) laborables · <%= equipo.length %> empleado(s)
+    </span>
+  </div>
+</form>
+
+<div class="card mb-3">
+  <div class="card-header py-2"><strong class="small">Datos de la actividad a asignar</strong></div>
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small mb-1">Nombre de la actividad <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm" id="defNombre" placeholder="Ej: Instalación en obra">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Tipo <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="defTipo">
+          <option value="">Seleccionar...</option>
+          <% tiposActividad.forEach(function(t) { %>
+          <option value="<%= t.ID_Tipo_Actividad %>" <%= ultimoTipoId === t.ID_Tipo_Actividad ? 'selected' : '' %>><%= t.Nombre %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Empresa <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="defEmpresa">
+          <option value="">Seleccionar...</option>
+          <% empresas.forEach(function(emp) { %>
+          <option value="<%= emp.ID_Empresa %>" <%= ultimaEmpresaId === emp.ID_Empresa ? 'selected' : '' %>><%= emp.Nombre_Empresa %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <div class="form-check form-switch mb-1">
+          <input class="form-check-input" type="checkbox" id="chkRecurrente">
+          <label class="form-check-label small" for="chkRecurrente">
+            <i class="bi bi-arrow-repeat"></i> Repetir cada semana
+          </label>
+        </div>
+        <small class="text-body-secondary" style="font-size:.7rem">
+          Activo: el clic crea una regla semanal en ese día.
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Calendario editable -->
+<style>
+  .cal-act th, .cal-act td { font-size:.78rem; white-space:nowrap; vertical-align:middle; }
+  .cal-act .col-emp { position:sticky; left:0; background:#fff; z-index:2; min-width:180px; }
+  .cal-act thead .col-emp { z-index:3; background:#f8f9fa; }
+  .cal-act .th-sab { background:#fff3cd; }
+  .celda-act {
+    cursor:pointer; text-align:center; padding:.35rem .25rem; min-width:78px;
+    border:1px solid #dee2e6; transition:background .12s;
+  }
+  .celda-act:hover { background:#e9ecef; }
+  .celda-act.tiene-actividad { background:#e2d9f3; }
+  .celda-act.tiene-actividad:hover { background:#d3c4ee; }
+  .celda-act.ocupada-loading { opacity:.45; pointer-events:none; }
+  /* Preview del rectángulo mientras se arrastra sobre varias celdas */
+  .celda-act.en-seleccion { outline:2px solid #0d6efd; outline-offset:-2px; background:#cfe2ff !important; }
+  .cal-act-tabla { user-select:none; }
+  .celda-act .act-nombre { font-weight:600; color:#6f42c1; display:block; overflow:hidden; text-overflow:ellipsis; max-width:110px; }
+  .celda-act .act-tipo { font-size:.68rem; color:#6c757d; display:block; }
+</style>
+
 <div class="card">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover mb-0">
+      <table class="table table-bordered mb-0 cal-act cal-act-tabla">
         <thead class="table-light">
           <tr>
-            <th>Actividad</th>
-            <th>Empresa</th>
-            <% if (esSupervisor) { %><th>Responsable</th><% } %>
-            <th class="text-center">Empleados</th>
-            <th class="text-center">Días</th>
-            <th>Periodo</th>
-            <th class="text-end">Acciones</th>
+            <th class="col-emp">Empleado</th>
+            <% const DIAS_CORTO = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']; %>
+            <% fechas.forEach(function(f) { %>
+            <th class="text-center <%= f.getDay() === 6 ? 'th-sab' : '' %>">
+              <%= DIAS_CORTO[f.getDay()] %><br>
+              <small class="text-body-secondary"><%= String(f.getDate()).padStart(2,'0') %>/<%= String(f.getMonth()+1).padStart(2,'0') %></small>
+            </th>
+            <% }); %>
           </tr>
         </thead>
         <tbody>
-          <% if (actividades && actividades.length > 0) { %>
-            <% actividades.forEach(function(a) { %>
-            <tr>
-              <td><strong><%= a.Nombre_Actividad %></strong></td>
-              <td><i class="bi bi-building text-primary me-1"></i><%= a.empresa.Nombre_Empresa %></td>
-              <% if (esSupervisor) { %>
-                <td><%= a.responsable.Nombre %> <%= a.responsable.Apellido_Paterno %></td>
-              <% } %>
-              <td class="text-center"><span class="badge bg-info"><%= a.totalEmpleados %></span></td>
-              <td class="text-center"><span class="badge bg-secondary"><%= a.totalDias %></span></td>
-              <td>
-                <% if (a.fechaMin) { %>
-                  <small><%= a.fechaMin %><% if (a.fechaMax !== a.fechaMin) { %> – <%= a.fechaMax %><% } %></small>
-                <% } else { %>-<% } %>
+          <% equipo.forEach(function(emp) { %>
+          <tr>
+            <td class="col-emp">
+              <%= [emp.Nombre, emp.Apellido_Paterno, emp.Apellido_Materno].filter(Boolean).join(' ') %>
+            </td>
+            <% fechas.forEach(function(f) { %>
+              <%
+                const ymd = f.toISOString().slice(0,10);
+                const act = celdas.get(emp.ID_Empleado + '_' + ymd) || null;
+              %>
+              <td class="celda-act <%= act ? 'tiene-actividad' : '' %>"
+                  style="<%= act && act.color ? 'background-color:' + act.color + '22;' : '' %>"
+                  data-empleado="<%= emp.ID_Empleado %>"
+                  data-fecha="<%= ymd %>"
+                  title="<%= act ? 'Tipo: ' + act.tipo + ' · ' + act.nombre + (act.empresa ? ' · ' + act.empresa : '') + (act.esRecurrente ? ' · recurrente' : ' · puntual') : 'Sin actividad — clic para asignar' %>">
+                <% if (act) { %>
+                  <span class="act-nombre" style="color:<%= act.color %>"><%= act.nombre %></span>
+                  <span class="act-tipo">
+                    <%= act.empresa || '' %><% if (act.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
+                  </span>
+                <% } else { %>
+                  <span class="text-body-secondary">+</span>
+                <% } %>
               </td>
-              <td class="text-end">
-                <a href="/encargado/actividades/<%= a.ID_Actividad %>" class="btn btn-sm btn-outline-primary" title="Ver detalle">
-                  <i class="bi bi-eye"></i>
-                </a>
-              </td>
-            </tr>
             <% }); %>
-          <% } else { %>
-            <tr><td colspan="<%= esSupervisor ? 7 : 6 %>" class="text-center text-body-secondary py-4">No hay actividades de campo registradas</td></tr>
-          <% } %>
+          </tr>
+          <% }); %>
         </tbody>
       </table>
     </div>
   </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+<script>
+(function(){
+  // --- Selector de rango ---
+  const fi = document.getElementById('fechaInicio');
+  const ff = document.getElementById('fechaFin');
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  flatpickr('#rango', {
+    mode: 'range',
+    locale: 'es',
+    dateFormat: 'Y-m-d',
+    defaultDate: [fi.value, ff.value],
+    onChange: function(dates){
+      if (dates.length === 2) { fi.value = fmt(dates[0]); ff.value = fmt(dates[1]); }
+    }
+  });
+
+  // --- Toggle de celdas ---
+  const defNombre = document.getElementById('defNombre');
+  const defTipo = document.getElementById('defTipo');
+  const defEmpresa = document.getElementById('defEmpresa');
+  const chkRecurrente = document.getElementById('chkRecurrente');
+  const idEncargado = <%= esSupervisorParaDelegar ? idEncargadoPreseleccionado : 'null' %>;
+
+  function pintar(td, estado, act) {
+    td.classList.toggle('tiene-actividad', estado !== 'VACIO');
+    if (estado === 'VACIO' || !act) {
+      td.innerHTML = '<span class="text-body-secondary">+</span>';
+      td.style.backgroundColor = '';
+      td.title = 'Sin actividad — clic para asignar';
+      return;
+    }
+    const color = act.color || '#6f42c1';
+    const rec = act.esRecurrente ? ' <i class="bi bi-arrow-repeat"></i>' : '';
+    td.style.backgroundColor = color + '22';
+    td.innerHTML = '<span class="act-nombre"></span><span class="act-tipo"></span>';
+    const nom = td.querySelector('.act-nombre');
+    nom.textContent = act.nombre;
+    nom.style.color = color;
+    td.querySelector('.act-tipo').innerHTML = (act.empresa || '') + rec;
+    td.title = 'Tipo: ' + (act.tipo || '') + ' · ' + act.nombre + (act.empresa ? ' · ' + act.empresa : '') + (act.esRecurrente ? ' · recurrente' : ' · puntual');
+  }
+
+  // Aplica el toggle a UNA celda. Devuelve una promesa que nunca rechaza:
+  // resuelve con el mensaje de error (o null si salió bien), para poder
+  // procesar un lote sin que un fallo corte el resto.
+  function toggleCelda(td) {
+    const tieneActividad = td.classList.contains('tiene-actividad');
+    const body = {
+      ID_Empleado: parseInt(td.dataset.empleado),
+      fecha: td.dataset.fecha,
+      modo: chkRecurrente.checked ? 'RECURRENTE' : 'PUNTUAL'
+    };
+    if (idEncargado) body.ID_Encargado_Empleado = idEncargado;
+
+    // Solo se exigen los valores por defecto cuando la celda va a CREAR algo.
+    if (!tieneActividad) {
+      body.Nombre_Actividad = defNombre.value.trim();
+      body.ID_Tipo_Actividad = defTipo.value;
+      body.ID_Empresa = defEmpresa.value;
+      if (!body.Nombre_Actividad || !body.ID_Tipo_Actividad || !body.ID_Empresa) {
+        return Promise.resolve('FALTAN_DEFAULTS');
+      }
+    }
+
+    td.classList.add('ocupada-loading');
+    return fetch('/encargado/actividades/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) return res.error || 'No se pudo actualizar la actividad';
+        pintar(td, res.estado, res.actividad);
+        return null;
+      })
+      .catch(function(){ return 'Error de conexión'; })
+      .finally(function(){ td.classList.remove('ocupada-loading'); });
+  }
+
+  // --- Selección por arrastre (rectángulo empleado × días) ---
+  const celdas = Array.from(document.querySelectorAll('.celda-act'));
+  // Índice fila/columna de cada celda, para calcular el rectángulo arrastrado.
+  celdas.forEach(function(td){
+    td.dataset.fila = td.parentElement.rowIndex;
+    td.dataset.col = td.cellIndex;
+  });
+
+  let arrastrando = false, inicio = null, movio = false;
+
+  function enRectangulo(a, b) {
+    const f1 = Math.min(+a.dataset.fila, +b.dataset.fila), f2 = Math.max(+a.dataset.fila, +b.dataset.fila);
+    const c1 = Math.min(+a.dataset.col, +b.dataset.col), c2 = Math.max(+a.dataset.col, +b.dataset.col);
+    return celdas.filter(function(td){
+      const f = +td.dataset.fila, c = +td.dataset.col;
+      return f >= f1 && f <= f2 && c >= c1 && c <= c2;
+    });
+  }
+
+  function pintarPreview(lista) {
+    celdas.forEach(function(td){ td.classList.remove('en-seleccion'); });
+    lista.forEach(function(td){ td.classList.add('en-seleccion'); });
+  }
+
+  celdas.forEach(function(td){
+    td.addEventListener('mousedown', function(ev){
+      ev.preventDefault(); // evita selección de texto al arrastrar
+      arrastrando = true; movio = false; inicio = td;
+      pintarPreview([td]);
+    });
+    td.addEventListener('mouseenter', function(){
+      if (!arrastrando || !inicio) return;
+      movio = true;
+      pintarPreview(enRectangulo(inicio, td));
+    });
+  });
+
+  document.addEventListener('mouseup', function(){
+    if (!arrastrando || !inicio) return;
+    const seleccion = celdas.filter(function(td){ return td.classList.contains('en-seleccion'); });
+    arrastrando = false;
+    pintarPreview([]);
+    if (seleccion.length === 0) { inicio = null; return; }
+
+    // Un solo clic sin arrastre: comportamiento de siempre.
+    const lote = movio ? seleccion : [inicio];
+    inicio = null;
+
+    // Faltan valores por defecto y alguna celda vacía los necesita.
+    const necesitaDefaults = lote.some(function(td){ return !td.classList.contains('tiene-actividad'); });
+    if (necesitaDefaults && (!defNombre.value.trim() || !defTipo.value || !defEmpresa.value)) {
+      alert('Completa nombre, tipo y empresa antes de asignar días');
+      defNombre.focus();
+      return;
+    }
+
+    // Secuencial: el backend valida traslapes fila por fila; en paralelo
+    // podrían chocar dos celdas del mismo empleado y día.
+    const errores = [];
+    lote.reduce(function(cadena, td){
+      return cadena.then(function(){
+        return toggleCelda(td).then(function(err){ if (err && err !== 'FALTAN_DEFAULTS') errores.push(err); });
+      });
+    }, Promise.resolve()).then(function(){
+      if (errores.length) {
+        const unicos = errores.filter(function(e, i){ return errores.indexOf(e) === i; });
+        alert(lote.length > 1
+          ? errores.length + ' de ' + lote.length + ' celda(s) no se pudieron actualizar:\n\n' + unicos.slice(0, 4).join('\n')
+          : unicos[0]);
+      }
+    });
+  });
+})();
+</script>
+<% } %>

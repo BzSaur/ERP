@@ -1,15 +1,69 @@
 <%
 function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.round((n-h)*60); if(h===0&&m===0) return '0'; if(h===0) return m+'m'; if(m===0) return h+'h'; return h+'h '+m+'m'; }
+const urlExcelBase = typeof excelUrl !== 'undefined' && excelUrl ? excelUrl : '/asistencia/horas/excel';
+// SuperAdmin en la vista por encargado: debe elegir uno antes de ver datos.
+const delegando = typeof esSupervisorParaDelegar !== 'undefined' && esSupervisorParaDelegar;
+const idEncSel = typeof idEncargadoPreseleccionado !== 'undefined' ? idEncargadoPreseleccionado : null;
+const faltaElegirEncargado = delegando && !idEncSel;
 %>
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
-    <h4 class="mb-1">Consultar Horas</h4>
+    <h4 class="mb-1"><%= typeof title !== 'undefined' && title ? title : 'Consultar Horas' %></h4>
     <p class="text-body-secondary mb-0">Horas trabajadas por empleado (checadas en vivo). Clic en un empleado para el desglose diario.</p>
   </div>
+  <% if (!delegando) { %>
   <a href="/checador" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar XLSX (respaldo)
   </a>
+  <% } %>
 </div>
+
+<% if (delegando) { %>
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="row g-2 align-items-end" id="formEncargado">
+      <input type="hidden" name="fechaInicio" value="<%= fechaInicio %>">
+      <input type="hidden" name="fechaFin" value="<%= fechaFin %>">
+      <div class="col-auto">
+        <label class="form-label mb-1 small">Ver el equipo de</label>
+        <select class="form-select form-select-sm" name="encargado" id="selEncargado" style="min-width:300px;">
+          <option value="">Selecciona un encargado...</option>
+          <% encargadosDisponibles.forEach(function(e) { %>
+            <option value="<%= e.empleado.ID_Empleado %>" <%= idEncSel === e.empleado.ID_Empleado ? 'selected' : '' %>>
+              <%= e.empleado.Nombre %> <%= e.empleado.Apellido_Paterno %> <%= e.empleado.Apellido_Materno || '' %>
+            </option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-arrow-right me-1"></i>Ver equipo
+        </button>
+      </div>
+      <div class="col-auto text-body-secondary small pb-2">
+        <i class="bi bi-info-circle me-1"></i>El reporte se acota al equipo vigente del encargado elegido.
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<script>
+(function(){
+  const sel = document.getElementById('selEncargado');
+  const form = document.getElementById('formEncargado');
+  if (!sel || !form) return;
+  sel.addEventListener('change', function(){ if (sel.value) form.submit(); });
+})();
+</script>
+
+<% if (faltaElegirEncargado) { %>
+<div class="alert alert-info">
+  <i class="bi bi-arrow-up me-1"></i>
+  Elige un encargado arriba y pulsa <strong>Ver equipo</strong>.
+  <a href="/asistencia/horas" class="alert-link ms-1">O consulta la tabla global de todos los empleados.</a>
+</div>
+<% } else { %>
 
 <!-- Filtro con flatpickr (rango) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -29,7 +83,7 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
       </div>
     </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
-    <a id="btnExcel" href="/asistencia/horas/excel?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>"
+    <a id="btnExcel" href="<%= urlExcelBase %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %><%= idEncSel ? '&encargado=' + idEncSel : '' %>"
        class="btn btn-sm btn-success">
       <i class="bi bi-file-earmark-excel me-1"></i>Descargar Excel
     </a>
@@ -131,12 +185,12 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
 <% } %>
 
 <!-- Panel de actividades de campo (asistencia delegada por un encargado) -->
-<% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador') && datos.totalActividades && datos.totalActividades > 0) { %>
+<% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador','ENCARGADO') && datos.totalActividades && datos.totalActividades > 0) { %>
 <div class="card border-primary mb-4" id="panelActividadesCampo">
   <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
     <span class="fw-semibold">
       <i class="bi bi-signpost-split-fill text-primary me-2"></i>
-      <%= datos.totalActividades %> día(s) de actividad de campo en este periodo
+      <%= datos.totalActividades %> día(s) de actividad (campo/home office) en este periodo
       <small class="text-body-secondary ms-1">(asistencia delegada por un encargado — no cuentan como falta)</small>
     </span>
     <div class="d-flex gap-2">
@@ -155,8 +209,8 @@ function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.ro
             <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
             <div class="mt-1 d-flex flex-wrap gap-1">
               <% r.dias.forEach(function(d){ %>
-                <span class="badge bg-primary bg-opacity-75" title="<%= d.nombre %> · <%= d.empresa %> · Resp. <%= d.responsable %>">
-                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>: <%= d.empresa %>
+                <span class="badge bg-primary bg-opacity-75" title="Tipo: <%= d.tipo %> · Encargado: <%= d.responsable %> · Actividad: <%= d.nombre %><%= d.empresa ? ' · Empresa: ' + d.empresa : '' %>">
+                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>: <%= d.tipo %>
                 </span>
               <% }); %>
             </div>
@@ -186,6 +240,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas td.cel-revision .hrs { color:#d63384; }
   .matriz-horas td.cel-actividad { background:#e2d9f3; }
   .matriz-horas td.cel-actividad .cel-es .hrs { color:#6f42c1; }
+  /* Detalle de actividad delegada dentro de la MISMA celda chica: tipo /
+     actividad / empresa / encargado, truncados. El title de la celda ya trae
+     el texto completo. */
+  .cel-act-info { line-height:1.15; max-width:92px; margin:0 auto; }
+  .cel-act-info > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* El nombre lleva el color del tipo (inline, desde Cat_Tipo_Actividad.Color) */
+  .cel-act-info .act-nom { font-weight:700; font-size:.66rem; }
+  .cel-act-info .act-emp { color:#495057; font-size:.6rem; }
+  .cel-act-info .act-enc { color:#6c757d; font-size:.58rem; font-style:italic; }
   .matriz-horas .col-id  { position:sticky; left:0; background:#fff; z-index:2; min-width:48px; }
   .matriz-horas .col-emp { position:sticky; left:48px; background:#fff; z-index:2; min-width:190px; }
   .matriz-horas thead .col-id, .matriz-horas thead .col-emp { z-index:3; }
@@ -239,11 +302,20 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                 <% } else { %><span class="fw-semibold"><%= f.nombre %></span><% } %>
                 <% if (f.multi > 0) { %><span class="badge bg-info ms-1" style="font-size:.6rem" title="<%= f.multi %> día(s) multi-planta">MP</span><% } %>
               </td>
-              <% f.celdas.forEach(function(c){
-                   let cls='', tip='';
+              <% f.celdas.forEach(function(c, idxCelda){
+                   const fechaCelda = datos.fechas[idxCelda] ? new Date(datos.fechas[idxCelda]).toISOString().slice(0,10) : '';
+                   let cls='', tip='', bgStyle='';
+                   // Tinte de fondo con el color propio del tipo de actividad
+                   // (Cat_Tipo_Actividad.Color): 22 = ~13% de opacidad en hex.
+                   const tinteActividad = c.actividad && c.actividad.color
+                     ? 'background-color:' + c.actividad.color + '22;'
+                     : '';
                    if (c.esDomingo) { cls='cel-dom'; }
-                   else if (!c.presente && c.ausencia) { cls='cel-vacacion'; tip=c.ausencia + ' · no cuenta como falta'; }
-                   else if (!c.presente && c.actividad) { cls='cel-actividad'; tip='Actividad de campo: ' + c.actividad.nombre + ' · ' + c.actividad.empresa + ' · Resp. ' + c.actividad.responsable; }
+                   else if (!c.presente && c.ausencia) { cls='cel-vacacion'; tip=c.ausencia + ' · 9h jornada cumplida (no cuenta como falta)'; }
+                   else if (!c.presente && c.actividad) {
+                     cls='cel-actividad'; bgStyle=tinteActividad;
+                     tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · 9h jornada cumplida';
+                   }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + (c.horas||0).toFixed(1) + 'h (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
@@ -251,11 +323,17 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    else if (c.presente) {
                      cls = c.jornadaCompleta ? 'cel-completa' : '';
                      tip=(c.planta||'') + (c.ausencia ? ' · trabajó en periodo de ' + c.ausencia.toLowerCase() : '');
-                     if (c.actividad) { cls += ' cel-actividad'; tip += ' · Actividad de campo: ' + c.actividad.nombre + ' · ' + c.actividad.empresa + ' · Resp. ' + c.actividad.responsable; }
+                     if (c.actividad) {
+                       cls += ' cel-actividad'; bgStyle=tinteActividad;
+                       tip += ' · Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '');
+                     }
                    }
               %>
-                <td class="text-center <%= cls %> cel-dia"
+                <td class="text-center <%= cls %> cel-dia<%= (typeof panelEditable !== 'undefined' && panelEditable && !c.esDomingo) ? ' cel-editable' : '' %>"
+                    style="<%= bgStyle %>"
                     title="<%= tip %>"
+                    data-emp="<%= f.ID_Empleado %>"
+                    data-fecha="<%= fechaCelda %>"
                     data-ent="<%= c.entrada || '' %>"
                     data-sal="<%= c.salida || '' %>"
                     data-horas="<%= c.horas || 0 %>"
@@ -265,9 +343,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                   <% if (c.esDomingo) { %>
                     <span class="text-body-secondary small">Dom</span>
                   <% } else if (!c.presente && c.ausencia) { %>
-                    <span class="text-primary fw-bold"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
+                    <span class="text-primary fw-bold d-block"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
+                    <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
                   <% } else if (!c.presente && c.actividad) { %>
-                    <span class="fw-bold" style="color:#6f42c1"><i class="bi bi-signpost-split-fill"></i> Campo</span>
+                    <div class="cel-act-info">
+                      <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
+                      <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
+                      <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
+                    </div>
                   <% } else if (!c.presente && c.vacio) { %>
                     <span class="text-danger fw-bold">Falta</span>
                   <% } else if (c.presente) { %>
@@ -282,8 +365,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                         <div class="hrs"><%= (c.horas||0).toFixed(1) %>h</div>
                       <% } %>
                       <% if (c.actividad) { %>
-                        <div title="Actividad de campo: <%= c.actividad.nombre %> · <%= c.actividad.empresa %>">
-                          <i class="bi bi-signpost-split-fill" style="color:#6f42c1"></i>
+                        <div class="cel-act-info mt-1 pt-1 border-top">
+                          <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
+                          <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
+                          <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
                         </div>
                       <% } %>
                     </div>
@@ -307,6 +392,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
 <script>
 (function(){
+  const URL_EXCEL_BASE = <%- JSON.stringify(urlExcelBase) %>;
+  const ID_ENCARGADO_SEL = <%- JSON.stringify(idEncSel) %>;
   const tbody = document.getElementById('matrizBody');
   const inputBuscar = document.getElementById('buscarEmp');
   const getRows = () => Array.from(tbody.querySelectorAll('tr[data-id]'));
@@ -319,6 +406,16 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       tr.style.display = match ? '' : 'none';
     });
   });
+
+  // Filtro directo por lista de IDs vía ?ids=1,2,3 (ej. enlazado desde un grupo).
+  const paramsIds = new URLSearchParams(window.location.search).get('ids');
+  if (paramsIds) {
+    const idsSet = new Set(paramsIds.split(',').map(s => s.trim()));
+    getRows().forEach(tr => {
+      tr.style.display = idsSet.has(tr.dataset.id) ? '' : 'none';
+    });
+    inputBuscar.placeholder = idsSet.size + ' empleado(s) del grupo — escribe para buscar entre todos';
+  }
 
   // --- Ordenar por columna ---
   let sortState = { key: null, asc: true };
@@ -430,7 +527,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     if (!btnExcel) return;
     const fi = document.getElementById('fechaInicio').value;
     const ff = document.getElementById('fechaFin').value;
-    let url = `/asistencia/horas/excel?fechaInicio=${fi}&fechaFin=${ff}`;
+    let url = `${URL_EXCEL_BASE}?fechaInicio=${fi}&fechaFin=${ff}`;
+    if (ID_ENCARGADO_SEL) url += `&encargado=${ID_ENCARGADO_SEL}`;
     if (sortState.key) url += `&sort=${sortState.key}&dir=${sortState.asc ? 'asc' : 'desc'}`;
     if (document.getElementById('chkRedondear').checked) url += '&redondear=1';
     btnExcel.href = url;
@@ -474,4 +572,232 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
 })();
 </script>
+<% } %>
+
+<% if (typeof panelEditable !== 'undefined' && panelEditable) { %>
+<!-- Panel lateral: detalle del día + edición de la actividad delegada -->
+<style>
+  .cel-editable { cursor:pointer; }
+  .cel-editable:hover { outline:2px solid #6f42c1; outline-offset:-2px; }
+  #panelDia .dato-lbl { font-size:.72rem; color:#6c757d; text-transform:uppercase; }
+  #panelDia .dato-val { font-weight:600; }
+</style>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="panelDia" style="width:420px">
+  <div class="offcanvas-header border-bottom">
+    <div>
+      <h6 class="offcanvas-title mb-0" id="panelNombre">—</h6>
+      <small class="text-body-secondary" id="panelFecha">—</small>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div id="panelCargando" class="text-center text-body-secondary py-4">
+      <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+    </div>
+
+    <div id="panelContenido" class="d-none">
+      <div class="card mb-3">
+        <div class="card-header py-2"><strong class="small">Checadas reales</strong></div>
+        <div class="card-body py-2" id="panelChecadas"></div>
+      </div>
+
+      <div id="panelAusenciaWrap" class="alert alert-primary py-2 d-none">
+        <i class="bi bi-calendar-check me-1"></i><span id="panelAusencia"></span>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong class="small">Actividad delegada</strong>
+          <span class="badge bg-secondary d-none" id="panelBadgeRec"><i class="bi bi-arrow-repeat"></i> Recurrente</span>
+        </div>
+        <div class="card-body">
+          <div id="panelSinActividad" class="text-body-secondary small mb-3 d-none">
+            Sin actividad asignada este día.
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Nombre de la actividad</label>
+            <input type="text" class="form-control form-control-sm" id="panelNombreAct" placeholder="Ej: Instalación en obra">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1">Tipo</label>
+            <select class="form-select form-select-sm" id="panelTipo"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small mb-1">Empresa</label>
+            <select class="form-select form-select-sm" id="panelEmpresa"></select>
+          </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="panelRecurrente">
+            <label class="form-check-label small" for="panelRecurrente">
+              <i class="bi bi-arrow-repeat"></i> Repetir cada semana este día
+            </label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="panelGuardar">
+              <i class="bi bi-check-lg me-1"></i>Asignar
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger d-none" id="panelQuitar">
+              <i class="bi bi-trash me-1"></i>Quitar
+            </button>
+          </div>
+          <div class="small text-danger mt-2 d-none" id="panelError"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const el = document.getElementById('panelDia');
+  if (!el) return;
+  const oc = new bootstrap.Offcanvas(el);
+  const $ = function(id){ return document.getElementById(id); };
+  // SuperAdmin delegando: todas las llamadas van a nombre del encargado elegido.
+  const encDelegado = <%- JSON.stringify(delegando ? idEncSel : null) %>;
+  let ctx = { emp: null, fecha: null, tieneActividad: false };
+
+  function opciones(sel, items, valueKey, labelKey, seleccionado) {
+    sel.innerHTML = '<option value="">Seleccionar...</option>' + items.map(function(i){
+      const s = String(i[valueKey]) === String(seleccionado) ? ' selected' : '';
+      return '<option value="' + i[valueKey] + '"' + s + '>' + i[labelKey] + '</option>';
+    }).join('');
+  }
+
+  function mostrarError(msg) {
+    const e = $('panelError');
+    e.textContent = msg || '';
+    e.classList.toggle('d-none', !msg);
+  }
+
+  document.querySelectorAll('td.cel-editable').forEach(function(td){
+    td.addEventListener('click', function(){
+      ctx = { emp: td.dataset.emp, fecha: td.dataset.fecha, tieneActividad: false };
+      if (!ctx.emp || !ctx.fecha) return;
+
+      $('panelCargando').classList.remove('d-none');
+      $('panelContenido').classList.add('d-none');
+      mostrarError('');
+      oc.show();
+
+      fetch('/encargado/asistencia/dia?empleado=' + ctx.emp + '&fecha=' + ctx.fecha +
+            (encDelegado ? '&encargado=' + encDelegado : ''))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d.ok) { mostrarError(d.error || 'No se pudo cargar el día'); $('panelCargando').classList.add('d-none'); return; }
+
+          $('panelNombre').textContent = d.empleado.nombre;
+          $('panelFecha').textContent = new Date(d.fecha + 'T12:00:00')
+            .toLocaleDateString('es-MX', { weekday:'long', day:'2-digit', month:'long' }) +
+            (d.empleado.area ? ' · ' + d.empleado.area : '');
+
+          const ch = $('panelChecadas');
+          if (d.asistencia) {
+            let h = '<div class="row g-2 mb-2">' +
+              '<div class="col-4"><div class="dato-lbl">Entrada</div><div class="dato-val">' + (d.asistencia.entrada || '--:--') + '</div></div>' +
+              '<div class="col-4"><div class="dato-lbl">Salida</div><div class="dato-val">' + (d.asistencia.salida || '--:--') + '</div></div>' +
+              '<div class="col-4"><div class="dato-lbl">Horas</div><div class="dato-val">' + d.asistencia.horas.toFixed(1) + 'h</div></div>' +
+              '</div>';
+            if (d.asistencia.plantaEntrada) h += '<div class="small text-body-secondary">Planta: ' + d.asistencia.plantaEntrada + '</div>';
+            if (d.asistencia.minutosRetardo > 0) h += '<div class="small text-danger">Retardo: ' + d.asistencia.minutosRetardo + ' min</div>';
+            if (d.asistencia.checadas.length) {
+              h += '<div class="mt-2 d-flex flex-wrap gap-1">' + d.asistencia.checadas.map(function(c){
+                return '<span class="badge bg-light text-dark border">' + c.hora + ' ' + c.tipo + '</span>';
+              }).join('') + '</div>';
+            }
+            ch.innerHTML = h;
+          } else {
+            ch.innerHTML = '<div class="text-body-secondary small">Sin checadas registradas este día.</div>';
+          }
+
+          const aw = $('panelAusenciaWrap');
+          if (d.ausencia) {
+            aw.classList.remove('d-none');
+            $('panelAusencia').textContent = d.ausencia.etiqueta + ' · 9h jornada cumplida' +
+              (d.ganador === 'ACTIVIDAD' ? ' (desplazada por la actividad, asignada después)' : '');
+          } else {
+            aw.classList.add('d-none');
+          }
+
+          const act = d.actividad;
+          ctx.tieneActividad = !!act;
+          $('panelSinActividad').classList.toggle('d-none', !!act);
+          $('panelBadgeRec').classList.toggle('d-none', !(act && act.esRecurrente));
+          $('panelQuitar').classList.toggle('d-none', !act);
+          $('panelGuardar').innerHTML = act
+            ? '<i class="bi bi-check-lg me-1"></i>Actualizar'
+            : '<i class="bi bi-check-lg me-1"></i>Asignar';
+
+          $('panelNombreAct').value = act ? act.nombre : '';
+          $('panelRecurrente').checked = !!(act && act.esRecurrente);
+
+          let tipoSel = '', empSel = '';
+          if (act) {
+            const t = d.tiposActividad.filter(function(x){ return x.Nombre === act.tipo; })[0];
+            if (t) tipoSel = t.ID_Tipo_Actividad;
+            const em = d.empresas.filter(function(x){ return x.Nombre_Empresa === act.empresa; })[0];
+            if (em) empSel = em.ID_Empresa;
+          }
+          opciones($('panelTipo'), d.tiposActividad, 'ID_Tipo_Actividad', 'Nombre', tipoSel);
+          opciones($('panelEmpresa'), d.empresas, 'ID_Empresa', 'Nombre_Empresa', empSel);
+
+          $('panelCargando').classList.add('d-none');
+          $('panelContenido').classList.remove('d-none');
+        })
+        .catch(function(){ mostrarError('Error de conexión'); $('panelCargando').classList.add('d-none'); });
+    });
+  });
+
+  function enviarToggle(body, onOk) {
+    mostrarError('');
+    if (encDelegado) body.ID_Encargado_Empleado = encDelegado;
+    fetch('/encargado/actividades/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { mostrarError(res.error || 'No se pudo guardar'); return; }
+        onOk(res);
+      })
+      .catch(function(){ mostrarError('Error de conexión'); });
+  }
+
+  $('panelGuardar').addEventListener('click', function(){
+    const nombre = $('panelNombreAct').value.trim();
+    const tipo = $('panelTipo').value;
+    const empresa = $('panelEmpresa').value;
+    if (!nombre || !tipo || !empresa) { mostrarError('Completa nombre, tipo y empresa'); return; }
+
+    const body = {
+      ID_Empleado: parseInt(ctx.emp),
+      fecha: ctx.fecha,
+      modo: $('panelRecurrente').checked ? 'RECURRENTE' : 'PUNTUAL',
+      Nombre_Actividad: nombre,
+      ID_Tipo_Actividad: tipo,
+      ID_Empresa: empresa
+    };
+
+    // Si ya había actividad, se quita primero para poder reemplazarla.
+    if (ctx.tieneActividad) {
+      enviarToggle({ ID_Empleado: body.ID_Empleado, fecha: body.fecha, modo: body.modo }, function(){
+        enviarToggle(body, function(){ window.location.reload(); });
+      });
+    } else {
+      enviarToggle(body, function(){ window.location.reload(); });
+    }
+  });
+
+  $('panelQuitar').addEventListener('click', function(){
+    enviarToggle({
+      ID_Empleado: parseInt(ctx.emp),
+      fecha: ctx.fecha,
+      modo: $('panelRecurrente').checked ? 'RECURRENTE' : 'PUNTUAL'
+    }, function(){ window.location.reload(); });
+  });
+})();
+</script>
+<% } %>
 

@@ -109,9 +109,29 @@ model Cat_Empresas {
   CreatedAt      DateTime @default(now())
 
   // Relaciones
-  actividades Actividades_Campo[]
+  actividades  Actividades_Campo[]
+  recurrencias Actividad_Recurrencias[]
 
   @@map("Cat_Empresas")
+}
+
+// Catálogo abierto de tipos de actividad delegada (Campo, Home Office, Venta,
+// Capacitación, etc.), administrado por SuperAdmin. Solo clasifica/trazabilidad
+// — no afecta cálculo de horas (siempre 9h fijas). El Color sí es propio de
+// cada tipo: identifica visualmente la actividad en las tablas de asistencia.
+model Cat_Tipo_Actividad {
+  ID_Tipo_Actividad Int      @id @default(autoincrement())
+  Nombre            String   @unique @db.VarChar(50)
+  // Color hex (#rrggbb) del tipo, usado como fondo/acento de la celda.
+  Color             String   @default("#6f42c1") @db.VarChar(7)
+  Activo            Boolean  @default(true)
+  CreatedAt         DateTime @default(now())
+  CreatedBy         String?  @db.VarChar(100)
+
+  actividades  Actividades_Campo[]
+  recurrencias Actividad_Recurrencias[]
+
+  @@map("Cat_Tipo_Actividad")
 }
 
 model Cat_Tipo_Incidencia {
@@ -210,10 +230,11 @@ model Empleados {
   finiquitos        Finiquito_Liquidacion[]
   incidencias       Empleados_Incidencias[]
   prestamos         Empleados_Prestamos[]
-  equipo_como_encargado    Encargado_Subordinados[] @relation("EncargadoEquipo")
-  equipo_como_subordinado  Encargado_Subordinados[] @relation("SubordinadoDe")
   actividades_responsable  Actividades_Campo[]
   actividad_asignaciones   Actividad_Asignaciones[]
+  designacion_encargado    Cat_Encargados?
+  grupo_miembros           Grupo_Miembros[]
+  actividad_recurrencias   Actividad_Recurrencias[]
 
   @@index([ID_Nacionalidad])
   @@index([ID_Puesto])
@@ -255,6 +276,7 @@ model App_Usuarios {
   prestamos_aprobados    Empleados_Prestamos[]         @relation("PrestamoAprobado")
   consultor_plantas      Consultor_Plantas[]
   consultor_areas        Consultor_Areas[]
+  notificaciones         Notificaciones[]
 
   @@index([Email_Office365])
   @@index([ID_Rol])
@@ -761,33 +783,80 @@ model Empleados_Prestamos {
 }
 
 // ============================================================
-// ENCARGADOS Y ACTIVIDADES DE CAMPO
-// Delegación de asistencia por día para trabajo de campo donde
-// el personal no puede sellar (obra/cliente externo).
+// ENCARGADOS, GRUPOS Y ACTIVIDADES DE CAMPO / HOME OFFICE
+// Delegación de asistencia por día para trabajo de campo u home office
+// donde el personal no sella normalmente (obra/cliente externo, remoto).
+// Un empleado puede pertenecer a varios Grupos (cada uno con su propio
+// encargado y vigencia); las reglas de recurrencia semanal se definen por
+// empleado individual y se resuelven en consulta (no se materializan filas).
 // ============================================================
 
-// Equipo fijo de cada encargado (patrón idéntico a Consultor_Plantas):
-// el encargado gestiona su propia lista de subordinados.
-model Encargado_Subordinados {
-  ID_Relacion   Int      @id @default(autoincrement())
-  ID_Encargado  Int
-  ID_Subordinado Int
-  CreatedAt     DateTime @default(now())
-  CreatedBy     String?  @db.VarChar(100)
+// Empleados designados por SuperAdmin como encargados (habilita ser
+// responsable de uno o más Grupos). Independiente del rol de acceso
+// (App_Usuarios.ID_Rol = ENCARGADO), que se administra en /usuarios.
+model Cat_Encargados {
+  ID_Encargado_Cat Int      @id @default(autoincrement())
+  ID_Empleado      Int      @unique
+  Activo           Boolean  @default(true)
+  CreatedAt        DateTime @default(now())
+  CreatedBy        String?  @db.VarChar(100)
 
-  encargado    Empleados @relation("EncargadoEquipo", fields: [ID_Encargado], references: [ID_Empleado], onDelete: Cascade)
-  subordinado  Empleados @relation("SubordinadoDe", fields: [ID_Subordinado], references: [ID_Empleado], onDelete: Cascade)
+  empleado Empleados @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  grupos   Grupos[]
 
-  @@unique([ID_Encargado, ID_Subordinado])
-  @@index([ID_Encargado])
-  @@index([ID_Subordinado])
-  @@map("Encargado_Subordinados")
+  @@map("Cat_Encargados")
 }
 
-// Actividad de campo creada por un encargado (Nombre + Empresa cliente).
+// Grupo de trabajo con UN encargado responsable. Un empleado puede
+// pertenecer a varios grupos simultáneamente (ver Grupo_Miembros).
+model Grupos {
+  ID_Grupo     Int      @id @default(autoincrement())
+  Nombre_Grupo String   @db.VarChar(150)
+  ID_Encargado Int
+  Descripcion  String?  @db.VarChar(255)
+  Activo       Boolean  @default(true)
+  CreatedAt    DateTime @default(now())
+  CreatedBy    String?  @db.VarChar(100)
+  UpdatedAt    DateTime @updatedAt
+  UpdatedBy    String?  @db.VarChar(100)
+
+  encargado    Cat_Encargados           @relation(fields: [ID_Encargado], references: [ID_Encargado_Cat])
+  miembros     Grupo_Miembros[]
+  recurrencias Actividad_Recurrencias[]
+
+  @@index([ID_Encargado])
+  @@map("Grupos")
+}
+
+// Membresía de un empleado en un Grupo, con vigencia PROPIA (no compartida
+// entre miembros). Sin unique global: permite reingreso tras una vigencia
+// vencida. Traslapes de vigencia para el mismo par Grupo+Empleado se validan
+// en el controller, no en BD.
+model Grupo_Miembros {
+  ID_Miembro   Int       @id @default(autoincrement())
+  ID_Grupo     Int
+  ID_Empleado  Int
+  Fecha_Inicio DateTime  @db.Date
+  Fecha_Fin    DateTime? @db.Date // null = vigencia indefinida
+  Activo       Boolean   @default(true)
+  CreatedAt    DateTime  @default(now())
+  CreatedBy    String?   @db.VarChar(100)
+
+  grupo    Grupos    @relation(fields: [ID_Grupo], references: [ID_Grupo], onDelete: Cascade)
+  empleado Empleados @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+
+  @@index([ID_Grupo])
+  @@index([ID_Empleado])
+  @@map("Grupo_Miembros")
+}
+
+// Actividad delegada por un encargado (Nombre + Empresa + Tipo). El tipo es
+// solo clasificación/trazabilidad (Cat_Tipo_Actividad, catálogo abierto de
+// SuperAdmin) — no cambia el cálculo de horas ni la apariencia.
 model Actividades_Campo {
   ID_Actividad     Int      @id @default(autoincrement())
   Nombre_Actividad String   @db.VarChar(150)
+  ID_Tipo_Actividad Int
   ID_Empresa       Int
   ID_Responsable   Int      // Empleado encargado, dueño de la actividad
   Descripcion      String?  @db.VarChar(255)
@@ -795,13 +864,48 @@ model Actividades_Campo {
   CreatedAt        DateTime @default(now())
   CreatedBy        String?  @db.VarChar(100)
 
+  tipo_actividad Cat_Tipo_Actividad @relation(fields: [ID_Tipo_Actividad], references: [ID_Tipo_Actividad])
   empresa      Cat_Empresas @relation(fields: [ID_Empresa], references: [ID_Empresa])
   responsable  Empleados    @relation(fields: [ID_Responsable], references: [ID_Empleado])
   asignaciones Actividad_Asignaciones[]
 
   @@index([ID_Empresa])
   @@index([ID_Responsable])
+  @@index([ID_Tipo_Actividad])
   @@map("Actividades_Campo")
+}
+
+// Regla de recurrencia por EMPLEADO individual: "este empleado hace <tipo>
+// todos los <día(s) de semana>, del <inicio> al <fin/indefinido>".
+// NO se materializan filas futuras en Actividad_Asignaciones; se resuelve en
+// consulta (asistenciaService.resolverActividadesPorRango). Una asignación
+// PUNTUAL en Actividad_Asignaciones para esa fecha siempre gana sobre la
+// recurrencia ese día — la semana siguiente sin puntual, la regla vuelve a
+// aplicar sola, sin acción manual.
+model Actividad_Recurrencias {
+  ID_Recurrencia   Int       @id @default(autoincrement())
+  ID_Empleado      Int
+  ID_Grupo         Int?      // contexto opcional: bajo qué grupo se definió la regla
+  ID_Tipo_Actividad Int
+  Nombre_Actividad String    @db.VarChar(150)
+  ID_Empresa       Int
+  Dia_Semana       Int       // 0=domingo .. 6=sábado (Date.getDay())
+  Fecha_Inicio     DateTime  @db.Date
+  Fecha_Fin        DateTime? @db.Date // null = indefinida
+  Activo           Boolean   @default(true)
+  CreatedAt        DateTime  @default(now())
+  CreatedBy        String?   @db.VarChar(100)
+
+  empleado Empleados    @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
+  grupo    Grupos?      @relation(fields: [ID_Grupo], references: [ID_Grupo], onDelete: SetNull)
+  tipo_actividad Cat_Tipo_Actividad @relation(fields: [ID_Tipo_Actividad], references: [ID_Tipo_Actividad])
+  empresa  Cat_Empresas @relation(fields: [ID_Empresa], references: [ID_Empresa])
+
+  @@index([ID_Empleado])
+  @@index([ID_Grupo])
+  @@index([ID_Tipo_Actividad])
+  @@index([Dia_Semana])
+  @@map("Actividad_Recurrencias")
 }
 
 // Día concreto de una actividad asignado a un subordinado. Un empleado solo
@@ -918,6 +1022,28 @@ model Checadas_Huerfanas {
 
   @@index([Resuelto])
   @@map("Checadas_Huerfanas")
+}
+
+// ============================================================
+// NOTIFICACIONES IN-APP
+// Sin canal de correo/push en esta iteración. Alimenta la campana del navbar.
+// ============================================================
+model Notificaciones {
+  ID_Notificacion Int       @id @default(autoincrement())
+  ID_Usuario      Int       // destinatario (App_Usuarios)
+  Tipo            String    @db.VarChar(40)  // ACTIVIDAD_ASIGNADA | GRUPO_MIEMBRO_CAMBIO | ENCARGADO_DESIGNADO | GRUPO_REASIGNADO
+  Titulo          String    @db.VarChar(150)
+  Mensaje         String    @db.VarChar(500)
+  Url             String?   @db.VarChar(255)
+  Leida           Boolean   @default(false)
+  FechaLeida      DateTime?
+  CreatedAt       DateTime  @default(now())
+
+  usuario App_Usuarios @relation(fields: [ID_Usuario], references: [ID_Usuario], onDelete: Cascade)
+
+  @@index([ID_Usuario])
+  @@index([ID_Usuario, Leida])
+  @@map("Notificaciones")
 }
 
 

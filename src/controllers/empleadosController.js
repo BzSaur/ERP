@@ -618,7 +618,8 @@ export const update = async (req, res, next) => {
         ID_Puesto: true,
         ID_Area: true,
         Salario_Diario: true,
-        ID_Estatus: true
+        ID_Estatus: true,
+        estatus: { select: { Nombre_Estatus: true } }
       }
     });
 
@@ -693,8 +694,15 @@ export const update = async (req, res, next) => {
 
     // ADMS: sincronizar cambios a los checadores (no rompe el flujo si falla)
     {
-      const estatusNuevo = parseInt(ID_Estatus);
-      const estatusPrevio = empleadoPrevio?.ID_Estatus;
+      // Comparar por NOMBRE de estatus, no por ID numérico (no estable entre entornos)
+      // y sobre todo: solo BAJA real debe dar de baja en checadores. VACACIONES/
+      // INCAPACIDAD/SUSPENDIDO deben seguir sincronizados como cualquier activo.
+      const estatusNuevoCat = await prisma.cat_Estatus_Empleado.findUnique({
+        where: { ID_Estatus: parseInt(ID_Estatus) },
+        select: { Nombre_Estatus: true }
+      });
+      const estatusNuevoNombre = estatusNuevoCat?.Nombre_Estatus;
+      const estatusPrevioNombre = empleadoPrevio?.estatus?.Nombre_Estatus;
       const empData = { ID_Empleado: idNum, Nombre, Apellido_Paterno, Apellido_Materno };
       const nombreCambio =
         empleadoPrevio &&
@@ -704,11 +712,11 @@ export const update = async (req, res, next) => {
 
       try {
         let n = null, accion = null;
-        if (estatusNuevo === 1 && estatusPrevio !== 1) {
+        if (estatusNuevoNombre === 'ACTIVO' && estatusPrevioNombre !== 'ACTIVO') {
           n = await encolarAltaEmpleado(empData, 'CREATE_USER'); accion = 'alta';     // reactivación
-        } else if (estatusNuevo !== 1 && estatusPrevio === 1) {
-          n = await encolarBajaEmpleado(idNum); accion = 'baja';                       // baja
-        } else if (estatusNuevo === 1 && nombreCambio) {
+        } else if (estatusNuevoNombre === 'BAJA' && estatusPrevioNombre !== 'BAJA') {
+          n = await encolarBajaEmpleado(idNum); accion = 'baja';                       // baja real únicamente
+        } else if (estatusNuevoNombre === 'ACTIVO' && nombreCambio) {
           n = await encolarAltaEmpleado(empData, 'UPDATE_USER'); accion = 'actualización'; // cambio de nombre
         }
         if (accion) {

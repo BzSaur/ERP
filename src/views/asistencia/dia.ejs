@@ -152,7 +152,7 @@
                                             <% if (c.actividad) { %>
                                                 <br>
                                                 <span class="badge mt-1" style="background-color:#6f42c1"
-                                                      title="Responsable: <%= c.actividad.responsable %> · Empresa: <%= c.actividad.empresa %>">
+                                                      title="Tipo: <%= c.actividad.tipo %> · Encargado: <%= c.actividad.responsable %> · Actividad: <%= c.actividad.nombre %><%= c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '' %>">
                                                     <i class="bi bi-signpost-split-fill me-1"></i><%= c.actividad.nombre %>
                                                 </span>
                                             <% } %>
