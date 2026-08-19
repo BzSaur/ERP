@@ -1,0 +1,171 @@
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-pencil-square me-2"></i>Editar Incidencia</h2>
+    <p class="text-body-secondary mb-0">
+      <%= [incidencia.empleado.Nombre, incidencia.empleado.Apellido_Paterno, incidencia.empleado.Apellido_Materno].filter(Boolean).join(' ') %>
+      · <%= incidencia.tipo_incidencia.Nombre %>
+    </p>
+  </div>
+  <a href="/incidencias" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<% if (incidencia.Estado === 'CANCELADA' || incidencia.Estado === 'RECHAZADA') { %>
+<div class="alert alert-secondary">
+  <i class="bi bi-x-circle me-2"></i>
+  Esta incidencia está <strong><%= incidencia.Estado.toLowerCase() %></strong>: no afecta la asistencia.
+  <% if (incidencia.Motivo_Rechazo) { %><br><small>Motivo: <%= incidencia.Motivo_Rechazo %></small><% } %>
+</div>
+<% } %>
+
+<div class="card">
+  <div class="card-body">
+    <form action="/incidencias/<%= incidencia.ID_Incidencia %>" method="POST">
+      <div class="row g-3">
+        <div class="col-md-12">
+          <label for="ID_Empleado" class="form-label">Empleado *</label>
+          <select class="form-select" id="ID_Empleado" name="ID_Empleado" required>
+            <% empleados.forEach(function(e) { %>
+              <option value="<%= e.ID_Empleado %>" <%= incidencia.ID_Empleado === e.ID_Empleado ? 'selected' : '' %>>
+                <%= e.Nombre %> <%= e.Apellido_Paterno %> <%= e.Apellido_Materno || '' %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+
+        <div class="col-md-12">
+          <label for="selTipo" class="form-label">Tipo de incidencia *</label>
+          <select class="form-select" id="selTipo" name="ID_Tipo_Incidencia" required>
+            <% tipos.forEach(function(t) { %>
+              <option value="<%= t.ID_Tipo_Incidencia %>"
+                      data-goce="<%= t.Con_Goce_Sueldo ? '1' : '0' %>"
+                      data-doc="<%= t.Requiere_Documento ? '1' : '0' %>"
+                      data-max="<%= t.Dias_Maximos || '' %>"
+                      <%= incidencia.ID_Tipo_Incidencia === t.ID_Tipo_Incidencia ? 'selected' : '' %>><%= t.Nombre %></option>
+            <% }) %>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label for="fIni" class="form-label">Fecha de Inicio *</label>
+          <input type="date" class="form-control" id="fIni" name="Fecha_Inicio" required value="<%= fechaInicio %>">
+        </div>
+
+        <div class="col-md-4">
+          <label for="fFin" class="form-label">Fecha de Fin *</label>
+          <input type="date" class="form-control" id="fFin" name="Fecha_Fin" required value="<%= fechaFin %>">
+        </div>
+
+        <div class="col-md-4">
+          <label for="diasCalc" class="form-label">Días</label>
+          <input type="text" class="form-control" id="diasCalc" readonly value="<%= incidencia.Dias_Totales %>">
+        </div>
+
+        <div class="col-md-6">
+          <label for="txtFolio" class="form-label" id="lblDoc">
+            Documento comprobatorio
+            <% if (incidencia.tipo_incidencia.Requiere_Documento) { %><span class="text-danger">*</span><% } %>
+          </label>
+          <input type="text" class="form-control" id="txtFolio" name="Folio_Documento"
+                 value="<%= incidencia.Folio_Documento || '' %>" placeholder="Folio o referencia"
+                 <%= incidencia.tipo_incidencia.Requiere_Documento ? 'required' : '' %>>
+          <div class="form-text" id="ayudaDoc">
+            <%= incidencia.tipo_incidencia.Requiere_Documento ? 'Obligatorio para este tipo' : 'Opcional para este tipo' %>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Goce de sueldo</label>
+          <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" name="Con_Goce_Sueldo" id="chkGoce" <%= incidencia.Con_Goce_Sueldo ? 'checked' : '' %>>
+            <label class="form-check-label" for="chkGoce">Con goce de sueldo</label>
+          </div>
+          <div class="form-text">Con goce el día cuenta 9h; sin goce se etiqueta pero no suma horas</div>
+        </div>
+
+        <div class="col-md-12">
+          <label for="Observaciones" class="form-label">Observaciones</label>
+          <textarea class="form-control" id="Observaciones" name="Observaciones" rows="2"><%= incidencia.Observaciones || '' %></textarea>
+        </div>
+      </div>
+
+      <hr class="my-4">
+
+      <div class="d-flex justify-content-between align-items-center gap-2">
+        <% if (incidencia.Estado !== 'CANCELADA' && incidencia.Estado !== 'RECHAZADA') { %>
+          <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#panelCancelar">
+            <i class="bi bi-x-circle me-1"></i> Cancelar incidencia
+          </button>
+        <% } else { %><span></span><% } %>
+        <div class="d-flex gap-2">
+          <a href="/incidencias" class="btn btn-outline-secondary">Cancelar</a>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <% if (incidencia.Estado !== 'CANCELADA' && incidencia.Estado !== 'RECHAZADA') { %>
+    <div class="collapse mt-3" id="panelCancelar">
+      <div class="border rounded p-3 bg-body-tertiary">
+        <p class="small text-body-secondary mb-2">
+          La incidencia dejará de afectar la asistencia del empleado. El registro se conserva para histórico.
+        </p>
+        <form action="/incidencias/<%= incidencia.ID_Incidencia %>/cancelar" method="POST"
+              class="row g-2 align-items-end"
+              onsubmit="return confirm('¿Cancelar esta incidencia?')">
+          <div class="col-md-8">
+            <label for="Motivo" class="form-label">Motivo (opcional)</label>
+            <input type="text" class="form-control" id="Motivo" name="Motivo" placeholder="Ej: capturada por error">
+          </div>
+          <div class="col-md-4">
+            <button type="submit" class="btn btn-danger w-100">
+              <i class="bi bi-x-circle me-1"></i> Confirmar cancelación
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<script>
+(function(){
+  const sel = document.getElementById('selTipo');
+  const fIni = document.getElementById('fIni');
+  const fFin = document.getElementById('fFin');
+  const diasCalc = document.getElementById('diasCalc');
+  function calcular(){
+    if (!fIni.value || !fFin.value) { diasCalc.value = '—'; return; }
+    const a = new Date(fIni.value + 'T00:00:00'), b = new Date(fFin.value + 'T00:00:00');
+    if (b < a) { diasCalc.value = 'rango inválido'; return; }
+    const n = Math.round((b - a) / 86400000) + 1;
+    const max = sel.selectedOptions[0]?.dataset.max;
+    diasCalc.value = n + (max && n > +max ? ' (excede el máximo de ' + max + ')' : '');
+  }
+  fIni.addEventListener('change', function(){ if (fFin.value < fIni.value) fFin.value = fIni.value; calcular(); });
+  fFin.addEventListener('change', calcular);
+
+  // Al cambiar el tipo, ajustar si el documento pasa a ser obligatorio.
+  const txtFolio = document.getElementById('txtFolio');
+  const lblDoc = document.getElementById('lblDoc');
+  const ayudaDoc = document.getElementById('ayudaDoc');
+  sel.addEventListener('change', function(){
+    const obligatorio = sel.selectedOptions[0]?.dataset.doc === '1';
+    txtFolio.required = obligatorio;
+    lblDoc.innerHTML = 'Documento comprobatorio' + (obligatorio ? ' <span class="text-danger">*</span>' : '');
+    ayudaDoc.textContent = obligatorio ? 'Obligatorio para este tipo.' : 'Opcional para este tipo.';
+    calcular();
+  });
+})();
+</script>

@@ -13,6 +13,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig } from '../services/nominaService.js';
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 
 // Tabla de días de vacaciones según LFT México 2024
 const DIAS_VACACIONES_LFT = {
@@ -60,6 +61,10 @@ async function calcularFactorJornada(empleado) {
 // Listar vacaciones
 export const index = async (req, res) => {
   try {
+    // Los periodos que ya terminaron se cierran solos: no hay que volver a
+    // confirmarlos a mano.
+    await cerrarVacacionesVencidas();
+
     const { anio, estado, empleado } = req.query;
 
     let where = {};
@@ -89,7 +94,8 @@ export const index = async (req, res) => {
           }
         },
         periodos: {
-          where: { Estado: 'APROBADO' },
+          // Se incluyen los cancelados: la vista los muestra tachados para
+          // dejar rastro de la corrección (no cuentan al saldo ni a asistencia).
           orderBy: { Fecha_Inicio: 'asc' }
         }
       },
@@ -340,6 +346,210 @@ export const store = async (req, res) => {
     console.error('Error al guardar vacaciones:', error);
     req.flash('error', 'Error al registrar las vacaciones');
     res.redirect('/vacaciones/crear');
+  }
+};
+
+/**
+ * Cierra los registros EN_CURSO cuyos periodos aprobados ya terminaron:
+ * pasan a TOMADAS sin necesidad de confirmarlos a mano. Si más adelante se
+ * les agrega un periodo futuro, `store` los regresa a EN_CURSO por su cuenta.
+ *
+ * Se llama al entrar a la pantalla de vacaciones (no hay tareas programadas
+ * en el proyecto): es un solo UPDATE indexado por Estado.
+ * @returns {Promise<number>} cuántos registros se cerraron
+ */
+export async function cerrarVacacionesVencidas() {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const { count } = await prisma.vacaciones.updateMany({
+    where: {
+      Estado: 'EN_CURSO',
+      // Ningún periodo vigente que siga en curso o por venir.
+      periodos: { none: { Estado: 'APROBADO', Fecha_Fin: { gte: hoy } } }
+    },
+    data: { Estado: 'TOMADAS' }
+  });
+  return count;
+}
+
+// GET /vacaciones/periodos/:id/editar - Formulario de edición de un periodo
+export const editarPeriodo = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const periodo = await prisma.vacaciones_Periodos.findUnique({
+      where: { ID_Periodo_Vac: id },
+      include: {
+        empleado: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true } },
+        vacacion: { select: { ID_Vacacion: true, Anio: true, Dias_Proporcionales: true, Dias_Tomados: true, Dias_Pendientes: true } }
+      }
+    });
+
+    if (!periodo) {
+      req.flash('error', 'Periodo de vacaciones no encontrado');
+      return res.redirect('/vacaciones');
+    }
+
+    const fmt = (d) => new Date(d).toISOString().slice(0, 10);
+    res.render('vacaciones/editar-periodo', {
+      title: 'Editar periodo de vacaciones',
+      periodo,
+      fechaInicio: fmt(periodo.Fecha_Inicio),
+      fechaFin: fmt(periodo.Fecha_Fin)
+    });
+  } catch (error) {
+    console.error('Error al cargar periodo:', error);
+    req.flash('error', 'Error al cargar el periodo');
+    res.redirect('/vacaciones');
+  }
+};
+
+// POST /vacaciones/periodos/:id - Actualizar fechas/observaciones del periodo.
+// Ajusta el saldo del registro anual: devuelve los días viejos y descuenta los
+// nuevos, para que Dias_Tomados/Dias_Pendientes no se corrompan.
+export const actualizarPeriodo = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const periodo = await prisma.vacaciones_Periodos.findUnique({
+      where: { ID_Periodo_Vac: id },
+      include: { vacacion: true }
+    });
+    if (!periodo) {
+      req.flash('error', 'Periodo de vacaciones no encontrado');
+      return res.redirect('/vacaciones');
+    }
+    const volver = `/vacaciones/periodos/${id}/editar`;
+
+    const inicio = new Date(req.body.Fecha_Inicio);
+    const fin = new Date(req.body.Fecha_Fin);
+    if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin < inicio) {
+      req.flash('error', 'Rango de fechas inválido');
+      return res.redirect(volver);
+    }
+    const diasNuevos = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+    const diasViejos = periodo.Dias;
+
+    // Traslape con OTRO periodo aprobado del mismo empleado (no consigo mismo).
+    const traslape = await prisma.vacaciones_Periodos.findFirst({
+      where: {
+        ID_Empleado: periodo.ID_Empleado,
+        Estado: 'APROBADO',
+        ID_Periodo_Vac: { not: id },
+        Fecha_Inicio: { lte: fin },
+        Fecha_Fin: { gte: inicio }
+      }
+    });
+    if (traslape) {
+      req.flash('error', 'El nuevo rango se traslapa con otro periodo ya registrado');
+      return res.redirect(volver);
+    }
+
+    // Si el periodo está activo, validar que el saldo alcance para los días extra.
+    const delta = diasNuevos - diasViejos;
+    if (periodo.Estado === 'APROBADO' && delta > 0 && periodo.vacacion) {
+      if (delta > periodo.vacacion.Dias_Pendientes) {
+        req.flash('error', `Solo hay ${periodo.vacacion.Dias_Pendientes} día(s) pendientes; el cambio requiere ${delta} más`);
+        return res.redirect(volver);
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.vacaciones_Periodos.update({
+        where: { ID_Periodo_Vac: id },
+        data: {
+          Fecha_Inicio: inicio,
+          Fecha_Fin: fin,
+          Dias: diasNuevos,
+          Observaciones: req.body.Observaciones || null
+        }
+      });
+      // El saldo anual solo se mueve si el periodo está vigente.
+      if (periodo.Estado === 'APROBADO' && periodo.vacacion && delta !== 0) {
+        await tx.vacaciones.update({
+          where: { ID_Vacacion: periodo.ID_Vacacion },
+          data: {
+            Dias_Tomados: periodo.vacacion.Dias_Tomados + delta,
+            Dias_Pendientes: periodo.vacacion.Dias_Pendientes - delta
+          }
+        });
+      }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Vacaciones_Periodos',
+      idRegistro: id.toString(),
+      descripcion: `Periodo de vacaciones editado (empleado ${periodo.ID_Empleado}): ${diasViejos} → ${diasNuevos} día(s)`,
+      datosPrevios: { Fecha_Inicio: periodo.Fecha_Inicio, Fecha_Fin: periodo.Fecha_Fin, Dias: diasViejos },
+      datosNuevos: { Fecha_Inicio: inicio, Fecha_Fin: fin, Dias: diasNuevos },
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', 'Periodo de vacaciones actualizado');
+    res.redirect('/vacaciones');
+  } catch (error) {
+    console.error('Error al actualizar periodo:', error);
+    req.flash('error', 'Error al actualizar el periodo');
+    res.redirect('/vacaciones');
+  }
+};
+
+// POST /vacaciones/periodos/:id/cancelar - Cancela el periodo (no lo borra) y
+// devuelve sus días al saldo anual del empleado.
+export const cancelarPeriodo = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const periodo = await prisma.vacaciones_Periodos.findUnique({
+      where: { ID_Periodo_Vac: id },
+      include: { vacacion: true }
+    });
+    if (!periodo) {
+      req.flash('error', 'Periodo de vacaciones no encontrado');
+      return res.redirect('/vacaciones');
+    }
+    if (periodo.Estado === 'CANCELADO') {
+      req.flash('info', 'Ese periodo ya estaba cancelado');
+      return res.redirect('/vacaciones');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.vacaciones_Periodos.update({
+        where: { ID_Periodo_Vac: id },
+        data: {
+          Estado: 'CANCELADO',
+          Observaciones: [periodo.Observaciones, req.body.Motivo_Cancelacion?.trim()].filter(Boolean).join(' · ') || null
+        }
+      });
+      // Devolver los días al saldo del año correspondiente.
+      if (periodo.vacacion) {
+        await tx.vacaciones.update({
+          where: { ID_Vacacion: periodo.ID_Vacacion },
+          data: {
+            Dias_Tomados: Math.max(0, periodo.vacacion.Dias_Tomados - periodo.Dias),
+            Dias_Pendientes: periodo.vacacion.Dias_Pendientes + periodo.Dias
+          }
+        });
+      }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Vacaciones_Periodos',
+      idRegistro: id.toString(),
+      descripcion: `Periodo de vacaciones CANCELADO (empleado ${periodo.ID_Empleado}): se devolvieron ${periodo.Dias} día(s) al saldo`,
+      datosPrevios: { Estado: periodo.Estado, Dias: periodo.Dias },
+      datosNuevos: { Estado: 'CANCELADO' },
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', `Periodo cancelado — ${periodo.Dias} día(s) devueltos al saldo del empleado`);
+    res.redirect('/vacaciones');
+  } catch (error) {
+    console.error('Error al cancelar periodo:', error);
+    req.flash('error', 'Error al cancelar el periodo');
+    res.redirect('/vacaciones');
   }
 };
 

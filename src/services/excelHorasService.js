@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasActividadHastaEntrada } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -202,14 +202,30 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         if (!periodoAus && !actividadRaw) { fila.push('', '', ''); continue; }
 
         // Ausencia y actividad el mismo día: gana la asignada al último.
-        // En ambos casos el día cuenta 9h fijas (jornada cumplida).
+        const fmtMin = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
         if (ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
+          // Sin checada: el tramo capturado manda; si no hay, jornada fija.
+          const horasAct = horasDeActividad(actividadRaw, null);
           const empresaTxt = actividadRaw.empresa ? ` (${actividadRaw.empresa})` : '';
-          fila.push(`${actividadRaw.tipo.toUpperCase()}: ${actividadRaw.nombre}${empresaTxt}`, '', HORAS_FIJAS_ACTIVIDAD);
+          const tieneTramo = Number.isFinite(actividadRaw.horaInicio) && Number.isFinite(actividadRaw.horaFin);
+          fila.push(
+            `${actividadRaw.tipo.toUpperCase()}: ${actividadRaw.nombre}${empresaTxt}`,
+            tieneTramo ? `${fmtMin(actividadRaw.horaInicio)}-${fmtMin(actividadRaw.horaFin)}` : '',
+            horasAct
+          );
+          totalHoras += horasAct;
         } else {
-          fila.push(periodoAus.etiqueta.toUpperCase(), '', HORAS_FIJAS_ACTIVIDAD);
+          // Ausencia: paga jornada completa solo si es CON goce de sueldo.
+          // Las sin goce (falta injustificada, permiso sin goce…) se etiquetan
+          // pero no suman horas.
+          const horasAus = periodoAus.conGoce ? HORAS_FIJAS_ACTIVIDAD : 0;
+          fila.push(
+            periodoAus.etiqueta.toUpperCase() + (periodoAus.conGoce ? '' : ' (sin goce)'),
+            '',
+            horasAus || ''
+          );
+          totalHoras += horasAus;
         }
-        totalHoras += HORAS_FIJAS_ACTIVIDAD;
         continue;
       }
 
@@ -233,12 +249,12 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         horas = horasEntreRedondeadas(entR, salR);
       }
 
-      // Actividad delegada Y checada real el mismo día: se suman (tramo virtual
-      // 8am-primera entrada, con descuento de comida, + horas reales) — mismo
-      // criterio que la vista HTML /asistencia/horas.
+      // Actividad delegada Y checada real el mismo día: se suman el tramo de la
+      // actividad (capturado, o 8am→primera entrada) y las horas reales —
+      // mismo criterio que la vista HTML /asistencia/horas.
       const actividadConChecada = d.getDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
       if (actividadConChecada) {
-        horas += horasActividadHastaEntrada(a.Hora_Entrada);
+        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada);
       }
 
       totalHoras += horas;

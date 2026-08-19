@@ -6,10 +6,26 @@
       <li class="breadcrumb-item active"><%= actividad.Nombre_Actividad %></li>
     </ol>
   </nav>
-  <div class="d-flex flex-wrap align-items-center gap-2">
-    <h4 class="mb-0"><%= actividad.Nombre_Actividad %></h4>
-    <span class="badge bg-primary"><i class="bi bi-building me-1"></i><%= actividad.empresa.Nombre_Empresa %></span>
-    <span class="badge bg-secondary"><i class="bi bi-person-badge me-1"></i>Responsable: <%= actividad.responsable.Nombre %> <%= actividad.responsable.Apellido_Paterno %></span>
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h4 class="mb-0"><%= actividad.Nombre_Actividad %></h4>
+      <span class="badge" style="background-color:<%= actividad.tipo_actividad ? actividad.tipo_actividad.Color : '#6f42c1' %>">
+        <i class="bi bi-signpost-split-fill me-1"></i><%= actividad.tipo_actividad ? actividad.tipo_actividad.Nombre : '' %>
+      </span>
+      <span class="badge bg-primary"><i class="bi bi-building me-1"></i><%= actividad.empresa.Nombre_Empresa %></span>
+      <span class="badge bg-secondary"><i class="bi bi-person-badge me-1"></i><%= actividad.responsable.Nombre %> <%= actividad.responsable.Apellido_Paterno %></span>
+    </div>
+    <% if (puedeEditar) { %>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#formEditar">
+        <i class="bi bi-pencil me-1"></i>Editar actividad
+      </button>
+      <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/eliminar" method="POST" class="d-inline"
+            onsubmit="return confirm('¿Eliminar la actividad completa y sus <%= actividad.asignaciones.length %> día(s) asignado(s)? Esta acción no se puede deshacer.')">
+        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Eliminar</button>
+      </form>
+    </div>
+    <% } %>
   </div>
   <% if (actividad.Descripcion) { %><p class="text-body-secondary mt-2 mb-0"><%= actividad.Descripcion %></p><% } %>
 </div>
@@ -27,13 +43,97 @@
 </div>
 <% } %>
 
-<!-- Tabla de empleados de la actividad y su desglose -->
+<% if (puedeEditar) { %>
+<!-- 1. Editar datos de la actividad (aplica a TODOS sus días) -->
+<div class="collapse mb-4" id="formEditar">
+  <div class="card border-primary">
+    <div class="card-header bg-primary bg-opacity-10">
+      <i class="bi bi-pencil-square me-2"></i><strong>Editar actividad</strong>
+      <small class="text-body-secondary ms-2">Los cambios aplican a los <%= actividad.asignaciones.length %> día(s) ya asignados.</small>
+    </div>
+    <div class="card-body">
+      <form action="/encargado/actividades/<%= actividad.ID_Actividad %>" method="POST" class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Nombre de la actividad <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" name="Nombre_Actividad" required value="<%= actividad.Nombre_Actividad %>">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Tipo <span class="text-danger">*</span></label>
+          <select class="form-select" name="ID_Tipo_Actividad" required>
+            <% tiposActividad.forEach(function(t) { %>
+            <option value="<%= t.ID_Tipo_Actividad %>" <%= actividad.ID_Tipo_Actividad === t.ID_Tipo_Actividad ? 'selected' : '' %>><%= t.Nombre %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Empresa <span class="text-danger">*</span></label>
+          <select class="form-select" name="ID_Empresa" required>
+            <% empresas.forEach(function(emp) { %>
+            <option value="<%= emp.ID_Empresa %>" <%= actividad.ID_Empresa === emp.ID_Empresa ? 'selected' : '' %>><%= emp.Nombre_Empresa %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg me-1"></i>Guardar</button>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Descripción</label>
+          <textarea class="form-control" name="Descripcion" rows="2"><%= actividad.Descripcion || '' %></textarea>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Alta en bloque: rango de fechas × varios empleados -->
 <div class="card mb-4">
-  <div class="card-header d-flex justify-content-between align-items-center">
+  <div class="card-header">
+    <i class="bi bi-calendar-plus me-2"></i><strong>Agregar en bloque</strong>
+    <small class="text-body-secondary ms-2">Un rango de fechas para varios empleados de una vez.</small>
+  </div>
+  <div class="card-body">
+    <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones" method="POST" class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Desde <span class="text-danger">*</span></label>
+        <input type="date" class="form-control form-control-sm" name="Rango_Desde" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Hasta <span class="text-danger">*</span></label>
+        <input type="date" class="form-control form-control-sm" name="Rango_Hasta" required>
+        <small class="text-body-secondary" style="font-size:.7rem">Se omiten los domingos.</small>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small mb-1">Empleados <span class="text-danger">*</span></label>
+        <div class="d-flex gap-2 mb-1">
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="btnTodosBloque">Todos</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0" id="btnNingunoBloque">Ninguno</button>
+        </div>
+        <div class="border rounded p-2" style="max-height:150px; overflow-y:auto;">
+          <% empleadosMatriz.filter(e => !e.fueraDelEquipo).forEach(function(e) { %>
+            <div class="form-check">
+              <input class="form-check-input chk-bloque" type="checkbox" name="subordinados" value="<%= e.ID_Empleado %>" id="blq<%= e.ID_Empleado %>">
+              <label class="form-check-label" for="blq<%= e.ID_Empleado %>"><%= e.Nombre %> <%= e.Apellido_Paterno %></label>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Agregar días</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<!-- 3. Tabla de días con checkbox + acciones en lote -->
+<form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones/lote-eliminar" method="POST"
+      onsubmit="return confirm('¿Quitar los días seleccionados de esta actividad?')">
+<div class="card mb-4">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
     <h5 class="card-title mb-0"><i class="bi bi-table me-2"></i>Empleados y desglose</h5>
-    <% if (hasRole('ENCARGADO') || esSupervisor) { %>
-    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#formAgregar">
-      <i class="bi bi-plus-lg me-1"></i>Agregar días
+    <% if (puedeEditar) { %>
+    <button type="submit" class="btn btn-sm btn-outline-danger" id="btnQuitarLote" disabled>
+      <i class="bi bi-trash me-1"></i>Quitar seleccionados (<span id="contadorSel">0</span>)
     </button>
     <% } %>
   </div>
@@ -41,6 +141,7 @@
     <table class="table table-hover mb-0">
       <thead class="table-light">
         <tr>
+          <% if (puedeEditar) { %><th style="width:36px"><input type="checkbox" class="form-check-input" id="chkTodos" title="Seleccionar todo"></th><% } %>
           <th>Empleado</th>
           <th>Días asignados</th>
           <th class="text-center">Total días</th>
@@ -51,6 +152,9 @@
         <% if (filas && filas.length > 0) { %>
           <% filas.forEach(function(fila) { const e = fila.empleado; const sellados = fila.dias.filter(d => d.sello).length; %>
           <tr>
+            <% if (puedeEditar) { %>
+            <td><input type="checkbox" class="form-check-input chk-fila" title="Seleccionar todos los días de este empleado"></td>
+            <% } %>
             <td>
               <div class="d-flex align-items-center">
                 <div class="avatar-circle me-2">
@@ -65,13 +169,24 @@
             <td>
               <div class="d-flex flex-wrap gap-1">
                 <% fila.dias.forEach(function(d) { %>
-                  <span class="badge <%= d.sello ? 'bg-success' : 'bg-light text-dark border' %>" title="<%= d.sello ? 'Selló ese día (checada + actividad combinadas)' : 'Sin checada — cubierto por la actividad' %>">
+                  <span class="badge <%= d.sello ? 'bg-success' : 'bg-light text-dark border' %> d-inline-flex align-items-center gap-1"
+                        style="font-weight:500"
+                        title="<%= d.sello ? 'Selló ese día (checada + actividad se suman)' : 'Sin checada — cubierto por la actividad' %>">
+                    <% if (puedeEditar) { %>
+                    <input type="checkbox" class="form-check-input m-0 chk-dia" name="asignaciones" value="<%= d.ID_Asignacion %>" style="width:.8em;height:.8em" title="Seleccionar para quitar">
+                    <% } %>
                     <%= d.fecha %>
-                    <% if (hasRole('ENCARGADO') || esSupervisor) { %>
-                    <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones/<%= d.ID_Asignacion %>/eliminar" method="POST" class="d-inline"
-                          onsubmit="return confirm('¿Quitar este día de la actividad?')">
-                      <button type="submit" class="btn btn-link p-0 ms-1 text-decoration-none" style="font-size:.75rem; line-height:1; vertical-align:middle;" title="Quitar día">&times;</button>
-                    </form>
+                    <% if (d.tieneTramo) { %>
+                      <span class="ms-1" style="font-size:.9em; opacity:.85"><%= d.horaInicio %>–<%= d.horaFin %></span>
+                    <% } %>
+                    <% if (puedeEditar) { %>
+                      <i class="bi bi-clock ms-1 btn-horas" style="cursor:pointer"
+                         data-asignacion="<%= d.ID_Asignacion %>"
+                         data-fecha="<%= d.fecha %>"
+                         data-empleado="<%= [e.Nombre, e.Apellido_Paterno].filter(Boolean).join(' ') %>"
+                         data-inicio="<%= d.horaInicio %>"
+                         data-fin="<%= d.horaFin %>"
+                         title="Capturar horas de este día"></i>
                     <% } %>
                   </span>
                 <% }); %>
@@ -84,55 +199,108 @@
           </tr>
           <% }); %>
         <% } else { %>
-          <tr><td colspan="4" class="text-center text-body-secondary py-4">Sin empleados asignados</td></tr>
+          <tr><td colspan="<%= puedeEditar ? 5 : 4 %>" class="text-center text-body-secondary py-4">Sin empleados asignados</td></tr>
         <% } %>
       </tbody>
     </table>
   </div>
 </div>
+</form>
 
-<% if (hasRole('ENCARGADO') || esSupervisor) { %>
-<div class="collapse mb-4" id="formAgregar">
-  <div class="card">
-    <div class="card-header"><i class="bi bi-calendar-plus me-2"></i>Agregar días a esta actividad</div>
-    <div class="card-body">
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-      <form action="/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones" method="POST" id="formAsignar">
-        <div class="mb-3">
-          <label class="form-label">Días</label>
-          <input type="text" id="rangoDiasAgregar" class="form-control" placeholder="Selecciona uno o varios días...">
-          <input type="hidden" name="dias" id="diasAgregar">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Empleados</label>
-          <div class="border rounded p-2" style="max-height:200px; overflow-y:auto;">
-            <% filas.forEach(function(fila) { const e = fila.empleado; %>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="subordinados" value="<%= e.ID_Empleado %>" id="agSub<%= e.ID_Empleado %>">
-                <label class="form-check-label" for="agSub<%= e.ID_Empleado %>"><%= e.Nombre %> <%= e.Apellido_Paterno %></label>
-              </div>
-            <% }); %>
+<% if (puedeEditar) { %>
+<!-- Modal: capturar el tramo horario de un día concreto -->
+<div class="modal fade" id="modalHoras" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <form class="modal-content" method="POST" id="formHoras">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-clock me-2"></i>Horas de la actividad</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-body-secondary mb-3" id="modalHorasCtx">—</p>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Desde</label>
+            <input type="time" class="form-control form-control-sm" name="Hora_Inicio" id="mhInicio">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Hasta</label>
+            <input type="time" class="form-control form-control-sm" name="Hora_Fin" id="mhFin">
           </div>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Agregar</button>
-      </form>
-    </div>
+        <div class="alert alert-light border mt-3 mb-0 small">
+          <strong>Vacío</strong> = jornada completa: 9h si no hubo checada, o desde las 8:00 hasta que selló.<br>
+          <strong>Con horas</strong> = cuenta solo ese tramo y <strong>se suma</strong> a lo que marcó el checador.
+          Útil para home office por horas o trabajo fuera del horario normal.
+          Se descuenta la comida (14:00–15:00) si el tramo la cruza.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="mhLimpiar">Dejar vacío</button>
+        <button type="submit" class="btn btn-sm btn-primary">Guardar</button>
+      </div>
+    </form>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 <script>
 (function(){
-  const diasInput = document.getElementById('diasAgregar');
-  flatpickr('#rangoDiasAgregar', {
-    mode: 'multiple',
-    locale: 'es',
-    dateFormat: 'Y-m-d',
-    onChange: function(dates) {
-      const f = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      diasInput.value = dates.map(f).join(',');
-    }
+  // ---------- Modal de horas por día ----------
+  const modalEl = document.getElementById('modalHoras');
+  const modalHoras = new bootstrap.Modal(modalEl);
+  const formHoras = document.getElementById('formHoras');
+  document.querySelectorAll('.btn-horas').forEach(function(ic){
+    ic.addEventListener('click', function(ev){
+      ev.stopPropagation(); // no togglear el checkbox del badge
+      formHoras.action = '/encargado/actividades/<%= actividad.ID_Actividad %>/asignaciones/' + ic.dataset.asignacion + '/horas';
+      document.getElementById('mhInicio').value = ic.dataset.inicio || '';
+      document.getElementById('mhFin').value = ic.dataset.fin || '';
+      document.getElementById('modalHorasCtx').textContent = ic.dataset.empleado + ' · ' + ic.dataset.fecha;
+      modalHoras.show();
+    });
+  });
+  document.getElementById('mhLimpiar').addEventListener('click', function(){
+    document.getElementById('mhInicio').value = '';
+    document.getElementById('mhFin').value = '';
+    formHoras.submit();
+  });
+
+  // ---------- Checkbox en lote sobre la tabla de días ----------
+  const chkTodos = document.getElementById('chkTodos');
+  const btnLote = document.getElementById('btnQuitarLote');
+  const contSel = document.getElementById('contadorSel');
+  const todosDias = function(){ return Array.from(document.querySelectorAll('.chk-dia')); };
+
+  function refrescarLote() {
+    const n = todosDias().filter(function(c){ return c.checked; }).length;
+    contSel.textContent = n;
+    btnLote.disabled = n === 0;
+  }
+
+  if (chkTodos) {
+    chkTodos.addEventListener('change', function(){
+      todosDias().forEach(function(c){ c.checked = chkTodos.checked; });
+      document.querySelectorAll('.chk-fila').forEach(function(c){ c.checked = chkTodos.checked; });
+      refrescarLote();
+    });
+  }
+  // Checkbox de fila: marca/desmarca todos los días de ese empleado.
+  document.querySelectorAll('.chk-fila').forEach(function(chk){
+    chk.addEventListener('change', function(){
+      chk.closest('tr').querySelectorAll('.chk-dia').forEach(function(c){ c.checked = chk.checked; });
+      refrescarLote();
+    });
+  });
+  todosDias().forEach(function(c){ c.addEventListener('change', refrescarLote); });
+
+  refrescarLote();
+
+  // ---------- Alta en bloque: marcar/desmarcar todos ----------
+  document.getElementById('btnTodosBloque')?.addEventListener('click', function(){
+    document.querySelectorAll('.chk-bloque').forEach(function(c){ c.checked = true; });
+  });
+  document.getElementById('btnNingunoBloque')?.addEventListener('click', function(){
+    document.querySelectorAll('.chk-bloque').forEach(function(c){ c.checked = false; });
   });
 })();
 </script>

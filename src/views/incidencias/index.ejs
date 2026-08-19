@@ -1,0 +1,452 @@
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-clipboard-x me-2"></i>Faltas y Permisos</h2>
+    <p class="text-body-secondary mb-0">Control de faltas del periodo: justifica las que detecta el checador</p>
+  </div>
+  <a href="/incidencias/crear" class="btn btn-outline-primary">
+    <i class="bi bi-plus-lg me-1"></i> Registro manual
+  </a>
+</div>
+
+<% if (typeof messages !== 'undefined' && messages.success) { %>
+  <div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+<% if (typeof messages !== 'undefined' && messages.error) { %>
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+<% if (typeof messages !== 'undefined' && messages.info) { %>
+  <div class="alert alert-info alert-dismissible fade show">
+    <i class="bi bi-info-circle me-2"></i><%= messages.info %>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+<% } %>
+
+<!-- Filtros -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<div class="card mb-4">
+  <div class="card-body">
+    <form action="/incidencias" method="GET" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label for="rangoFechas" class="form-label">Periodo</label>
+        <input type="text" class="form-control" id="rangoFechas" placeholder="Selecciona un rango...">
+        <input type="hidden" name="desde" id="inpDesde" value="<%= desde %>">
+        <input type="hidden" name="hasta" id="inpHasta" value="<%= hasta %>">
+      </div>
+      <div class="col-6 col-md-3">
+        <label for="empleado" class="form-label">Empleado</label>
+        <select class="form-select" id="empleado" name="empleado">
+          <option value="">Todos</option>
+          <% empleados.forEach(function(e) { %>
+            <option value="<%= e.ID_Empleado %>" <%= String(filtros.empleado) === String(e.ID_Empleado) ? 'selected' : '' %>>
+              <%= e.Nombre %> <%= e.Apellido_Paterno %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="tipo" class="form-label">Tipo</label>
+        <select class="form-select" id="tipo" name="tipo">
+          <option value="">Todos</option>
+          <% tipos.forEach(function(t) { %>
+            <option value="<%= t.ID_Tipo_Incidencia %>" <%= String(filtros.tipo) === String(t.ID_Tipo_Incidencia) ? 'selected' : '' %>><%= t.Nombre %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary me-2">
+          <i class="bi bi-search me-1"></i> Filtrar
+        </button>
+        <a href="/incidencias" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if (bloqueadosAhora && bloqueadosAhora.length > 0) { %>
+  <div class="alert alert-dark">
+    <i class="bi bi-lock-fill me-2"></i>
+    <strong>Se bloqueó el checador de <%= bloqueadosAhora.length %> empleado(s):</strong>
+    <ul class="mb-0 mt-2">
+      <% bloqueadosAhora.forEach(function(b) { %>
+        <li><%= b.nombre %> — <%= b.motivo %></li>
+      <% }) %>
+    </ul>
+    <small class="d-block mt-2">
+      Ya no pueden checar hasta presentarse con RH. Su estatus pasó a SUSPENDIDO; no es una baja.
+    </small>
+  </div>
+<% } %>
+
+<% if (alertas && alertas.length > 0) { %>
+<% const hayBloqueados = alertas.some(a => a.bloqueado); %>
+<form action="/incidencias/reactivar-lote" method="POST" id="formLote">
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger bg-opacity-10 d-flex flex-wrap align-items-center gap-2">
+    <i class="bi bi-exclamation-octagon-fill text-danger"></i>
+    <strong class="text-danger">Posible abandono de trabajo</strong>
+    <span class="badge bg-danger ms-1"><%= alertas.length %></span>
+    <% if (hayBloqueados) { %>
+    <div class="ms-auto d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-success" id="btnReactivarSel" disabled>
+        <i class="bi bi-unlock me-1"></i>Reactivar seleccionados (<span id="contSel">0</span>)
+      </button>
+      <button type="submit" name="Todos" value="on" class="btn btn-sm btn-outline-success"
+              onclick="return confirm('¿Reactivar a TODOS los empleados bloqueados?')">
+        <i class="bi bi-unlock-fill me-1"></i>Reactivar todos
+      </button>
+    </div>
+    <% } %>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <% if (hayBloqueados) { %>
+          <th style="width:36px"><input type="checkbox" class="form-check-input" id="chkTodosLote" title="Seleccionar todos"></th>
+          <% } %>
+          <th>Empleado</th>
+          <th class="text-center">Faltas consecutivas</th>
+          <th>Racha</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% alertas.forEach(function(a) { %>
+        <tr style="background-color:#fdf2f3">
+          <% if (hayBloqueados) { %>
+          <td>
+            <% if (a.bloqueado) { %>
+              <input type="checkbox" class="form-check-input chk-lote" name="empleados" value="<%= a.ID_Empleado %>">
+            <% } %>
+          </td>
+          <% } %>
+          <td>
+            <div class="fw-semibold"><%= a.nombre %></div>
+            <small class="text-body-secondary">
+              <%= a.area || '' %> · última falta <%= new Date(a.ultimaFalta + 'T12:00:00').toLocaleDateString('es-MX') %>
+            </small>
+          </td>
+          <td class="text-center">
+            <span class="badge bg-danger fs-6"><%= a.consecutivas %></span>
+          </td>
+          <td>
+            <small>
+              <%= new Date(a.rachaDesde + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit',month:'short'}) %>
+              – <%= new Date(a.rachaHasta + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit',month:'short'}) %>
+            </small>
+            <% if (a.totalFaltas > a.consecutivas) { %>
+              <small class="d-block text-body-secondary" style="font-size:.72rem">
+                <%= a.totalFaltas %> faltas en total (30 días)
+              </small>
+            <% } %>
+          </td>
+          <td class="text-end">
+            <% if (a.bloqueado) { %>
+              <span class="badge bg-dark me-1" title="Deshabilitado en el checador; conserva su huella registrada">
+                <i class="bi bi-lock-fill me-1"></i>Checador bloqueado
+              </span>
+              <button type="submit" formaction="/incidencias/reactivar/<%= a.ID_Empleado %>"
+                      class="btn btn-sm btn-success" title="Se presentó con RH"
+                      onclick="return confirm('¿Reactivar a <%= a.nombre %>?')">
+                <i class="bi bi-unlock me-1"></i>Reactivar
+              </button>
+            <% } else if (a.estatus && a.estatus !== 'ACTIVO') { %>
+              <span class="badge bg-secondary" title="No se bloquea: su estatus actual no es ACTIVO"><%= a.estatus %></span>
+            <% } %>
+            <a href="/incidencias?empleado=<%= a.ID_Empleado %>" class="btn btn-sm btn-outline-secondary" title="Ver sus faltas">
+              <i class="bi bi-search"></i>
+            </a>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer small text-body-secondary">
+    Al acumular <strong>3 faltas consecutivas</strong>, el sistema <strong>deshabilita al empleado en el checador</strong>
+    (estatus SUSPENDIDO) para que se acerque a RH. Se aplica en cuanto llegan las checadas del device.
+    <strong>No es una baja ni una rescisión:</strong> conserva su relación laboral, y su
+    <strong>huella permanece registrada</strong> en el device — al reactivarlo vuelve a checar sin re-enrolar.
+  </div>
+</div>
+</form>
+
+<script>
+(function(){
+  const chkTodos = document.getElementById('chkTodosLote');
+  const btnSel = document.getElementById('btnReactivarSel');
+  const cont = document.getElementById('contSel');
+  if (!btnSel) return;
+  const casillas = () => Array.from(document.querySelectorAll('.chk-lote'));
+
+  function refrescar(){
+    const n = casillas().filter(c => c.checked).length;
+    cont.textContent = n;
+    btnSel.disabled = n === 0;
+  }
+  if (chkTodos) {
+    chkTodos.addEventListener('change', function(){
+      casillas().forEach(c => { c.checked = chkTodos.checked; });
+      refrescar();
+    });
+  }
+  casillas().forEach(c => c.addEventListener('change', refrescar));
+
+  btnSel.addEventListener('click', function(ev){
+    const n = casillas().filter(c => c.checked).length;
+    if (!confirm('¿Reactivar ' + n + ' empleado(s)?')) ev.preventDefault();
+  });
+  refrescar();
+})();
+</script>
+<% } %>
+
+<% if (sinDatosDelChecador) { %>
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>El checador no reportó ninguna checada en este periodo.</strong>
+    Las faltas de abajo pueden deberse a que la sincronización no ha corrido, no a ausencias reales.
+    Revisa <a href="/checadores" class="alert-link">Checadores (ADMS)</a> antes de justificar.
+  </div>
+<% } %>
+
+<!-- Resumen del periodo -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card border-success h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center"
+             style="width:48px;height:48px;background:#d1e7dd">
+          <i class="bi bi-check-lg fs-4 text-success"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold text-success"><%= stats.justificadas %></div>
+          <div class="text-body-secondary small">Justificadas en el periodo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100" style="border-color:#f1aeb5">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center"
+             style="width:48px;height:48px;background:#f8d7da">
+          <i class="bi bi-exclamation-triangle fs-4" style="color:#b02a37"></i>
+        </div>
+        <div>
+          <div class="fs-3 fw-bold" style="color:#b02a37"><%= stats.sinJustificar %></div>
+          <div class="text-body-secondary small">Faltas sin justificar</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 1. Justificadas (arriba, en verde) -->
+<% if (incidencias && incidencias.length > 0) { %>
+<div class="card mb-4">
+  <div class="card-header bg-success bg-opacity-10 d-flex align-items-center gap-2">
+    <i class="bi bi-check-circle text-success"></i>
+    <strong>Justificadas</strong>
+    <span class="badge bg-success ms-1"><%= incidencias.length %></span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Empleado</th>
+          <th>Tipo</th>
+          <th>Periodo</th>
+          <th class="text-center">Días</th>
+          <th class="text-center">Goce</th>
+          <th class="text-center">Estado</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% incidencias.forEach(function(i) { %>
+        <% const cancelada = i.Estado === 'CANCELADA' || i.Estado === 'RECHAZADA'; %>
+        <tr style="<%= cancelada ? '' : 'background-color:#f0f9f4' %>">
+          <td>
+            <div class="<%= cancelada ? 'text-body-secondary text-decoration-line-through' : '' %>">
+              <%= [i.empleado.Nombre, i.empleado.Apellido_Paterno, i.empleado.Apellido_Materno].filter(Boolean).join(' ') %>
+            </div>
+            <small class="text-body-secondary"><%= i.empleado.area ? i.empleado.area.Nombre_Area : '' %></small>
+          </td>
+          <td>
+            <%= i.tipo_incidencia.Nombre %>
+            <% if (i.Folio_Documento) { %>
+              <i class="bi bi-paperclip ms-1 text-body-secondary" title="Folio: <%= i.Folio_Documento %>"></i>
+            <% } %>
+          </td>
+          <td>
+            <small>
+              <%= i.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
+              <% if (i.Dias_Totales > 1) { %> – <%= i.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %><% } %>
+            </small>
+          </td>
+          <td class="text-center"><span class="badge bg-secondary"><%= i.Dias_Totales %></span></td>
+          <td class="text-center">
+            <% if (i.Con_Goce_Sueldo) { %>
+              <span class="badge bg-success" title="Cuenta 9h de jornada">Con goce</span>
+            <% } else { %>
+              <span class="badge" style="background-color:#b02a37" title="No suma horas">Sin goce</span>
+            <% } %>
+          </td>
+          <td class="text-center">
+            <% if (i.Estado === 'APROBADA') { %><span class="badge bg-success">Aprobada</span>
+            <% } else if (i.Estado === 'PENDIENTE') { %><span class="badge bg-warning text-dark">Pendiente</span>
+            <% } else { %><span class="badge bg-secondary"><%= i.Estado %></span><% } %>
+          </td>
+          <td class="text-end">
+            <a href="/incidencias/<%= i.ID_Incidencia %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<% } %>
+
+<!-- Permisos autorizados que aún no empiezan -->
+<% if (futuras && futuras.length > 0) { %>
+<div class="card mb-4">
+  <div class="card-header bg-info bg-opacity-10 d-flex align-items-center gap-2">
+    <i class="bi bi-calendar-event text-info"></i>
+    <strong>Autorizados para después</strong>
+    <span class="badge bg-info ms-1"><%= futuras.length %></span>
+    <small class="text-body-secondary ms-2">Permisos solicitados con anticipación</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Empleado</th>
+          <th>Tipo</th>
+          <th>Periodo</th>
+          <th class="text-center">Días</th>
+          <th class="text-center">Goce</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% futuras.forEach(function(i) { %>
+        <tr>
+          <td><%= [i.empleado.Nombre, i.empleado.Apellido_Paterno, i.empleado.Apellido_Materno].filter(Boolean).join(' ') %></td>
+          <td><%= i.tipo_incidencia.Nombre %></td>
+          <td>
+            <small>
+              <%= i.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
+              <% if (i.Dias_Totales > 1) { %> – <%= i.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %><% } %>
+            </small>
+          </td>
+          <td class="text-center"><span class="badge bg-secondary"><%= i.Dias_Totales %></span></td>
+          <td class="text-center">
+            <% if (i.Con_Goce_Sueldo) { %><span class="badge bg-success">Con goce</span>
+            <% } else { %><span class="badge" style="background-color:#b02a37">Sin goce</span><% } %>
+          </td>
+          <td class="text-end">
+            <a href="/incidencias/<%= i.ID_Incidencia %>/editar" class="btn btn-sm btn-outline-primary" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer text-body-secondary small">
+    Cuando llegue la fecha, estos días ya no se marcarán como falta.
+  </div>
+</div>
+<% } %>
+
+<!-- 2. Faltas detectadas por el checador, sin justificar (rojo pastel) -->
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-2" style="background-color:#fdf2f3">
+    <i class="bi bi-exclamation-triangle" style="color:#b02a37"></i>
+    <strong>Sin justificar</strong>
+    <span class="badge ms-1" style="background-color:#b02a37"><%= faltas.length %></span>
+    <small class="text-body-secondary ms-2">Días laborables sin checada registrada</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Empleado</th>
+          <th>Área</th>
+          <th>Día</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (faltas && faltas.length > 0) { %>
+          <% const DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']; %>
+          <% faltas.forEach(function(f) { %>
+          <tr style="background-color:#fdf2f3">
+            <td class="fw-semibold"><%= f.nombre %></td>
+            <td><small class="text-body-secondary"><%= f.area || '—' %></small></td>
+            <td>
+              <%= DIAS[f.diaSemana] %>
+              <small class="text-body-secondary ms-1">
+                <%= new Date(f.fecha + 'T12:00:00').toLocaleDateString('es-MX') %>
+              </small>
+            </td>
+            <td class="text-end">
+              <a href="/incidencias/crear?empleado=<%= f.ID_Empleado %>&fecha=<%= f.fecha %>"
+                 class="btn btn-sm btn-success">
+                <i class="bi bi-check-lg me-1"></i>Justificar
+              </a>
+            </td>
+          </tr>
+          <% }) %>
+        <% } else { %>
+          <tr>
+            <td colspan="4" class="text-center text-body-secondary py-4">
+              <i class="bi bi-check-circle text-success me-1"></i>
+              Sin faltas pendientes de justificar en este periodo
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer text-body-secondary small">
+    Las faltas las detecta el checador: son días laborables sin checada, sin vacaciones,
+    incidencia ni actividad de campo asignada. Al justificar una, sube a la tabla verde.
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+<script>
+(function(){
+  const inpDesde = document.getElementById('inpDesde');
+  const inpHasta = document.getElementById('inpHasta');
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+
+  flatpickr('#rangoFechas', {
+    mode: 'range',
+    locale: 'es',
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'j M Y',
+    defaultDate: [inpDesde.value, inpHasta.value],
+    onChange: function(dates){
+      if (dates.length === 2) {
+        inpDesde.value = fmt(dates[0]);
+        inpHasta.value = fmt(dates[1]);
+      }
+    }
+  });
+})();
+</script>

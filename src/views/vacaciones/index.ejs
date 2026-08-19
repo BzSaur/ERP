@@ -161,12 +161,16 @@
                 <td>
                   <% if (v.periodos && v.periodos.length > 0) { %>
                     <% v.periodos.forEach(p => { %>
-                      <span class="badge bg-light text-dark border d-inline-block mb-1"
-                            title="<%= p.Dias %> día(s)<%= p.Observaciones ? ' · ' + p.Observaciones : '' %>">
+                      <% const cancelado = p.Estado === 'CANCELADO'; %>
+                      <a href="/vacaciones/periodos/<%= p.ID_Periodo_Vac %>/editar"
+                         class="badge <%= cancelado ? 'bg-secondary' : 'bg-light text-dark border' %> d-inline-block mb-1 text-decoration-none"
+                         style="<%= cancelado ? 'text-decoration:line-through !important;' : '' %>"
+                         title="<%= p.Dias %> día(s)<%= cancelado ? ' · CANCELADO' : '' %><%= p.Observaciones ? ' · ' + p.Observaciones : '' %> — clic para editar">
                         <%= p.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> -
                         <%= p.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
                         (<%= p.Dias %>d)
-                      </span>
+                        <i class="bi bi-pencil ms-1" style="font-size:.7em"></i>
+                      </a>
                     <% }) %>
                   <% } else if (v.Fecha_Inicio && v.Fecha_Fin) { %>
                     <small>

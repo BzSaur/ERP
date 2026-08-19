@@ -235,6 +235,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas td.cel-parcial  { background:#fff3cd; }
   .matriz-horas td.cel-ausente  { background:#f8d7da; }
   .matriz-horas td.cel-vacacion { background:#cfe2ff; }
+  /* Ausencia SIN goce de sueldo: justificada pero no pagada (no suma horas) */
+  .matriz-horas td.cel-singoce  { background:#f5d9dc; }
   .matriz-horas td.cel-dom      { background:#f1f3f5; }
   .matriz-horas td.cel-revision { background:#ffe0b2; outline:2px solid #fd7e14; outline-offset:-2px; }
   .matriz-horas td.cel-revision .hrs { color:#d63384; }
@@ -311,7 +313,12 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                      ? 'background-color:' + c.actividad.color + '22;'
                      : '';
                    if (c.esDomingo) { cls='cel-dom'; }
-                   else if (!c.presente && c.ausencia) { cls='cel-vacacion'; tip=c.ausencia + ' · 9h jornada cumplida (no cuenta como falta)'; }
+                   else if (!c.presente && c.ausencia) {
+                     cls = c.sinGoce ? 'cel-singoce' : 'cel-vacacion';
+                     tip = c.ausencia + (c.sinGoce
+                       ? ' · sin goce de sueldo — no suma horas'
+                       : ' · 9h jornada cumplida (no cuenta como falta)');
+                   }
                    else if (!c.presente && c.actividad) {
                      cls='cel-actividad'; bgStyle=tinteActividad;
                      tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · 9h jornada cumplida';
@@ -343,8 +350,13 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                   <% if (c.esDomingo) { %>
                     <span class="text-body-secondary small">Dom</span>
                   <% } else if (!c.presente && c.ausencia) { %>
-                    <span class="text-primary fw-bold d-block"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
-                    <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
+                    <% if (c.sinGoce) { %>
+                      <span class="fw-bold d-block" style="color:#b02a37; font-size:.7rem" title="<%= c.ausencia %> — sin goce de sueldo"><%= c.ausencia.length > 12 ? c.ausencia.slice(0,11) + '…' : c.ausencia %></span>
+                      <span style="color:#b02a37; font-size:.64rem">sin goce</span>
+                    <% } else { %>
+                      <span class="text-primary fw-bold d-block"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
+                      <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
+                    <% } %>
                   <% } else if (!c.presente && c.actividad) { %>
                     <div class="cel-act-info">
                       <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
@@ -627,6 +639,27 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <label class="form-label small mb-1">Empresa</label>
             <select class="form-select form-select-sm" id="panelEmpresa"></select>
           </div>
+
+          <!-- Tramo horario del día: es lo útil cuando YA hubo checada y la
+               actividad cubre otra parte de la jornada. Vacío = implícito. -->
+          <div class="mb-3 d-none" id="panelHorasWrap">
+            <label class="form-label small mb-1">Horario de la actividad</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <input type="time" class="form-control form-control-sm" id="panelHoraIni" title="Desde">
+              </div>
+              <div class="col-6">
+                <input type="time" class="form-control form-control-sm" id="panelHoraFin" title="Hasta">
+              </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-start mt-1 gap-2">
+              <small class="text-body-secondary" id="panelHorasAyuda" style="font-size:.72rem"></small>
+              <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none flex-shrink-0" id="panelHorasGuardar" style="font-size:.75rem">
+                Guardar horario
+              </button>
+            </div>
+          </div>
+
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="panelRecurrente">
             <label class="form-check-label small" for="panelRecurrente">
@@ -642,6 +675,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             </button>
           </div>
           <div class="small text-danger mt-2 d-none" id="panelError"></div>
+          <a href="#" id="panelLinkDetalle" class="small d-none d-block mt-2">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir la actividad completa
+          </a>
         </div>
       </div>
     </div>
@@ -673,7 +709,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
   document.querySelectorAll('td.cel-editable').forEach(function(td){
     td.addEventListener('click', function(){
-      ctx = { emp: td.dataset.emp, fecha: td.dataset.fecha, tieneActividad: false };
+      ctx = { emp: td.dataset.emp, fecha: td.dataset.fecha, tieneActividad: false, idActividad: null, idAsignacion: null, idRecurrencia: null, esRecurrente: false };
       if (!ctx.emp || !ctx.fecha) return;
 
       $('panelCargando').classList.remove('d-none');
@@ -722,6 +758,22 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
           const act = d.actividad;
           ctx.tieneActividad = !!act;
+          ctx.idActividad = act ? act.ID_Actividad : null;
+          ctx.idRecurrencia = act ? act.ID_Recurrencia : null;
+          ctx.esRecurrente = !!(act && act.esRecurrente);
+
+          // Enlace a la pantalla de detalle correspondiente, para gestionar
+          // todos los días de la actividad o la regla completa.
+          const linkDet = $('panelLinkDetalle');
+          if (act && (act.ID_Actividad || act.ID_Recurrencia)) {
+            linkDet.href = act.esRecurrente
+              ? '/encargado/recurrencias/' + act.ID_Recurrencia
+              : '/encargado/actividades/' + act.ID_Actividad;
+            linkDet.textContent = act.esRecurrente ? 'Abrir la regla completa' : 'Abrir la actividad completa';
+            linkDet.classList.remove('d-none');
+          } else {
+            linkDet.classList.add('d-none');
+          }
           $('panelSinActividad').classList.toggle('d-none', !!act);
           $('panelBadgeRec').classList.toggle('d-none', !(act && act.esRecurrente));
           $('panelQuitar').classList.toggle('d-none', !act);
@@ -731,6 +783,26 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
           $('panelNombreAct').value = act ? act.nombre : '';
           $('panelRecurrente').checked = !!(act && act.esRecurrente);
+
+          // Horario: solo tiene sentido en actividades puntuales (las
+          // recurrentes no materializan un día editable).
+          ctx.idAsignacion = act ? act.ID_Asignacion : null;
+          const wrapH = $('panelHorasWrap');
+          if (act && act.ID_Asignacion) {
+            const aHHMM = m => Number.isFinite(m)
+              ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+              : '';
+            $('panelHoraIni').value = aHHMM(act.horaInicio);
+            $('panelHoraFin').value = aHHMM(act.horaFin);
+            $('panelHorasAyuda').textContent = (Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
+              ? 'Solo cuenta este tramo; se suma a lo que marcó el checador.'
+              : (d.asistencia
+                  ? 'Vacío: cuenta desde las 8:00 hasta su primera checada.'
+                  : 'Vacío: cuenta jornada completa (9h).');
+            wrapH.classList.remove('d-none');
+          } else {
+            wrapH.classList.add('d-none');
+          }
 
           let tipoSel = '', empSel = '';
           if (act) {
@@ -771,23 +843,72 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     const empresa = $('panelEmpresa').value;
     if (!nombre || !tipo || !empresa) { mostrarError('Completa nombre, tipo y empresa'); return; }
 
+    const quiereRecurrente = $('panelRecurrente').checked;
     const body = {
       ID_Empleado: parseInt(ctx.emp),
       fecha: ctx.fecha,
-      modo: $('panelRecurrente').checked ? 'RECURRENTE' : 'PUNTUAL',
+      modo: quiereRecurrente ? 'RECURRENTE' : 'PUNTUAL',
       Nombre_Actividad: nombre,
       ID_Tipo_Actividad: tipo,
       ID_Empresa: empresa
     };
 
-    // Si ya había actividad, se quita primero para poder reemplazarla.
-    if (ctx.tieneActividad) {
-      enviarToggle({ ID_Empleado: body.ID_Empleado, fecha: body.fecha, modo: body.modo }, function(){
+    // Actividad PUNTUAL existente que sigue siendo puntual: UPDATE real sobre
+    // la actividad, sin borrar ni recrear el día (conserva ID e histórico).
+    // Ojo: afecta a TODOS los días de esa actividad, no solo a este.
+    if (ctx.idActividad && !ctx.esRecurrente && !quiereRecurrente) {
+      mostrarError('');
+      fetch('/encargado/actividades/' + ctx.idActividad + '/datos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Nombre_Actividad: nombre, ID_Tipo_Actividad: tipo, ID_Empresa: empresa })
+      })
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if (!res.ok) { mostrarError(res.error || 'No se pudo actualizar'); return; }
+          if (res.diasAfectados > 1) {
+            alert('Actualizado. El cambio aplica a los ' + res.diasAfectados + ' días de esta actividad.');
+          }
+          window.location.reload();
+        })
+        .catch(function(){ mostrarError('Error de conexión'); });
+      return;
+    }
+
+    // Si había una RECURRENTE y ahora se quiere puntual, el backend crea la
+    // puntual encima (gana sobre la regla) — no hay que quitar nada primero.
+    // Si había puntual, el backend la reemplaza al detectar datos distintos.
+    // Solo el paso a recurrente sobre una recurrente existente necesita
+    // detener la regla previa.
+    if (ctx.tieneActividad && ctx.esRecurrente && quiereRecurrente) {
+      enviarToggle({ ID_Empleado: body.ID_Empleado, fecha: body.fecha, modo: 'RECURRENTE' }, function(){
         enviarToggle(body, function(){ window.location.reload(); });
       });
     } else {
       enviarToggle(body, function(){ window.location.reload(); });
     }
+  });
+
+  // Guardar solo el tramo horario, sin tocar el resto de la actividad.
+  $('panelHorasGuardar').addEventListener('click', function(){
+    if (!ctx.idAsignacion) return;
+    const ini = $('panelHoraIni').value;
+    const fin = $('panelHoraFin').value;
+    if (!!ini !== !!fin) { mostrarError('Captura ambas horas, o deja las dos vacías'); return; }
+    if (ini && fin && fin <= ini) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+
+    mostrarError('');
+    fetch('/encargado/actividades/asignacion/' + ctx.idAsignacion + '/horas-json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Hora_Inicio: ini, Hora_Fin: fin })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { mostrarError(res.error || 'No se pudo guardar el horario'); return; }
+        window.location.reload();
+      })
+      .catch(function(){ mostrarError('Error de conexión'); });
   });
 
   $('panelQuitar').addEventListener('click', function(){

@@ -2,13 +2,19 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
   <div>
     <h2 class="fw-bold mb-1">¡Bienvenido, <%= user ? user.Nombre_Completo.split(' ')[0] : 'Usuario' %>!</h2>
-    <p class="text-body-secondary mb-0 small">Resumen de tu equipo y actividades — VITA</p>
+    <p class="text-body-secondary mb-0 small">Estado de tu equipo hoy — VITA</p>
   </div>
-  <div class="d-none d-md-block">
-    <span class="text-body-secondary small">
+  <div class="d-flex align-items-center gap-2">
+    <span class="text-body-secondary small d-none d-md-inline">
       <i class="bi bi-calendar3 me-1"></i>
       <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
     </span>
+    <a href="/encargado" class="btn btn-primary btn-sm">
+      <i class="bi bi-calendar3 me-1"></i>Calendario
+    </a>
+    <a href="/encargado/asistencia" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-table me-1"></i>Asistencia
+    </a>
   </div>
 </div>
 
@@ -17,129 +23,152 @@
   <i class="bi bi-exclamation-triangle me-2"></i>
   Tu usuario no está vinculado a un empleado. Contacta a un administrador para poder gestionar tu equipo.
 </div>
+<% } else if (equipoSize === 0) { %>
+<div class="alert alert-info">
+  <i class="bi bi-people me-2"></i>
+  Aún no tienes empleados vigentes en tu equipo. Un SuperAdmin debe agregarte miembros en Grupos.
+</div>
 <% } else { %>
 
-<!-- Stats -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-primary h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Mis Grupos</div>
-          <div class="stat-value"><%= grupos.length %></div>
-        </div>
-        <i class="bi bi-diagram-3-fill stat-icon"></i>
-      </div>
+<style>
+  .fila-hoy { border-left:4px solid transparent; }
+  .fila-hoy.st-sin  { border-left-color:#dc3545; background:#fdf2f3; }
+  .fila-hoy.st-act  { border-left-color:#6f42c1; }
+  .fila-hoy.st-pres { border-left-color:#198754; }
+  .fila-hoy.st-comp { border-left-color:#198754; }
+  .fila-hoy.st-aus  { border-left-color:#0d6efd; }
+  .fila-hoy .hora-dato { font-variant-numeric:tabular-nums; }
+  .prox-dia { min-width:190px; }
+</style>
+
+<!-- Estado de HOY -->
+<div class="card mb-4">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-people-fill text-primary me-2"></i>
+      Mi equipo hoy
+      <small class="text-body-secondary fw-normal ms-1">
+        <%= new Date().toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'long' }) %>
+      </small>
+    </h5>
+    <div class="d-flex flex-wrap gap-2 small">
+      <% if (resumenHoy.sinChecada > 0) { %>
+        <span class="badge bg-danger"><%= resumenHoy.sinChecada %> sin checada</span>
+      <% } %>
+      <% if (resumenHoy.enActividad > 0) { %>
+        <span class="badge" style="background-color:#6f42c1"><%= resumenHoy.enActividad %> en actividad</span>
+      <% } %>
+      <span class="badge bg-success"><%= resumenHoy.presentes %> presentes</span>
+      <% if (resumenHoy.ausencias > 0) { %>
+        <span class="badge bg-primary"><%= resumenHoy.ausencias %> ausencia justificada</span>
+      <% } %>
+      <span class="badge bg-secondary"><%= resumenHoy.total %> en total</span>
     </div>
   </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-success h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Mi Equipo</div>
-          <div class="stat-value"><%= equipoSize %></div>
-        </div>
-        <i class="bi bi-people-fill stat-icon"></i>
-      </div>
+
+  <% if (esDomingoHoy) { %>
+    <div class="card-body text-center text-body-secondary py-4">
+      <i class="bi bi-cup-hot d-block mb-2 fs-3"></i>
+      Domingo — día de descanso
     </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-info h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Días esta semana</div>
-          <div class="stat-value"><%= actividadesSemana.length %></div>
+  <% } else { %>
+  <div class="list-group list-group-flush">
+    <% equipoHoy.forEach(function(e) { %>
+      <%
+        const clase = { SIN_CHECADA:'st-sin', ACTIVIDAD:'st-act', PRESENTE:'st-pres', COMPLETO:'st-comp', AUSENCIA:'st-aus', DESCANSO:'' }[e.estado];
+      %>
+      <div class="list-group-item fila-hoy <%= clase %> d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2" style="min-width:200px">
+          <% if (e.estado === 'SIN_CHECADA') { %>
+            <i class="bi bi-exclamation-circle-fill text-danger"></i>
+          <% } else if (e.estado === 'ACTIVIDAD') { %>
+            <i class="bi bi-signpost-split-fill" style="color:<%= e.actividad.color || '#6f42c1' %>"></i>
+          <% } else if (e.estado === 'AUSENCIA') { %>
+            <i class="bi bi-calendar-check-fill text-primary"></i>
+          <% } else { %>
+            <i class="bi bi-check-circle-fill text-success"></i>
+          <% } %>
+          <span class="fw-semibold"><%= e.nombre %></span>
         </div>
-        <i class="bi bi-calendar-week-fill stat-icon"></i>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-warning h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Vencen en 7 días</div>
-          <div class="stat-value"><%= porVencer.length %></div>
+
+        <div class="flex-grow-1 small">
+          <% if (e.estado === 'SIN_CHECADA') { %>
+            <span class="text-danger">Sin checada registrada</span>
+          <% } else if (e.estado === 'ACTIVIDAD') { %>
+            <span class="fw-semibold" style="color:<%= e.actividad.color || '#6f42c1' %>"><%= e.actividad.nombre %></span>
+            <span class="text-body-secondary ms-1"><%= e.actividad.empresa || '' %></span>
+            <% if (e.actividad.esRecurrente) { %><i class="bi bi-arrow-repeat text-body-secondary ms-1" title="Recurrente"></i><% } %>
+          <% } else if (e.estado === 'AUSENCIA') { %>
+            <span class="text-primary"><%= e.ausencia %></span>
+          <% } else { %>
+            <span class="hora-dato">
+              <i class="bi bi-box-arrow-in-right text-success"></i> <%= e.entrada %>
+              <% if (e.salida) { %>
+                <i class="bi bi-box-arrow-right text-danger ms-2"></i> <%= e.salida %>
+              <% } else { %>
+                <span class="text-body-secondary ms-2">— en curso</span>
+              <% } %>
+            </span>
+            <% if (e.planta) { %><span class="text-body-secondary ms-2"><%= e.planta %></span><% } %>
+          <% } %>
         </div>
-        <i class="bi bi-hourglass-split stat-icon"></i>
+
+        <div class="text-end" style="min-width:110px">
+          <% if (e.estado === 'COMPLETO' || e.estado === 'PRESENTE') { %>
+            <span class="badge bg-light text-dark border"><%= e.horas.toFixed(1) %>h</span>
+          <% } else if (e.estado === 'ACTIVIDAD' || e.estado === 'AUSENCIA') { %>
+            <span class="badge bg-light text-dark border">9.0h</span>
+          <% } else { %>
+            <a href="/encargado/asistencia" class="btn btn-sm btn-outline-danger">Revisar</a>
+          <% } %>
+        </div>
       </div>
-    </div>
+    <% }); %>
   </div>
+  <% } %>
 </div>
 
-<div class="row g-3">
-  <!-- Quick Actions -->
-  <div class="col-12 col-lg-4 col-xl-3">
-    <div class="card h-100">
-      <div class="card-header">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-lightning-fill text-warning me-2"></i>
-          Acciones Rápidas
-        </h5>
-      </div>
-      <div class="card-body d-grid gap-2">
-        <a href="/encargado" class="btn btn-outline-primary">
-          <i class="bi bi-calendar3"></i> Calendario de Actividades
-        </a>
-        <a href="/encargado/asistencia" class="btn btn-outline-info">
-          <i class="bi bi-table"></i> Asistencia de mi Equipo
-        </a>
-        <a href="/encargado/actividades/crear" class="btn btn-outline-secondary">
-          <i class="bi bi-plus-lg"></i> Alta masiva (varios días)
-        </a>
-      </div>
-    </div>
+<!-- Próximos días asignados -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-calendar-week text-primary me-2"></i>
+      Próximos días asignados
+    </h5>
+    <a href="/encargado" class="btn btn-sm btn-outline-primary">Ver calendario</a>
   </div>
-
-  <!-- Actividades de la semana -->
-  <div class="col-12 col-lg-8 col-xl-9">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">
-          <i class="bi bi-calendar-week text-primary me-2"></i>
-          Actividades de mi equipo esta semana
-        </h5>
-        <a href="/encargado" class="btn btn-sm btn-primary">Ver todas</a>
+  <div class="card-body">
+    <% if (proximosDias && proximosDias.length > 0) { %>
+      <div class="d-flex gap-3 overflow-auto pb-2">
+        <% proximosDias.forEach(function(d) { %>
+        <div class="prox-dia border rounded p-2 flex-shrink-0">
+          <div class="fw-semibold small mb-2 pb-1 border-bottom">
+            <%= d.nombreDia %> <%= String(d.dia).padStart(2,'0') %>
+            <span class="badge bg-secondary ms-1"><%= d.items.length %></span>
+          </div>
+          <% d.items.slice(0, 6).forEach(function(i) { %>
+            <div class="small mb-1">
+              <div class="text-truncate" style="max-width:170px"><%= i.nombreEmpleado %></div>
+              <div class="text-truncate" style="max-width:170px; font-size:.72rem; color:<%= i.color || '#6f42c1' %>">
+                <%= i.nombre %><% if (i.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
+              </div>
+            </div>
+          <% }); %>
+          <% if (d.items.length > 6) { %>
+            <div class="text-body-secondary" style="font-size:.72rem">+<%= d.items.length - 6 %> más</div>
+          <% } %>
+        </div>
+        <% }); %>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Empleado</th>
-                <th>Día</th>
-                <th>Tipo</th>
-                <th>Actividad</th>
-                <th>Empresa</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (actividadesSemana && actividadesSemana.length > 0) { %>
-                <% actividadesSemana.forEach(function(a) { %>
-                <tr>
-                  <td class="fw-semibold"><%= a.nombreEmpleado %></td>
-                  <td><%= a.nombreDia %> <%= a.fecha.slice(5).split('-').reverse().join('/') %></td>
-                  <td>
-                    <span class="badge" style="background-color:#6f42c1"><i class="bi bi-signpost-split-fill"></i> <%= a.tipo %></span>
-                    <% if (a.esRecurrente) { %><i class="bi bi-arrow-repeat text-body-secondary ms-1" title="Recurrente"></i><% } %>
-                  </td>
-                  <td><%= a.nombre %></td>
-                  <td class="text-body-secondary"><%= a.empresa || '-' %></td>
-                </tr>
-                <% }); %>
-              <% } else { %>
-                <tr>
-                  <td colspan="5" class="text-center text-body-secondary py-5">
-                    <i class="bi bi-calendar-x d-block mb-2 fs-3"></i>
-                    Sin actividades esta semana
-                  </td>
-                </tr>
-              <% } %>
-            </tbody>
-          </table>
+    <% } else { %>
+      <div class="text-center text-body-secondary py-4">
+        <i class="bi bi-calendar-x d-block mb-2 fs-3"></i>
+        Sin días asignados para el resto de la semana
+        <div class="mt-2">
+          <a href="/encargado" class="btn btn-sm btn-primary">Asignar actividades</a>
         </div>
       </div>
-    </div>
+    <% } %>
   </div>
 </div>
 

@@ -23,7 +23,10 @@
     "vita:logs:app": "docker logs -f erp_rh_app",
     "vita:rebuild": "docker compose up -d --build --force-recreate --no-deps app",
     "vita:deploy": "git pull origin main && npm run vita:rebuild",
+    "vita:deploy:full": "npm run vita:backup && git pull origin main && npm run vita:rebuild && npm run vita:migrate && npm run vita:generate && npm run vita:restart",
     "vita:migrate": "docker exec erp_rh_app npx prisma migrate deploy",
+    "vita:generate": "docker exec erp_rh_app npx prisma generate",
+    "vita:migrate:status": "docker exec erp_rh_app npx prisma migrate status",
     "vita:seed": "docker exec erp_rh_app node prisma/seed.js",
     "vita:backup": "docker exec erp_rh_postgres pg_dump -U erp_user erp_rh | gzip > backups/erp_rh_backup.sql.gz"
   },

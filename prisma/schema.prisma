@@ -916,6 +916,12 @@ model Actividad_Asignaciones {
   ID_Actividad  Int
   ID_Empleado   Int
   Fecha         DateTime @db.Date
+  // Tramo horario real de la actividad ese día, en minutos desde medianoche
+  // (ej. 480 = 8:00). Ambos null = jornada implícita: 9h fijas si no hubo
+  // checada, o 8:00→primera checada si sí la hubo. Con valores, cuenta solo
+  // ese tramo (descontando comida si lo cruza) y se SUMA a las horas reales.
+  Hora_Inicio   Int?
+  Hora_Fin      Int?
   CreatedAt     DateTime @default(now())
   CreatedBy     String?  @db.VarChar(100)
 

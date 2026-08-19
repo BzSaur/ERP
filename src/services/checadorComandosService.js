@@ -16,6 +16,7 @@
  */
 
 import prisma from '../config/database.js';
+import { logger } from '../config/logger.js';
 
 function nombreCompleto(emp) {
   return [emp.Nombre, emp.Apellido_Paterno, emp.Apellido_Materno]
@@ -82,16 +83,44 @@ export async function sincronizarTodos(idChecador = null) {
 
   if (destinos.length === 0) return { encolados: 0, eliminados: 0, checadores: 0 };
 
-  // "Activo para el checador" = cualquier estatus salvo BAJA real (VACACIONES/
-  // INCAPACIDAD/SUSPENDIDO deben permanecer sincronizados en el device).
+  // Antes de decidir quién va al device: aplicar el bloqueo por faltas
+  // consecutivas. Va aquí y no en una pantalla para que surta efecto en cuanto
+  // llegan las checadas nuevas — quien completó su racha sale del checador en
+  // esta misma pasada. Import diferido: evita un ciclo con asistenciaService.
+  let bloqueadosPorAbandono = [];
+  try {
+    const { evaluarYBloquear } = await import('./abandonoService.js');
+    const r = await evaluarYBloquear(null, null);
+    bloqueadosPorAbandono = r.bloqueados;
+    if (bloqueadosPorAbandono.length) {
+      logger.info(`[ADMS] Bloqueo por faltas: ${bloqueadosPorAbandono.length} empleado(s) retirados del checador`);
+    }
+  } catch (err) {
+    // Nunca debe impedir la sincronización.
+    logger.error(`[ADMS] Error al evaluar abandono: ${err.message}`);
+  }
+
+  // Tres grupos, porque el device se trata distinto en cada uno:
+  //  - ACTIVOS (incl. VACACIONES/INCAPACIDAD): alta normal, pueden checar.
+  //  - SUSPENDIDO: se DESHABILITA sin borrar. El PIN y la huella siguen en el
+  //    device; solo se le niega el acceso. Así, al reactivar no hay que
+  //    re-enrolar biométricos (DELETE sí los borraría y se perderían).
+  //  - BAJA: se borra del device de verdad (ya no es empleado).
   const activos = await prisma.empleados.findMany({
-    where: { estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } } },
+    where: { estatus: { is: { Nombre_Estatus: { notIn: ['BAJA', 'SUSPENDIDO'] } } } },
     select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
   });
   const activosSet = new Set(activos.map(e => e.ID_Empleado));
 
+  const suspendidos = await prisma.empleados.findMany({
+    where: { estatus: { is: { Nombre_Estatus: 'SUSPENDIDO' } } },
+    select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
+  });
+  const suspendidosSet = new Set(suspendidos.map(e => e.ID_Empleado));
+
   let encolados = 0;
   let eliminados = 0;
+  let deshabilitados = 0;
 
   for (const d of destinos) {
     // Todos los comandos de usuario de este device, para saber el estado de cada PIN
@@ -115,9 +144,21 @@ export async function sincronizarTodos(idChecador = null) {
       else enDevice.add(c.ID_Empleado);
     }
 
-    // ALTAS: activos que el device no conoce (o tienen un DELETE previo y vuelven)
+    // Último comando de habilitación por PIN, para no re-encolar lo mismo.
+    const ultimoEstado = new Map(); // PIN -> 'habilitado' | 'deshabilitado'
+    for (const c of comandos) {
+      if (c.ID_Empleado == null) continue;
+      if (!['pendiente', 'enviado', 'confirmado'].includes(c.Estatus)) continue;
+      if (c.Tipo_Comando === 'CREATE_USER') ultimoEstado.set(c.ID_Empleado, 'habilitado');
+      else if (c.Tipo_Comando === 'UPDATE_USER') ultimoEstado.set(c.ID_Empleado, 'deshabilitado');
+    }
+
+    // ALTAS: activos que el device no conoce, que traen un DELETE previo, o
+    // que venían deshabilitados y hay que volver a habilitar (reactivación).
     const aAltar = activos.filter(e =>
-      !enDevice.has(e.ID_Empleado) || conDeletePend.has(e.ID_Empleado)
+      !enDevice.has(e.ID_Empleado) ||
+      conDeletePend.has(e.ID_Empleado) ||
+      ultimoEstado.get(e.ID_Empleado) === 'deshabilitado'
     );
     if (aAltar.length > 0) {
       await prisma.checadores_Comandos.createMany({
@@ -131,9 +172,30 @@ export async function sincronizarTodos(idChecador = null) {
       encolados += aAltar.length;
     }
 
-    // BAJAS: PINs presentes en el device que ya NO son empleados activos
-    // y aún no tienen un DELETE en cola/confirmado.
-    const aBorrar = [...enDevice].filter(pin => !activosSet.has(pin) && !conDeletePend.has(pin));
+    // BLOQUEOS: suspendidos que el device conoce y siguen habilitados. Se
+    // deshabilitan con Enable=0 (el PIN y la huella permanecen en el device).
+    const aDeshabilitar = suspendidos.filter(e =>
+      enDevice.has(e.ID_Empleado) &&
+      !conDeletePend.has(e.ID_Empleado) &&
+      ultimoEstado.get(e.ID_Empleado) !== 'deshabilitado'
+    );
+    if (aDeshabilitar.length > 0) {
+      await prisma.checadores_Comandos.createMany({
+        data: aDeshabilitar.map(e => ({
+          ID_Checador: d.ID_Checador,
+          Tipo_Comando: 'UPDATE_USER',
+          ID_Empleado: e.ID_Empleado,
+          Comando: `DATA UPDATE USERINFO PIN=${e.ID_Empleado}\tName=${nombreCompleto(e)}\tPri=0\tEnable=0`
+        }))
+      });
+      deshabilitados += aDeshabilitar.length;
+    }
+
+    // BAJAS REALES: PINs en el device que ya no son empleados vigentes ni
+    // suspendidos. Aquí sí se borra (con su huella): ya no trabajan aquí.
+    const aBorrar = [...enDevice].filter(pin =>
+      !activosSet.has(pin) && !suspendidosSet.has(pin) && !conDeletePend.has(pin)
+    );
     if (aBorrar.length > 0) {
       await prisma.checadores_Comandos.createMany({
         data: aBorrar.map(pin => ({
@@ -147,7 +209,7 @@ export async function sincronizarTodos(idChecador = null) {
     }
   }
 
-  return { encolados, eliminados, checadores: destinos.length };
+  return { encolados, eliminados, deshabilitados, checadores: destinos.length, bloqueadosPorAbandono };
 }
 
 /** Encola DELETE_USER (baja) en todos los checadores activos. */

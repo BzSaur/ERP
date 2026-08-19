@@ -1,0 +1,146 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/encargado">Actividades de Campo</a></li>
+      <li class="breadcrumb-item active">Recurrencia</li>
+    </ol>
+  </nav>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h4 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i><%= regla.Nombre_Actividad %></h4>
+    <span class="badge" style="background-color:<%= regla.tipo_actividad.Color %>">
+      <i class="bi bi-signpost-split-fill me-1"></i><%= regla.tipo_actividad.Nombre %>
+    </span>
+    <span class="badge bg-primary"><i class="bi bi-building me-1"></i><%= regla.empresa.Nombre_Empresa %></span>
+  </div>
+  <p class="text-body-secondary mt-2 mb-0">
+    <i class="bi bi-person me-1"></i>
+    <%= [regla.empleado.Nombre, regla.empleado.Apellido_Paterno, regla.empleado.Apellido_Materno].filter(Boolean).join(' ') %>
+    <% if (regla.empleado.area) { %><span class="ms-1">· <%= regla.empleado.area.Nombre_Area %></span><% } %>
+    <% if (regla.grupo) { %><span class="ms-1">· Grupo: <%= regla.grupo.Nombre_Grupo %></span><% } %>
+  </p>
+</div>
+
+<% if (messages.success) { %>
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-2"></i><%= messages.success %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<div class="alert alert-light border">
+  <i class="bi bi-info-circle me-2"></i>
+  Esta regla asigna la actividad automáticamente cada semana en los días marcados.
+  Si algún día concreto necesita otra cosa, asígnale una actividad puntual desde el calendario: la puntual siempre gana sobre la regla.
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header"><i class="bi bi-pencil-square me-2"></i><strong>Editar regla</strong></div>
+      <div class="card-body">
+        <form action="/encargado/recurrencias/<%= regla.ID_Recurrencia %>" method="POST">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nombre de la actividad <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="Nombre_Actividad" required value="<%= regla.Nombre_Actividad %>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tipo <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Tipo_Actividad" required>
+                <% tiposActividad.forEach(function(t) { %>
+                <option value="<%= t.ID_Tipo_Actividad %>" <%= regla.ID_Tipo_Actividad === t.ID_Tipo_Actividad ? 'selected' : '' %>><%= t.Nombre %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Empresa <span class="text-danger">*</span></label>
+              <select class="form-select" name="ID_Empresa" required>
+                <% empresas.forEach(function(emp) { %>
+                <option value="<%= emp.ID_Empresa %>" <%= regla.ID_Empresa === emp.ID_Empresa ? 'selected' : '' %>><%= emp.Nombre_Empresa %></option>
+                <% }); %>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label d-block">Días de la semana <span class="text-danger">*</span></label>
+              <div class="d-flex flex-wrap gap-2">
+                <% [1,2,3,4,5,6].forEach(function(dia) { %>
+                  <% const activo = diasActivos.includes(dia); %>
+                  <input type="checkbox" class="btn-check" name="Dia_Semana" value="<%= dia %>" id="dia<%= dia %>" autocomplete="off" <%= activo ? 'checked' : '' %>>
+                  <label class="btn btn-outline-primary" for="dia<%= dia %>" style="min-width:92px">
+                    <%= nombresDia[dia] %>
+                  </label>
+                <% }); %>
+              </div>
+              <small class="text-body-secondary">
+                Desmarcar un día lo elimina de la regla. Marcar uno nuevo lo agrega con los mismos datos y vigencia.
+              </small>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Vigente desde <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="Fecha_Inicio" required value="<%= fechaInicio %>">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Hasta</label>
+              <input type="date" class="form-control" name="Fecha_Fin" value="<%= fechaFin %>">
+              <small class="text-body-secondary">Vacío = indefinida.</small>
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+              <a href="/encargado" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Cancelar</a>
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar cambios</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header py-2"><strong class="small">Días activos de esta regla</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 small">
+          <thead class="table-light">
+            <tr><th>Día</th><th>Desde</th><th>Hasta</th></tr>
+          </thead>
+          <tbody>
+            <% hermanas.forEach(function(h) { %>
+            <tr>
+              <td><strong><%= nombresDia[h.Dia_Semana] %></strong></td>
+              <td><%= new Date(h.Fecha_Inicio).toLocaleDateString('es-MX', { timeZone: 'UTC' }) %></td>
+              <td><%= h.Fecha_Fin ? new Date(h.Fecha_Fin).toLocaleDateString('es-MX', { timeZone: 'UTC' }) : '—' %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-body-secondary" style="font-size:.75rem">
+        Cada día de la semana es un registro propio; al guardar se aplican los mismos datos a todos.
+      </div>
+    </div>
+
+    <div class="card border-danger">
+      <div class="card-header bg-danger bg-opacity-10 py-2"><strong class="small">Detener la regla</strong></div>
+      <div class="card-body">
+        <p class="small text-body-secondary mb-3">
+          Deja de aplicar desde hoy. No borra el histórico: los días pasados que ya se resolvieron con esta regla se conservan.
+        </p>
+        <form action="/encargado/recurrencias/<%= regla.ID_Recurrencia %>/detener" method="POST"
+              onsubmit="return confirm('¿Detener esta recurrencia? Dejará de aplicar a partir de hoy.')">
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-stop-circle me-1"></i>Detener recurrencia
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

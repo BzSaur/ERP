@@ -16,7 +16,7 @@ import auditoriaRoutes from './auditoria.js';
 import { isAuthenticated } from '../middleware/auth.js';
 import prisma from '../config/database.js';
 import * as gruposService from '../services/gruposService.js';
-import { resolverActividadesPorRango } from '../services/asistenciaService.js';
+import { resolverActividadesPorRango, obtenerAusenciasJustificadas, ausenciaEnFecha } from '../services/asistenciaService.js';
 
 const router = Router();
 
@@ -37,7 +37,9 @@ router.get('/', isAuthenticated, async (req, res, next) => {
         return res.render('home-encargado', {
           title: 'Dashboard',
           sinVincular: true,
-          grupos: [], equipoSize: 0, actividadesSemana: [], porVencer: []
+          grupos: [], equipoSize: 0, porVencer: [],
+          equipoHoy: [], resumenHoy: { presentes: 0, enActividad: 0, sinChecada: 0, ausencias: 0, total: 0 },
+          proximosDias: [], esDomingoHoy: false
         });
       }
 
@@ -66,27 +68,91 @@ router.get('/', isAuthenticated, async (req, res, next) => {
 
       const NOMBRES_DIA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
       const empPorId = new Map(equipo.map(e => [e.ID_Empleado, e]));
-      const actividadesSemana = [];
+      const hoyStr = hoy.toISOString().slice(0, 10);
+
+      // --- Situación de HOY: checadas reales + actividad delegada ---
+      const [asistenciaHoy, ausenciasHoy] = await Promise.all([
+        equipoIds.length
+          ? prisma.empleados_Asistencia.findMany({
+              where: { ID_Empleado: { in: equipoIds }, Fecha: hoy },
+              select: { ID_Empleado: true, Presente: true, Hora_Entrada: true, Hora_Salida: true, Horas_Trabajadas: true, Ubicacion_Entrada: true }
+            })
+          : Promise.resolve([]),
+        equipoIds.length
+          ? obtenerAusenciasJustificadas(hoy, hoy)
+          : Promise.resolve(new Map())
+      ]);
+      const asistPorEmp = new Map(asistenciaHoy.map(a => [a.ID_Empleado, a]));
+
+      const fmtHora = (d) => d ? new Date(d).toTimeString().slice(0, 5) : null;
+      const esDomingoHoy = hoy.getDay() === 0;
+
+      const equipoHoy = equipo.map(e => {
+        const a = asistPorEmp.get(e.ID_Empleado) || null;
+        const act = actividadesMap.get(`${e.ID_Empleado}_${hoyStr}`) || null;
+        const ausencia = ausenciaEnFecha(ausenciasHoy, e.ID_Empleado, hoy);
+
+        // Estado del día, en orden de precedencia visual.
+        let estado;
+        if (esDomingoHoy) estado = 'DESCANSO';
+        else if (a && a.Hora_Entrada) estado = a.Hora_Salida ? 'COMPLETO' : 'PRESENTE';
+        else if (act) estado = 'ACTIVIDAD';
+        else if (ausencia) estado = 'AUSENCIA';
+        else estado = 'SIN_CHECADA';
+
+        return {
+          ID_Empleado: e.ID_Empleado,
+          nombre: [e.Nombre, e.Apellido_Paterno].filter(Boolean).join(' '),
+          estado,
+          entrada: fmtHora(a?.Hora_Entrada),
+          salida: fmtHora(a?.Hora_Salida),
+          horas: Number(a?.Horas_Trabajadas) || 0,
+          planta: a?.Ubicacion_Entrada || null,
+          actividad: act,
+          ausencia
+        };
+      });
+
+      // Los que requieren atención primero.
+      const ordenEstado = { SIN_CHECADA: 0, ACTIVIDAD: 1, PRESENTE: 2, COMPLETO: 3, AUSENCIA: 4, DESCANSO: 5 };
+      equipoHoy.sort((a, b) => ordenEstado[a.estado] - ordenEstado[b.estado] || a.nombre.localeCompare(b.nombre));
+
+      const resumenHoy = {
+        presentes: equipoHoy.filter(e => e.estado === 'PRESENTE' || e.estado === 'COMPLETO').length,
+        enActividad: equipoHoy.filter(e => e.estado === 'ACTIVIDAD').length,
+        sinChecada: equipoHoy.filter(e => e.estado === 'SIN_CHECADA').length,
+        ausencias: equipoHoy.filter(e => e.estado === 'AUSENCIA').length,
+        total: equipoHoy.length
+      };
+
+      // --- Próximos días ya asignados (de mañana en adelante) ---
+      const proximos = new Map(); // yyyy-mm-dd -> { fecha, nombreDia, items[] }
       for (const [key, info] of actividadesMap) {
         const [empId, fechaStr] = key.split('_');
+        if (fechaStr <= hoyStr) continue; // hoy ya se muestra arriba
         const emp = empPorId.get(parseInt(empId));
         if (!emp) continue;
-        const f = new Date(fechaStr + 'T12:00:00');
-        actividadesSemana.push({
+        if (!proximos.has(fechaStr)) {
+          const f = new Date(fechaStr + 'T12:00:00');
+          proximos.set(fechaStr, { fecha: fechaStr, nombreDia: NOMBRES_DIA_CORTO[f.getDay()], dia: f.getDate(), items: [] });
+        }
+        proximos.get(fechaStr).items.push({
           nombreEmpleado: [emp.Nombre, emp.Apellido_Paterno].filter(Boolean).join(' '),
-          fecha: fechaStr,
-          nombreDia: NOMBRES_DIA_CORTO[f.getDay()],
           ...info
         });
       }
-      actividadesSemana.sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const proximosDias = [...proximos.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+      proximosDias.forEach(d => d.items.sort((a, b) => a.nombreEmpleado.localeCompare(b.nombreEmpleado)));
 
       return res.render('home-encargado', {
         title: 'Dashboard',
         sinVincular: false,
         grupos,
         equipoSize: equipo.length,
-        actividadesSemana,
+        equipoHoy,
+        resumenHoy,
+        proximosDias,
+        esDomingoHoy,
         porVencer
       });
     }

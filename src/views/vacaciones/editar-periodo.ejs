@@ -1,0 +1,113 @@
+<!-- Header -->
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1">
+      <li class="breadcrumb-item"><a href="/vacaciones">Vacaciones</a></li>
+      <li class="breadcrumb-item active">Editar periodo</li>
+    </ol>
+  </nav>
+  <h4 class="mb-0">Editar periodo de vacaciones</h4>
+  <p class="text-body-secondary mb-0">
+    <%= [periodo.empleado.Nombre, periodo.empleado.Apellido_Paterno, periodo.empleado.Apellido_Materno].filter(Boolean).join(' ') %>
+    <% if (periodo.vacacion) { %><span class="ms-1">· Año <%= periodo.vacacion.Anio %></span><% } %>
+  </p>
+</div>
+
+<% if (messages.error) { %>
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-2"></i><%= messages.error %>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<% } %>
+
+<% if (periodo.Estado === 'CANCELADO') { %>
+<div class="alert alert-secondary">
+  <i class="bi bi-x-circle me-2"></i>
+  Este periodo está <strong>cancelado</strong>: no cuenta como vacaciones ni descuenta días del saldo.
+</div>
+<% } %>
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-calendar-range me-2"></i><strong>Datos del periodo</strong></div>
+      <div class="card-body">
+        <form action="/vacaciones/periodos/<%= periodo.ID_Periodo_Vac %>" method="POST">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Desde <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="Fecha_Inicio" required value="<%= fechaInicio %>">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Hasta <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="Fecha_Fin" required value="<%= fechaFin %>">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Observaciones</label>
+              <textarea class="form-control" name="Observaciones" rows="2"><%= periodo.Observaciones || '' %></textarea>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <a href="/vacaciones" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Cancelar</a>
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar cambios</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="card-footer text-body-secondary small">
+        Al cambiar las fechas se recalculan los días y se ajusta el saldo del año automáticamente.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card mb-4">
+      <div class="card-header py-2"><strong class="small">Saldo del año</strong></div>
+      <div class="card-body">
+        <% if (periodo.vacacion) { %>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-body-secondary small">Días de este periodo</span>
+          <strong><%= periodo.Dias %></strong>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-body-secondary small">Correspondientes al año</span>
+          <strong><%= periodo.vacacion.Dias_Proporcionales %></strong>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-body-secondary small">Tomados</span>
+          <strong><%= periodo.vacacion.Dias_Tomados %></strong>
+        </div>
+        <div class="d-flex justify-content-between">
+          <span class="text-body-secondary small">Pendientes</span>
+          <strong class="<%= periodo.vacacion.Dias_Pendientes > 0 ? 'text-success' : 'text-body-secondary' %>">
+            <%= periodo.vacacion.Dias_Pendientes %>
+          </strong>
+        </div>
+        <% } else { %>
+        <p class="text-body-secondary small mb-0">Sin registro anual asociado.</p>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (periodo.Estado !== 'CANCELADO') { %>
+    <div class="card border-danger">
+      <div class="card-header bg-danger bg-opacity-10 py-2"><strong class="small">Cancelar periodo</strong></div>
+      <div class="card-body">
+        <p class="small text-body-secondary mb-3">
+          El periodo deja de contar como vacaciones y sus <strong><%= periodo.Dias %> día(s)</strong>
+          vuelven al saldo del empleado. El registro se conserva para histórico.
+        </p>
+        <form action="/vacaciones/periodos/<%= periodo.ID_Periodo_Vac %>/cancelar" method="POST"
+              onsubmit="return confirm('¿Cancelar este periodo y devolver <%= periodo.Dias %> día(s) al saldo?')">
+          <div class="mb-2">
+            <label class="form-label small mb-1">Motivo (opcional)</label>
+            <input type="text" class="form-control form-control-sm" name="Motivo_Cancelacion" placeholder="Ej: capturado por error">
+          </div>
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-x-circle me-1"></i>Cancelar periodo
+          </button>
+        </form>
+      </div>
+    </div>
+    <% } %>
+  </div>
+</div>

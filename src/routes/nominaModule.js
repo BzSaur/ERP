@@ -9,6 +9,7 @@ import { isAuthenticated, isAdminOrRH } from '../middleware/auth.js';
 // Importar controllers
 import * as nominaController from '../controllers/nominaController.js';
 import * as vacacionesController from '../controllers/vacacionesController.js';
+import * as incidenciasController from '../controllers/incidenciasController.js';
 import * as aguinaldoController from '../controllers/aguinaldoController.js';
 import * as finiquitoController from '../controllers/finiquitoController.js';
 import * as horasAdicionalesController from '../controllers/horasAdicionalesController.js';
@@ -20,7 +21,7 @@ const router = Router();
 // gate de rol se limita a los prefijos de este módulo. Un router.use(isAdminOrRH)
 // sin path interceptaría TODO request (incluido /asistencia) y rompería CONSULTA.
 router.use(isAuthenticated);
-router.use(['/nomina', '/vacaciones', '/aguinaldo', '/finiquito', '/horas-adicionales'], isAdminOrRH);
+router.use(['/nomina', '/vacaciones', '/incidencias', '/aguinaldo', '/finiquito', '/horas-adicionales'], isAdminOrRH);
 
 // ============================================================
 // PERÍODOS Y NÓMINA
@@ -68,6 +69,22 @@ router.get('/vacaciones/crear', vacacionesController.crear);
 
 // Guardar vacaciones
 router.post('/vacaciones', vacacionesController.store);
+
+// Editar / cancelar un periodo ya registrado (ajusta el saldo del año)
+router.get('/vacaciones/periodos/:id/editar', vacacionesController.editarPeriodo);
+router.post('/vacaciones/periodos/:id', vacacionesController.actualizarPeriodo);
+router.post('/vacaciones/periodos/:id/cancelar', vacacionesController.cancelarPeriodo);
+
+// Incidencias: faltas, permisos e incapacidades (todo lo que no es vacaciones)
+router.get('/incidencias', incidenciasController.index);
+router.get('/incidencias/crear', incidenciasController.crear);
+router.post('/incidencias', incidenciasController.store);
+// Van ANTES de /incidencias/:id para que no se tomen como un id.
+router.post('/incidencias/reactivar-lote', incidenciasController.reactivarLote);
+router.post('/incidencias/reactivar/:idEmpleado', incidenciasController.reactivarEmpleado);
+router.get('/incidencias/:id/editar', incidenciasController.editar);
+router.post('/incidencias/:id', incidenciasController.actualizar);
+router.post('/incidencias/:id/cancelar', incidenciasController.cancelar);
 
 // Aprobar vacaciones
 router.post('/vacaciones/:id/aprobar', vacacionesController.aprobar);

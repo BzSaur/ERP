@@ -71,7 +71,8 @@ export const index = async (req, res, next) => {
           return res.render('encargado/index', {
             title: 'Actividades de Campo',
             equipo: [], fechas: [], celdas: new Map(),
-            empresas: [], tiposActividad: [],
+            empresas: [], tiposActividad: [], actividadesDelRango: [], recurrenciasDelRango: [],
+            nombresDia: NOMBRES_DIA,
             fechaInicio: '', fechaFin: '',
             esSupervisorParaDelegar: true,
             encargadosDisponibles,
@@ -124,10 +125,63 @@ export const index = async (req, res, next) => {
       select: { ID_Empresa: true, ID_Tipo_Actividad: true }
     });
 
+    // Actividades puntuales con días en el rango: dan acceso a su pantalla de
+    // detalle para editarlas (nombre/tipo/empresa) sin pasar por las celdas.
+    const actividadesDelRango = await prisma.actividades_Campo.findMany({
+      where: {
+        ID_Responsable: miId,
+        asignaciones: { some: { Fecha: { gte: inicio, lte: fin } } }
+      },
+      include: {
+        empresa: { select: { Nombre_Empresa: true } },
+        tipo_actividad: { select: { Nombre: true, Color: true } },
+        _count: { select: { asignaciones: true } }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    // Reglas recurrentes vigentes del equipo, agrupadas por
+    // empleado+nombre+tipo+empresa (cada día de semana es una fila distinta).
+    const reglasEquipo = equipo.length
+      ? await prisma.actividad_Recurrencias.findMany({
+          where: {
+            ID_Empleado: { in: equipo.map(e => e.ID_Empleado) },
+            Activo: true,
+            Fecha_Inicio: { lte: fin },
+            OR: [{ Fecha_Fin: null }, { Fecha_Fin: { gte: inicio } }]
+          },
+          include: {
+            empleado: { select: { Nombre: true, Apellido_Paterno: true } },
+            empresa: { select: { Nombre_Empresa: true } },
+            tipo_actividad: { select: { Nombre: true, Color: true } }
+          },
+          orderBy: [{ ID_Empleado: 'asc' }, { Dia_Semana: 'asc' }]
+        })
+      : [];
+
+    const porRegla = new Map();
+    for (const r of reglasEquipo) {
+      const clave = `${r.ID_Empleado}_${r.Nombre_Actividad}_${r.ID_Tipo_Actividad}_${r.ID_Empresa}`;
+      if (!porRegla.has(clave)) {
+        porRegla.set(clave, {
+          ID_Recurrencia: r.ID_Recurrencia, // cualquiera de las hermanas sirve de ancla
+          nombre: r.Nombre_Actividad,
+          empleado: [r.empleado.Nombre, r.empleado.Apellido_Paterno].filter(Boolean).join(' '),
+          empresa: r.empresa.Nombre_Empresa,
+          tipo: r.tipo_actividad.Nombre,
+          color: r.tipo_actividad.Color,
+          dias: []
+        });
+      }
+      porRegla.get(clave).dias.push(r.Dia_Semana);
+    }
+    const recurrenciasDelRango = [...porRegla.values()];
+
     res.render('encargado/index', {
       title: 'Actividades de Campo',
       equipo, fechas, celdas,
-      empresas, tiposActividad,
+      empresas, tiposActividad, actividadesDelRango, recurrenciasDelRango,
+      nombresDia: NOMBRES_DIA,
       ultimaEmpresaId: ultima?.ID_Empresa || null,
       ultimoTipoId: ultima?.ID_Tipo_Actividad || null,
       fechaInicio: inicio.toISOString().slice(0, 10),
@@ -531,6 +585,7 @@ export const ver = async (req, res, next) => {
       where: { ID_Actividad: id },
       include: {
         empresa: true,
+        tipo_actividad: { select: { ID_Tipo_Actividad: true, Nombre: true, Color: true } },
         responsable: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true } },
         asignaciones: {
           include: { empleado: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true, area: { select: { Nombre_Area: true } } } } },
@@ -569,19 +624,265 @@ export const ver = async (req, res, next) => {
       }
       const fechaStr = fmtFecha(asig.Fecha);
       const sello = selloMap.get(`${asig.ID_Empleado}_${fechaStr}`) || null;
+      const fmtMin = (m) => Number.isFinite(m)
+        ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+        : '';
       porEmpleado.get(key).dias.push({
         ID_Asignacion: asig.ID_Asignacion,
         fecha: fechaStr,
-        sello: !!(sello && sello.Hora_Entrada)
+        sello: !!(sello && sello.Hora_Entrada),
+        // Tramo horario capturado para ese día (vacío = jornada implícita).
+        horaInicio: fmtMin(asig.Hora_Inicio),
+        horaFin: fmtMin(asig.Hora_Fin),
+        tieneTramo: Number.isFinite(asig.Hora_Inicio) && Number.isFinite(asig.Hora_Fin)
       });
+    }
+
+    // Catálogos + equipo vigente del responsable, para el form de edición y
+    // para la matriz de días (permite agregar empleados que aún no están).
+    const [tiposActividad, empresas, equipo] = await Promise.all([
+      prisma.cat_Tipo_Actividad.findMany({ where: { Activo: true }, orderBy: { Nombre: 'asc' } }),
+      prisma.cat_Empresas.findMany({ where: { Activo: true }, orderBy: { Nombre_Empresa: 'asc' } }),
+      obtenerEquipoVigente(actividad.ID_Responsable)
+    ]);
+
+    // Empleados que ofrece el alta en bloque: el equipo vigente, más los que
+    // ya tienen días aquí aunque hayan salido del equipo (para verlos listados).
+    const empleadosMatriz = [...equipo];
+    for (const fila of porEmpleado.values()) {
+      if (!empleadosMatriz.some(e => e.ID_Empleado === fila.empleado.ID_Empleado)) {
+        empleadosMatriz.push({ ...fila.empleado, fueraDelEquipo: true });
+      }
     }
 
     res.render('encargado/detalle', {
       title: actividad.Nombre_Actividad,
       actividad,
       filas: [...porEmpleado.values()],
-      esSupervisor: supervisor
+      esSupervisor: supervisor,
+      puedeEditar: supervisor || actividad.ID_Responsable === req.user.ID_Empleado,
+      tiposActividad, empresas,
+      empleadosMatriz
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/:id - Actualizar datos de la actividad.
+// Afecta a TODOS sus días: es la misma fila de Actividades_Campo.
+export const actualizar = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const actividad = await prisma.actividades_Campo.findUnique({ where: { ID_Actividad: id } });
+    if (!actividad) {
+      req.flash('error', 'Actividad no encontrada');
+      return res.redirect('/encargado');
+    }
+    if (actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esta actividad no te pertenece' });
+    }
+
+    const { Nombre_Actividad, Descripcion } = req.body;
+    const idTipoActividad = parseInt(req.body.ID_Tipo_Actividad);
+    const idEmpresa = parseInt(req.body.ID_Empresa);
+
+    if (!Nombre_Actividad?.trim() || !Number.isInteger(idTipoActividad) || !Number.isInteger(idEmpresa)) {
+      req.flash('error', 'Nombre, tipo y empresa son obligatorios');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+    const tipoValido = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: idTipoActividad } });
+    if (!tipoValido || !tipoValido.Activo) {
+      req.flash('error', 'El tipo de actividad seleccionado ya no está disponible');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+
+    const actualizada = await prisma.actividades_Campo.update({
+      where: { ID_Actividad: id },
+      data: {
+        Nombre_Actividad: Nombre_Actividad.trim(),
+        ID_Tipo_Actividad: idTipoActividad,
+        ID_Empresa: idEmpresa,
+        Descripcion: Descripcion?.trim() || null
+      }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividades_Campo',
+      idRegistro: id.toString(),
+      descripcion: `Actividad actualizada: ${actualizada.Nombre_Actividad}`,
+      datosPrevios: {
+        Nombre_Actividad: actividad.Nombre_Actividad,
+        ID_Tipo_Actividad: actividad.ID_Tipo_Actividad,
+        ID_Empresa: actividad.ID_Empresa,
+        Descripcion: actividad.Descripcion
+      },
+      datosNuevos: {
+        Nombre_Actividad: actualizada.Nombre_Actividad,
+        ID_Tipo_Actividad: actualizada.ID_Tipo_Actividad,
+        ID_Empresa: actualizada.ID_Empresa,
+        Descripcion: actualizada.Descripcion
+      },
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', 'Actividad actualizada — el cambio aplica a todos sus días');
+    res.redirect(`/encargado/actividades/${id}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/:id/eliminar - Borra la actividad y TODOS sus
+// días asignados (las asignaciones caen por ON DELETE CASCADE).
+export const eliminar = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const actividad = await prisma.actividades_Campo.findUnique({
+      where: { ID_Actividad: id },
+      include: { _count: { select: { asignaciones: true } } }
+    });
+    if (!actividad) {
+      req.flash('error', 'Actividad no encontrada');
+      return res.redirect('/encargado');
+    }
+    if (actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esta actividad no te pertenece' });
+    }
+
+    await prisma.actividades_Campo.delete({ where: { ID_Actividad: id } });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Actividades_Campo',
+      idRegistro: id.toString(),
+      descripcion: `Actividad eliminada: ${actividad.Nombre_Actividad} (${actividad._count.asignaciones} día(s) asignado(s))`,
+      datosPrevios: { Nombre_Actividad: actividad.Nombre_Actividad, ID_Empresa: actividad.ID_Empresa },
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', `Actividad eliminada junto con sus ${actividad._count.asignaciones} día(s)`);
+    res.redirect('/encargado');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/:id/dias - Guarda la matriz completa de días de
+// esta actividad: recibe la lista de pares empleado+fecha que deben quedar
+// asignados y calcula el delta (alta de los nuevos, baja de los quitados).
+export const guardarDias = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const actividad = await prisma.actividades_Campo.findUnique({
+      where: { ID_Actividad: id },
+      include: { asignaciones: { select: { ID_Asignacion: true, ID_Empleado: true, Fecha: true } } }
+    });
+    if (!actividad) return res.status(404).json({ ok: false, error: 'Actividad no encontrada' });
+    if (actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).json({ ok: false, error: 'Esta actividad no te pertenece' });
+    }
+
+    // Body: celdas = ["46_2026-08-17", "2_2026-08-18", ...]
+    const deseadas = new Set(
+      (Array.isArray(req.body.celdas) ? req.body.celdas : [])
+        .filter(k => /^\d+_\d{4}-\d{2}-\d{2}$/.test(k))
+    );
+    const actuales = new Map(
+      actividad.asignaciones.map(a => [`${a.ID_Empleado}_${fmtFecha(a.Fecha)}`, a.ID_Asignacion])
+    );
+
+    const aAgregar = [...deseadas].filter(k => !actuales.has(k));
+    const aQuitar = [...actuales.entries()].filter(([k]) => !deseadas.has(k)).map(([, idAsig]) => idAsig);
+
+    if (aAgregar.length === 0 && aQuitar.length === 0) {
+      return res.json({ ok: true, agregados: 0, quitados: 0, sinCambios: true });
+    }
+
+    // Validar pertenencia al equipo y choque con otra actividad, por cada alta.
+    const conflictos = [];
+    const nuevas = [];
+    for (const key of aAgregar) {
+      const [empStr, fechaStr] = key.split('_');
+      const idEmpleado = parseInt(empStr);
+      const fecha = new Date(`${fechaStr}T00:00:00`);
+      if (fecha.getDay() === 0) continue; // domingo: se ignora
+
+      if (!(await empleadoEnEquipoDeEncargado(idEmpleado, actividad.ID_Responsable, fecha))) {
+        conflictos.push(`${fechaStr}: el empleado no pertenece al equipo vigente`);
+        continue;
+      }
+      const ocupado = await prisma.actividad_Asignaciones.findFirst({
+        where: { ID_Empleado: idEmpleado, Fecha: fecha },
+        include: { actividad: { select: { Nombre_Actividad: true } } }
+      });
+      if (ocupado) {
+        conflictos.push(`${fechaStr}: ya tiene "${ocupado.actividad.Nombre_Actividad}"`);
+        continue;
+      }
+      nuevas.push({ ID_Actividad: id, ID_Empleado: idEmpleado, Fecha: fecha, CreatedBy: req.user.Email_Office365 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (aQuitar.length) await tx.actividad_Asignaciones.deleteMany({ where: { ID_Asignacion: { in: aQuitar } } });
+      if (nuevas.length) await tx.actividad_Asignaciones.createMany({ data: nuevas });
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividad_Asignaciones',
+      idRegistro: id.toString(),
+      descripcion: `Días de "${actividad.Nombre_Actividad}": +${nuevas.length} / -${aQuitar.length}`,
+      ip: obtenerIP(req)
+    });
+
+    res.json({ ok: true, agregados: nuevas.length, quitados: aQuitar.length, conflictos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/:id/asignaciones/lote-eliminar - Quita en bloque
+// los días marcados con checkbox en la tabla de detalle.
+export const quitarAsignacionesLote = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const actividad = await prisma.actividades_Campo.findUnique({ where: { ID_Actividad: id } });
+    if (!actividad) {
+      req.flash('error', 'Actividad no encontrada');
+      return res.redirect('/encargado');
+    }
+    if (actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esta actividad no te pertenece' });
+    }
+
+    const ids = (req.body.asignaciones == null ? [] : Array.isArray(req.body.asignaciones) ? req.body.asignaciones : [req.body.asignaciones])
+      .map(Number).filter(Number.isInteger);
+
+    if (ids.length === 0) {
+      req.flash('error', 'Selecciona al menos un día');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+
+    const { count } = await prisma.actividad_Asignaciones.deleteMany({
+      where: { ID_Asignacion: { in: ids }, ID_Actividad: id }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Actividad_Asignaciones',
+      idRegistro: id.toString(),
+      descripcion: `${count} día(s) quitado(s) en lote de "${actividad.Nombre_Actividad}"`,
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', `${count} día(s) quitado(s)`);
+    res.redirect(`/encargado/actividades/${id}`);
   } catch (error) {
     next(error);
   }
@@ -602,7 +903,22 @@ export const agregarAsignacion = async (req, res, next) => {
 
     const subordinados = (req.body.subordinados == null ? [] : Array.isArray(req.body.subordinados) ? req.body.subordinados : [req.body.subordinados])
       .map(Number).filter(Number.isInteger);
-    const fechas = (req.body.dias || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    // Días: lista suelta ("dias") o rango completo (Rango_Desde/Rango_Hasta,
+    // que expande todos los laborables del intervalo, sin domingos).
+    let fechas = (req.body.dias || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (req.body.Rango_Desde && req.body.Rango_Hasta) {
+      const desde = new Date(`${req.body.Rango_Desde}T00:00:00`);
+      const hasta = new Date(`${req.body.Rango_Hasta}T00:00:00`);
+      if (!isNaN(desde) && !isNaN(hasta) && desde <= hasta) {
+        const delRango = [];
+        for (let d = new Date(desde); d <= hasta; d.setDate(d.getDate() + 1)) {
+          if (d.getDay() === 0) continue; // domingo no laborable
+          delRango.push(d.toISOString().slice(0, 10));
+        }
+        fechas = [...new Set([...fechas, ...delRango])];
+      }
+    }
 
     if (subordinados.length === 0 || fechas.length === 0) {
       req.flash('error', 'Selecciona empleados y días');
@@ -727,6 +1043,74 @@ export const toggleCelda = async (req, res, next) => {
       if (puntual.actividad.ID_Responsable !== miId && !esSupervisor(req.user)) {
         return res.status(403).json({ ok: false, error: 'Esa actividad pertenece a otro encargado' });
       }
+
+      // Si vienen datos de actividad Y son distintos a los actuales, es un
+      // REEMPLAZO (el usuario quiere cambiarle la actividad a ese día), no un
+      // "quitar". Se mueve el día a la actividad nueva sin borrar nada más.
+      const nomNuevo = (req.body.Nombre_Actividad || '').trim();
+      const tipoNuevo = parseInt(req.body.ID_Tipo_Actividad);
+      const empNuevo = parseInt(req.body.ID_Empresa);
+      const traeDatos = nomNuevo && Number.isInteger(tipoNuevo) && Number.isInteger(empNuevo);
+      const esOtraActividad = traeDatos && (
+        nomNuevo !== puntual.actividad.Nombre_Actividad ||
+        tipoNuevo !== puntual.actividad.ID_Tipo_Actividad ||
+        empNuevo !== puntual.actividad.ID_Empresa
+      );
+
+      if (esOtraActividad && modo === 'PUNTUAL') {
+        const tipoOk = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: tipoNuevo } });
+        if (!tipoOk || !tipoOk.Activo) {
+          return res.status(400).json({ ok: false, error: 'El tipo de actividad seleccionado ya no está disponible' });
+        }
+        // Reusar una actividad igual del mismo encargado, o crearla.
+        let destino = await prisma.actividades_Campo.findFirst({
+          where: {
+            ID_Responsable: miId, Nombre_Actividad: nomNuevo,
+            ID_Tipo_Actividad: tipoNuevo, ID_Empresa: empNuevo, Activo: true
+          }
+        });
+        if (!destino) {
+          destino = await prisma.actividades_Campo.create({
+            data: {
+              Nombre_Actividad: nomNuevo, ID_Tipo_Actividad: tipoNuevo,
+              ID_Empresa: empNuevo, ID_Responsable: miId, CreatedBy: req.user.Email_Office365
+            }
+          });
+        }
+
+        await prisma.actividad_Asignaciones.update({
+          where: { ID_Asignacion: puntual.ID_Asignacion },
+          data: { ID_Actividad: destino.ID_Actividad, Hora_Inicio: null, Hora_Fin: null }
+        });
+
+        // La actividad anterior puede quedarse sin días.
+        const quedan = await prisma.actividad_Asignaciones.count({ where: { ID_Actividad: puntual.ID_Actividad } });
+        if (quedan === 0) {
+          await prisma.actividades_Campo.delete({ where: { ID_Actividad: puntual.ID_Actividad } });
+        }
+
+        await registrarCambio({
+          usuario: req.user,
+          accion: 'UPDATE',
+          tabla: 'Actividad_Asignaciones',
+          idRegistro: puntual.ID_Asignacion.toString(),
+          descripcion: `Actividad del ${fechaStr} cambiada: "${puntual.actividad.Nombre_Actividad}" → "${nomNuevo}" (empleado ${idEmpleado})`,
+          ip: obtenerIP(req)
+        });
+
+        const empresaSel = await prisma.cat_Empresas.findUnique({
+          where: { ID_Empresa: empNuevo }, select: { Nombre_Empresa: true }
+        });
+        return res.json({
+          ok: true, estado: 'PUNTUAL', reemplazada: true,
+          actividad: {
+            ID_Actividad: destino.ID_Actividad, ID_Asignacion: puntual.ID_Asignacion,
+            nombre: nomNuevo, tipo: tipoOk.Nombre, color: tipoOk.Color,
+            empresa: empresaSel?.Nombre_Empresa || '', esRecurrente: false
+          }
+        });
+      }
+
       await prisma.actividad_Asignaciones.delete({ where: { ID_Asignacion: puntual.ID_Asignacion } });
 
       // Si la actividad se quedó sin ningún día asignado, se elimina también
@@ -780,10 +1164,10 @@ export const toggleCelda = async (req, res, next) => {
         });
         return res.json({ ok: true, estado: 'VACIO' });
       }
-      return res.status(400).json({
-        ok: false,
-        error: `Ese día ya está cubierto por una recurrencia (${NOMBRES_DIA[diaSemana]}). Activa el modo "repetir cada semana" para detenerla.`
-      });
+      // Modo PUNTUAL sobre un día que cubre una recurrencia: NO es un error.
+      // La puntual siempre gana sobre la regla (así se resuelve en consulta),
+      // así que se deja crear encima — la recurrencia sigue aplicando el resto
+      // de las semanas. Cae al bloque 3 para crearla.
     }
 
     // 3) No hay nada: crear.
@@ -887,12 +1271,441 @@ export const toggleCelda = async (req, res, next) => {
   }
 };
 
+// POST /encargado/actividades/:id/datos - Igual que `actualizar` pero
+// responde JSON, para el panel lateral de Asistencia de mi Equipo. Cambia los
+// datos de la actividad SIN tocar sus días (no borra ni recrea asignaciones).
+export const actualizarDatosJson = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const actividad = await prisma.actividades_Campo.findUnique({ where: { ID_Actividad: id } });
+    if (!actividad) return res.status(404).json({ ok: false, error: 'Actividad no encontrada' });
+    if (actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).json({ ok: false, error: 'Esta actividad no te pertenece' });
+    }
+
+    const nombre = (req.body.Nombre_Actividad || '').trim();
+    const idTipoActividad = parseInt(req.body.ID_Tipo_Actividad);
+    const idEmpresa = parseInt(req.body.ID_Empresa);
+    if (!nombre || !Number.isInteger(idTipoActividad) || !Number.isInteger(idEmpresa)) {
+      return res.status(400).json({ ok: false, error: 'Completa nombre, tipo y empresa' });
+    }
+    const tipoValido = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: idTipoActividad } });
+    if (!tipoValido || !tipoValido.Activo) {
+      return res.status(400).json({ ok: false, error: 'El tipo de actividad seleccionado ya no está disponible' });
+    }
+
+    const nDias = await prisma.actividad_Asignaciones.count({ where: { ID_Actividad: id } });
+    const actualizada = await prisma.actividades_Campo.update({
+      where: { ID_Actividad: id },
+      data: { Nombre_Actividad: nombre, ID_Tipo_Actividad: idTipoActividad, ID_Empresa: idEmpresa }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividades_Campo',
+      idRegistro: id.toString(),
+      descripcion: `Actividad actualizada desde el panel: ${actualizada.Nombre_Actividad}`,
+      datosPrevios: { Nombre_Actividad: actividad.Nombre_Actividad, ID_Tipo_Actividad: actividad.ID_Tipo_Actividad, ID_Empresa: actividad.ID_Empresa },
+      datosNuevos: { Nombre_Actividad: nombre, ID_Tipo_Actividad: idTipoActividad, ID_Empresa: idEmpresa },
+      ip: obtenerIP(req)
+    });
+
+    res.json({ ok: true, diasAfectados: nDias, nombre: actualizada.Nombre_Actividad });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/:id/asignaciones/:idAsignacion/horas
+// Captura (o limpia) el tramo horario de UN día concreto de la actividad.
+// Body: { Hora_Inicio:'HH:MM', Hora_Fin:'HH:MM' } — ambos vacíos = jornada
+// implícita (9h fijas sin checada, u 8:00→primera checada con ella).
+export const guardarHorasDia = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const idAsignacion = parseInt(req.params.idAsignacion);
+
+    const asignacion = await prisma.actividad_Asignaciones.findUnique({
+      where: { ID_Asignacion: idAsignacion },
+      include: { actividad: { select: { ID_Actividad: true, ID_Responsable: true, Nombre_Actividad: true } } }
+    });
+    if (!asignacion || asignacion.ID_Actividad !== id) {
+      req.flash('error', 'Día no encontrado en esta actividad');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+    if (asignacion.actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esta actividad no te pertenece' });
+    }
+
+    // 'HH:MM' -> minutos desde medianoche; vacío -> null.
+    const aMinutos = (hhmm) => {
+      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+      const [h, m] = hhmm.split(':').map(Number);
+      if (h > 23 || m > 59) return null;
+      return h * 60 + m;
+    };
+    const ini = aMinutos(req.body.Hora_Inicio);
+    const fin = aMinutos(req.body.Hora_Fin);
+
+    // O ambos, o ninguno: un solo extremo no define un tramo.
+    if ((ini == null) !== (fin == null)) {
+      req.flash('error', 'Captura la hora de inicio y la de fin, o deja ambas vacías');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+    if (ini != null && fin <= ini) {
+      req.flash('error', 'La hora de fin debe ser posterior a la de inicio');
+      return res.redirect(`/encargado/actividades/${id}`);
+    }
+
+    await prisma.actividad_Asignaciones.update({
+      where: { ID_Asignacion: idAsignacion },
+      data: { Hora_Inicio: ini, Hora_Fin: fin }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividad_Asignaciones',
+      idRegistro: idAsignacion.toString(),
+      descripcion: ini == null
+        ? `Horas del día ${fmtFecha(asignacion.Fecha)} devueltas a jornada implícita ("${asignacion.actividad.Nombre_Actividad}")`
+        : `Horas del día ${fmtFecha(asignacion.Fecha)}: ${req.body.Hora_Inicio}–${req.body.Hora_Fin} ("${asignacion.actividad.Nombre_Actividad}")`,
+      datosPrevios: { Hora_Inicio: asignacion.Hora_Inicio, Hora_Fin: asignacion.Hora_Fin },
+      datosNuevos: { Hora_Inicio: ini, Hora_Fin: fin },
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', ini == null ? 'Día devuelto a jornada completa' : 'Horas del día actualizadas');
+    res.redirect(`/encargado/actividades/${id}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/actividades/asignacion/:idAsignacion/horas-json
+// Igual que guardarHorasDia pero responde JSON, para el panel lateral de
+// Asistencia de mi Equipo: ahí es donde se ve la checada real y se le agrega
+// el tramo de actividad que la complementa.
+export const guardarHorasDiaJson = async (req, res, next) => {
+  try {
+    const idAsignacion = parseInt(req.params.idAsignacion);
+    const asignacion = await prisma.actividad_Asignaciones.findUnique({
+      where: { ID_Asignacion: idAsignacion },
+      include: { actividad: { select: { ID_Responsable: true, Nombre_Actividad: true } } }
+    });
+    if (!asignacion) return res.status(404).json({ ok: false, error: 'Día no encontrado' });
+    if (asignacion.actividad.ID_Responsable !== req.user.ID_Empleado && !esSupervisor(req.user)) {
+      return res.status(403).json({ ok: false, error: 'Esa actividad no te pertenece' });
+    }
+
+    const aMinutos = (hhmm) => {
+      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+      const [h, m] = hhmm.split(':').map(Number);
+      if (h > 23 || m > 59) return null;
+      return h * 60 + m;
+    };
+    const ini = aMinutos(req.body.Hora_Inicio);
+    const fin = aMinutos(req.body.Hora_Fin);
+
+    if ((ini == null) !== (fin == null)) {
+      return res.status(400).json({ ok: false, error: 'Captura ambas horas, o deja las dos vacías' });
+    }
+    if (ini != null && fin <= ini) {
+      return res.status(400).json({ ok: false, error: 'La hora de fin debe ser posterior a la de inicio' });
+    }
+
+    await prisma.actividad_Asignaciones.update({
+      where: { ID_Asignacion: idAsignacion },
+      data: { Hora_Inicio: ini, Hora_Fin: fin }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividad_Asignaciones',
+      idRegistro: idAsignacion.toString(),
+      descripcion: ini == null
+        ? `Horas del ${fmtFecha(asignacion.Fecha)} devueltas a jornada implícita ("${asignacion.actividad.Nombre_Actividad}")`
+        : `Horas del ${fmtFecha(asignacion.Fecha)}: ${req.body.Hora_Inicio}–${req.body.Hora_Fin} ("${asignacion.actividad.Nombre_Actividad}")`,
+      datosPrevios: { Hora_Inicio: asignacion.Hora_Inicio, Hora_Fin: asignacion.Hora_Fin },
+      datosNuevos: { Hora_Inicio: ini, Hora_Fin: fin },
+      ip: obtenerIP(req)
+    });
+
+    res.json({ ok: true, horaInicio: ini, horaFin: fin });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================
+// RECURRENCIAS — detalle y edición
+// Cada día de la semana es una FILA distinta en Actividad_Recurrencias. Una
+// "regla" para el usuario es el conjunto de filas activas del mismo empleado
+// que comparten nombre+tipo+empresa; se identifican por el ID de cualquiera
+// de ellas y se editan en bloque.
+// ============================================================
+
+// Devuelve las filas hermanas de una regla (mismo empleado, nombre, tipo y
+// empresa, todas activas), ordenadas por día de la semana.
+async function filasDeLaRegla(regla) {
+  return prisma.actividad_Recurrencias.findMany({
+    where: {
+      ID_Empleado: regla.ID_Empleado,
+      Nombre_Actividad: regla.Nombre_Actividad,
+      ID_Tipo_Actividad: regla.ID_Tipo_Actividad,
+      ID_Empresa: regla.ID_Empresa,
+      Activo: true
+    },
+    orderBy: { Dia_Semana: 'asc' }
+  });
+}
+
+// GET /encargado/recurrencias/:id - Detalle de una regla recurrente
+export const verRecurrencia = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const regla = await prisma.actividad_Recurrencias.findUnique({
+      where: { ID_Recurrencia: id },
+      include: {
+        empleado: { select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true, area: { select: { Nombre_Area: true } } } },
+        empresa: { select: { ID_Empresa: true, Nombre_Empresa: true } },
+        tipo_actividad: { select: { ID_Tipo_Actividad: true, Nombre: true, Color: true } },
+        grupo: { select: { ID_Grupo: true, Nombre_Grupo: true, encargado: { select: { ID_Empleado: true } } } }
+      }
+    });
+
+    if (!regla) {
+      req.flash('error', 'Recurrencia no encontrada');
+      return res.redirect('/encargado');
+    }
+
+    // Permiso: el empleado debe estar en el equipo vigente de quien edita
+    // (o ser supervisor). La regla no guarda responsable propio.
+    const supervisor = esSupervisor(req.user);
+    const miId = req.user.ID_Empleado;
+    const puedeEditar = supervisor ||
+      (miId ? await empleadoEnEquipoDeEncargado(regla.ID_Empleado, miId, new Date()) : false);
+    if (!puedeEditar) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esa recurrencia no pertenece a tu equipo' });
+    }
+
+    const hermanas = await filasDeLaRegla(regla);
+    const [tiposActividad, empresas] = await Promise.all([
+      prisma.cat_Tipo_Actividad.findMany({ where: { Activo: true }, orderBy: { Nombre: 'asc' } }),
+      prisma.cat_Empresas.findMany({ where: { Activo: true }, orderBy: { Nombre_Empresa: 'asc' } })
+    ]);
+
+    const fmtInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
+
+    res.render('encargado/recurrencia-detalle', {
+      title: `Recurrencia: ${regla.Nombre_Actividad}`,
+      regla,
+      diasActivos: hermanas.map(h => h.Dia_Semana),
+      hermanas,
+      tiposActividad, empresas,
+      puedeEditar: true,
+      // La vigencia se toma de la fila abierta; al guardar se aplica a todas.
+      fechaInicio: fmtInput(regla.Fecha_Inicio),
+      fechaFin: fmtInput(regla.Fecha_Fin),
+      nombresDia: NOMBRES_DIA
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/recurrencias/:id - Actualiza la regla completa: datos,
+// días de la semana (alta/baja de filas hermanas) y vigencia.
+export const actualizarRecurrencia = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const regla = await prisma.actividad_Recurrencias.findUnique({ where: { ID_Recurrencia: id } });
+    if (!regla) {
+      req.flash('error', 'Recurrencia no encontrada');
+      return res.redirect('/encargado');
+    }
+
+    const supervisor = esSupervisor(req.user);
+    const miId = req.user.ID_Empleado;
+    const permitido = supervisor ||
+      (miId ? await empleadoEnEquipoDeEncargado(regla.ID_Empleado, miId, new Date()) : false);
+    if (!permitido) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esa recurrencia no pertenece a tu equipo' });
+    }
+
+    const volver = `/encargado/recurrencias/${id}`;
+    const { Nombre_Actividad } = req.body;
+    const idTipoActividad = parseInt(req.body.ID_Tipo_Actividad);
+    const idEmpresa = parseInt(req.body.ID_Empresa);
+    const fechaInicio = req.body.Fecha_Inicio ? new Date(`${req.body.Fecha_Inicio}T00:00:00`) : null;
+    const fechaFin = req.body.Fecha_Fin ? new Date(`${req.body.Fecha_Fin}T00:00:00`) : null;
+    const dias = (Array.isArray(req.body.Dia_Semana) ? req.body.Dia_Semana : [req.body.Dia_Semana])
+      .filter(Boolean).map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6);
+
+    if (!Nombre_Actividad?.trim() || !Number.isInteger(idTipoActividad) || !Number.isInteger(idEmpresa) || !fechaInicio) {
+      req.flash('error', 'Nombre, tipo, empresa y fecha de inicio son obligatorios');
+      return res.redirect(volver);
+    }
+    if (dias.length === 0) {
+      req.flash('error', 'Marca al menos un día de la semana (o usa "Detener regla" para darla de baja)');
+      return res.redirect(volver);
+    }
+    if (fechaFin && fechaFin < fechaInicio) {
+      req.flash('error', 'La fecha de fin no puede ser anterior a la de inicio');
+      return res.redirect(volver);
+    }
+    const tipoValido = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: idTipoActividad } });
+    if (!tipoValido || !tipoValido.Activo) {
+      req.flash('error', 'El tipo de actividad seleccionado ya no está disponible');
+      return res.redirect(volver);
+    }
+
+    const hermanas = await filasDeLaRegla(regla);
+    const diasActuales = new Set(hermanas.map(h => h.Dia_Semana));
+    const diasNuevos = new Set(dias);
+
+    // Traslape: solo contra reglas ACTIVAS de OTRO conjunto (las hermanas
+    // propias no cuentan, se están reescribiendo aquí).
+    const idsHermanas = hermanas.map(h => h.ID_Recurrencia);
+    for (const dia of [...diasNuevos].filter(d => !diasActuales.has(d))) {
+      const choque = await prisma.actividad_Recurrencias.findFirst({
+        where: {
+          ID_Empleado: regla.ID_Empleado,
+          Dia_Semana: dia,
+          Activo: true,
+          ID_Recurrencia: { notIn: idsHermanas },
+          Fecha_Inicio: { lte: fechaFin ?? new Date('9999-12-31') },
+          OR: [{ Fecha_Fin: null }, { Fecha_Fin: { gte: fechaInicio } }]
+        }
+      });
+      if (choque) {
+        req.flash('error', `Ya existe otra recurrencia activa los ${NOMBRES_DIA[dia]} para ese empleado en esas fechas`);
+        return res.redirect(volver);
+      }
+    }
+
+    const datosComunes = {
+      Nombre_Actividad: Nombre_Actividad.trim(),
+      ID_Tipo_Actividad: idTipoActividad,
+      ID_Empresa: idEmpresa,
+      Fecha_Inicio: fechaInicio,
+      Fecha_Fin: fechaFin
+    };
+
+    await prisma.$transaction(async (tx) => {
+      // Días que se quedan: actualizar datos y vigencia.
+      const seQuedan = hermanas.filter(h => diasNuevos.has(h.Dia_Semana)).map(h => h.ID_Recurrencia);
+      if (seQuedan.length) {
+        await tx.actividad_Recurrencias.updateMany({
+          where: { ID_Recurrencia: { in: seQuedan } },
+          data: datosComunes
+        });
+      }
+      // Días quitados: baja real (la regla nunca llegó a aplicar ese día si se
+      // desmarca aquí; a diferencia del soft-stop, aquí es corrección).
+      const seVan = hermanas.filter(h => !diasNuevos.has(h.Dia_Semana)).map(h => h.ID_Recurrencia);
+      if (seVan.length) {
+        await tx.actividad_Recurrencias.deleteMany({ where: { ID_Recurrencia: { in: seVan } } });
+      }
+      // Días nuevos: crear fila hermana.
+      const seAgregan = [...diasNuevos].filter(d => !diasActuales.has(d));
+      if (seAgregan.length) {
+        await tx.actividad_Recurrencias.createMany({
+          data: seAgregan.map(dia => ({
+            ID_Empleado: regla.ID_Empleado,
+            ID_Grupo: regla.ID_Grupo,
+            Dia_Semana: dia,
+            CreatedBy: req.user.Email_Office365,
+            ...datosComunes
+          }))
+        });
+      }
+    });
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'UPDATE',
+      tabla: 'Actividad_Recurrencias',
+      idRegistro: id.toString(),
+      descripcion: `Recurrencia actualizada: ${datosComunes.Nombre_Actividad} (empleado ${regla.ID_Empleado}, días ${dias.map(d => NOMBRES_DIA[d]).join('/')})`,
+      datosPrevios: { Nombre_Actividad: regla.Nombre_Actividad, dias: [...diasActuales] },
+      datosNuevos: { ...datosComunes, dias },
+      ip: obtenerIP(req)
+    });
+
+    // Si la fila abierta se eliminó (su día se desmarcó), volver al calendario.
+    const sigueViva = await prisma.actividad_Recurrencias.findUnique({ where: { ID_Recurrencia: id } });
+    req.flash('success', 'Recurrencia actualizada');
+    res.redirect(sigueViva ? volver : '/encargado');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /encargado/recurrencias/:id/detener - Soft-stop de toda la regla:
+// corta la vigencia a ayer y la desactiva, sin borrar el histórico.
+export const detenerRecurrencia = async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const regla = await prisma.actividad_Recurrencias.findUnique({ where: { ID_Recurrencia: id } });
+    if (!regla) {
+      req.flash('error', 'Recurrencia no encontrada');
+      return res.redirect('/encargado');
+    }
+
+    const supervisor = esSupervisor(req.user);
+    const miId = req.user.ID_Empleado;
+    const permitido = supervisor ||
+      (miId ? await empleadoEnEquipoDeEncargado(regla.ID_Empleado, miId, new Date()) : false);
+    if (!permitido) {
+      return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esa recurrencia no pertenece a tu equipo' });
+    }
+
+    const hermanas = await filasDeLaRegla(regla);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const corte = new Date(hoy.getTime() - 24 * 3600 * 1000); // ayer
+
+    for (const h of hermanas) {
+      await prisma.actividad_Recurrencias.update({
+        where: { ID_Recurrencia: h.ID_Recurrencia },
+        data: { Fecha_Fin: corte < h.Fecha_Inicio ? h.Fecha_Inicio : corte, Activo: false }
+      });
+    }
+
+    await registrarCambio({
+      usuario: req.user,
+      accion: 'DELETE',
+      tabla: 'Actividad_Recurrencias',
+      idRegistro: id.toString(),
+      descripcion: `Recurrencia detenida: ${regla.Nombre_Actividad} (${hermanas.length} día(s) de la semana)`,
+      ip: obtenerIP(req)
+    });
+
+    req.flash('success', 'Recurrencia detenida — deja de aplicar desde hoy');
+    res.redirect('/encargado');
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   index,
   crear,
   store,
   ver,
+  actualizar,
+  eliminar,
+  guardarDias,
   agregarAsignacion,
   quitarAsignacion,
-  toggleCelda
+  quitarAsignacionesLote,
+  toggleCelda,
+  actualizarDatosJson,
+  guardarHorasDia,
+  guardarHorasDiaJson,
+  verRecurrencia,
+  actualizarRecurrencia,
+  detenerRecurrencia
 };

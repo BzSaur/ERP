@@ -135,7 +135,10 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
       },
       select: {
         ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true, CreatedAt: true,
-        tipo_incidencia: { select: { Nombre: true } }
+        // El goce de la incidencia gana sobre el del tipo: permite ajustar un
+        // caso puntual sin tocar el catálogo.
+        Con_Goce_Sueldo: true,
+        tipo_incidencia: { select: { Nombre: true, Con_Goce_Sueldo: true } }
       }
     })
   ]);
@@ -143,14 +146,23 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
   const mapa = new Map();
   // creadaEn permite resolver el empate cuando el mismo día tiene ausencia Y
   // actividad delegada: gana la que se asignó al último (ver ausenciaEnFecha).
-  const agregar = (id, ini, fin, etiqueta, creadaEn) => {
+  // conGoce decide si el día se paga (9h) o solo se etiqueta (0h): una falta
+  // injustificada o un permiso sin goce NO deben sumar horas.
+  const agregar = (id, ini, fin, etiqueta, creadaEn, conGoce) => {
     if (!ini || !fin) return;
     if (!mapa.has(id)) mapa.set(id, []);
-    mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta, creadaEn: creadaEn || null });
+    mapa.get(id).push({ desde: ymdUTC(ini), hasta: ymdUTC(fin), etiqueta, creadaEn: creadaEn || null, conGoce });
   };
-  for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones', p.CreatedAt);
-  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones', null);
-  for (const i of incidencias) agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso', i.CreatedAt);
+  // Las vacaciones siempre son con goce de sueldo.
+  for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones', p.CreatedAt, true);
+  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones', null, true);
+  for (const i of incidencias) {
+    // El goce capturado en la incidencia manda; si no viene, el del tipo.
+    const conGoce = typeof i.Con_Goce_Sueldo === 'boolean'
+      ? i.Con_Goce_Sueldo
+      : i.tipo_incidencia?.Con_Goce_Sueldo === true;
+    agregar(i.ID_Empleado, i.Fecha_Inicio, i.Fecha_Fin, i.tipo_incidencia?.Nombre || 'Permiso', i.CreatedAt, conGoce);
+  }
   return mapa;
 }
 
@@ -220,9 +232,12 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
   const asignaciones = await prisma.actividad_Asignaciones.findMany({
     where,
     select: {
+      ID_Asignacion: true,
       ID_Empleado: true,
       Fecha: true,
       CreatedAt: true,
+      Hora_Inicio: true,
+      Hora_Fin: true,
       actividad: {
         select: {
           ID_Actividad: true,
@@ -240,6 +255,8 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
     const key = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
     mapa.set(key, {
       ID_Actividad: a.actividad.ID_Actividad,
+      // Identifica el día concreto: necesario para capturarle su tramo horario.
+      ID_Asignacion: a.ID_Asignacion,
       ID_Recurrencia: null,
       nombre: a.actividad.Nombre_Actividad,
       empresa: a.actividad.empresa.Nombre_Empresa,
@@ -247,6 +264,10 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
       tipo: a.actividad.tipo_actividad.Nombre,
       color: a.actividad.tipo_actividad.Color,
       creadaEn: a.CreatedAt,
+      // Tramo horario capturado para ESTE día (minutos desde medianoche), o
+      // null si se deja a la jornada implícita.
+      horaInicio: a.Hora_Inicio,
+      horaFin: a.Hora_Fin,
       esRecurrente: false
     });
   }
@@ -318,6 +339,8 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
 
       resultado.set(key, {
         ID_Actividad: null,
+        // Las recurrencias no materializan filas: no hay asignación que editar.
+        ID_Asignacion: null,
         ID_Recurrencia: regla.ID_Recurrencia,
         nombre: regla.Nombre_Actividad,
         empresa: regla.empresa?.Nombre_Empresa || '',
@@ -327,6 +350,9 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
         tipo: regla.tipo_actividad.Nombre,
         color: regla.tipo_actividad.Color,
         creadaEn: regla.CreatedAt,
+        // Las reglas recurrentes no capturan tramo: siempre jornada implícita.
+        horaInicio: null,
+        horaFin: null,
         esRecurrente: true
       });
     }
@@ -741,18 +767,43 @@ function paresDesdeChecadas(checadas, empleadoRegla) {
 // calcularHorasPorPares (checadorImportService.js). Se SUMA a las horas reales
 // ya calculadas (no las reemplaza). Si no hubo checada, no aplica: ese caso
 // sigue usando las 9h fijas simples (bloques ya existentes, sin cambio).
+const COMIDA_INI_MIN = 14 * 60, COMIDA_FIN_MIN = 15 * 60;
+
+// Horas netas de un tramo [desdeMin, hastaMin] descontando la comida si lo
+// cruza. Mismo criterio de overlap que calcularHorasPorPares.
+function horasNetasTramo(desdeMin, hastaMin) {
+  if (!Number.isFinite(desdeMin) || !Number.isFinite(hastaMin) || hastaMin <= desdeMin) return 0;
+  let netos = hastaMin - desdeMin;
+  netos -= Math.max(0, Math.min(hastaMin, COMIDA_FIN_MIN) - Math.max(desdeMin, COMIDA_INI_MIN));
+  return Math.round((Math.max(0, netos) / 60) * 100) / 100;
+}
+
 export function horasActividadHastaEntrada(horaEntrada) {
   if (!horaEntrada) return 0;
   const entrada = new Date(horaEntrada);
   const entMin = entrada.getHours() * 60 + entrada.getMinutes();
   const INICIO_ACTIVIDAD = 8 * 60; // 8:00am
   if (entMin <= INICIO_ACTIVIDAD) return 0; // checó antes de las 8, no hay tramo previo
-  const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
-  let netos = entMin - INICIO_ACTIVIDAD;
-  if (INICIO_ACTIVIDAD < COMIDA_FIN) {
-    netos -= Math.max(0, Math.min(entMin, COMIDA_FIN) - Math.max(INICIO_ACTIVIDAD, COMIDA_INI));
+  return horasNetasTramo(INICIO_ACTIVIDAD, entMin);
+}
+
+/**
+ * Horas que aporta una actividad delegada un día concreto.
+ *  - Con Hora_Inicio/Hora_Fin capturadas: cuenta SOLO ese tramo (con descuento
+ *    de comida). Sirve para home office por horas o actividad fuera del
+ *    horario normal; se suma a lo que haya marcado el checador.
+ *  - Sin horas y CON checada: tramo implícito 8:00 → primera entrada.
+ *  - Sin horas y SIN checada: jornada fija completa (9h).
+ * @param {Object|null} actividad  entrada resuelta (trae horaInicio/horaFin)
+ * @param {Date|null} horaEntrada  primera checada real del día, si la hubo
+ */
+export function horasDeActividad(actividad, horaEntrada) {
+  if (!actividad) return 0;
+  const { horaInicio, horaFin } = actividad;
+  if (Number.isFinite(horaInicio) && Number.isFinite(horaFin)) {
+    return horasNetasTramo(horaInicio, horaFin);
   }
-  return Math.round((netos / 60) * 100) / 100;
+  return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
 }
 
 /**
@@ -802,12 +853,13 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const actividadDelDia = actividadesMap.get(`${empleadoId}_${fecha.toISOString().slice(0, 10)}`) || null;
     // Horas/retardo/entrada desde la BD consolidada (Empleados_Asistencia). Fuente única =
     // BD, igual que la vista global y el Excel. Las checadas crudas son solo auditoría.
-    // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: tramo
-    // virtual 8am-primera entrada (con descuento de comida) + horas reales ya
-    // calculadas por admsService.
-    const horas = (Number(a.Horas_Trabajadas) || 0) + (actividadDelDia ? horasActividadHastaEntrada(a.Hora_Entrada) : 0);
+    // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: el
+    // tramo de la actividad (capturado, o 8am→primera entrada) más las horas
+    // reales ya calculadas por admsService.
+    const horas = (Number(a.Horas_Trabajadas) || 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
-    const retardoDia = a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
+    // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
+    const retardoDia = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
     const minRetardoDia = a.Minutos_Retardo || 0;
     if (a.Presente && horas > 0) diasTrabajados++;
     if (retardoDia) { diasRetardo++; minutosRetardoTotal += minRetardoDia; }
@@ -871,7 +923,11 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const actividadDia = gana === 'ACTIVIDAD' ? actividadRaw : null;
     const etiqueta = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
     const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
-    const horasDia = HORAS_FIJAS_JORNADA;
+    // Actividad: tramo capturado o jornada implícita. Ausencia: 9h solo si es
+    // con goce de sueldo (ver obtenerAusenciasJustificadas).
+    const horasDia = actividadDia
+      ? horasDeActividad(actividadDia, null)
+      : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
     totalHoras += horasDia;
     dias.push({
       fecha,
@@ -1039,11 +1095,13 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // virtual 8am-primera entrada, con descuento de comida, + horas reales).
     const keyActividad = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
     const actividadDelDia = actividadesMap.get(keyActividad) || null;
-    const horasActividadDia = actividadDelDia ? horasActividadHastaEntrada(a.Hora_Entrada) : 0;
+    const horasActividadDia = horasDeActividad(actividadDelDia, a.Hora_Entrada);
     const h = (Number(a.Horas_Trabajadas) || 0) + horasActividadDia;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
+    // Con actividad delegada NO hay retardo: la actividad justifica que no
+    // llegara a la hora normal (ej. home office que sella al mediodía).
     const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
-    const esRetardo = a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
+    const esRetardo = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
     if (a.Presente && h > 0) acc.dias++;
     if (esRetardo) acc.retardos++;
     if (a.Multi_Planta) acc.multi++;
@@ -1113,7 +1171,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     const revisiones = []; // días <2h que RH debe revisar
     const actividadesEmp = []; // actividades delegadas en el rango (para el panel de alerta)
     let diasAusencia = 0; // vacaciones/permiso sin trabajar (cuentan 9h, no falta)
-    let diasCubiertosSinSello = 0; // días sin checada cubiertos por actividad o ausencia (9h fijas c/u)
+    let diasCubiertosSinSello = 0; // días sin checada cubiertos por actividad o ausencia
+    let horasCubiertasSinSello = 0; // horas que aportan esos días (9h fijas, o el tramo capturado)
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
@@ -1136,10 +1195,19 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
         // Día sin checada cubierto por actividad delegada O por ausencia
         // justificada: en ambos casos son 9h fijas de jornada cumplida.
         if (!esDomingo && (actividad || ausencia)) {
-          diasCubiertosSinSello++;
+          // Actividad: tramo capturado o jornada implícita.
+          // Ausencia: 9h solo si es CON goce de sueldo (vacaciones, permiso
+          // con goce, incapacidad RT…). Las sin goce (falta injustificada,
+          // permiso sin goce, abandono) se etiquetan pero no pagan horas.
+          const horasDia = actividad
+            ? horasDeActividad(actividad, null)
+            : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
+          horasCubiertasSinSello += horasDia;
+          if (horasDia > 0) diasCubiertosSinSello++;
           return {
             presente: false, vacio: false, esDomingo, ausencia, ausenciaDesplazada, actividad,
-            horas: HORAS_FIJAS_JORNADA, jornadaCompleta: true
+            sinGoce: !!(ausencia && !periodoAus?.conGoce),
+            horas: horasDia, jornadaCompleta: horasDia >= (jornada - 0.5)
           };
         }
         return { presente: false, vacio: !esDomingo && !ausencia && !actividad, esDomingo, ausencia, ausenciaDesplazada, actividad };
@@ -1161,9 +1229,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
 
-    // Horas fijas de los días sin checada cubiertos (actividad o ausencia)
-    // suman al total, igual que si hubiera trabajado.
-    const horas = Math.round((acc.horas + diasCubiertosSinSello * HORAS_FIJAS_JORNADA) * 100) / 100;
+    // Los días sin checada cubiertos (actividad o ausencia) suman al total,
+    // igual que si hubiera trabajado.
+    const horas = Math.round((acc.horas + horasCubiertasSinSello) * 100) / 100;
     // Extra = excedente sobre 45h semanales (incluye sábado en el total).
     // Normal = lo trabajado hasta el tope de 45h.
     const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
