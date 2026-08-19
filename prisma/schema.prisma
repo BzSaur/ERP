@@ -235,6 +235,7 @@ model Empleados {
   designacion_encargado    Cat_Encargados?
   grupo_miembros           Grupo_Miembros[]
   actividad_recurrencias   Actividad_Recurrencias[]
+  recurrencias_responsable Actividad_Recurrencias[] @relation("RecurrenciasResponsable")
 
   @@index([ID_Nacionalidad])
   @@index([ID_Puesto])
@@ -886,6 +887,9 @@ model Actividad_Recurrencias {
   ID_Recurrencia   Int       @id @default(autoincrement())
   ID_Empleado      Int
   ID_Grupo         Int?      // contexto opcional: bajo qué grupo se definió la regla
+  // Encargado que creó la regla. El grupo puede ser null (o cambiar después),
+  // así que este campo es la fuente confiable para mostrar el responsable.
+  ID_Responsable   Int?
   ID_Tipo_Actividad Int
   Nombre_Actividad String    @db.VarChar(150)
   ID_Empresa       Int
@@ -898,11 +902,13 @@ model Actividad_Recurrencias {
 
   empleado Empleados    @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
   grupo    Grupos?      @relation(fields: [ID_Grupo], references: [ID_Grupo], onDelete: SetNull)
+  responsable Empleados? @relation("RecurrenciasResponsable", fields: [ID_Responsable], references: [ID_Empleado])
   tipo_actividad Cat_Tipo_Actividad @relation(fields: [ID_Tipo_Actividad], references: [ID_Tipo_Actividad])
   empresa  Cat_Empresas @relation(fields: [ID_Empresa], references: [ID_Empresa])
 
   @@index([ID_Empleado])
   @@index([ID_Grupo])
+  @@index([ID_Responsable])
   @@index([ID_Tipo_Actividad])
   @@index([Dia_Semana])
   @@map("Actividad_Recurrencias")

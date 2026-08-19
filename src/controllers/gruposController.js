@@ -641,10 +641,17 @@ export const toggleRecurrencia = async (req, res, next) => {
       return res.status(400).json({ ok: false, error: `Ya existe una recurrencia activa los ${NOMBRES_DIA[diaSemana]} para ese empleado` });
     }
 
+    // El responsable de la regla es el encargado del grupo donde se define.
+    const encargadoGrupo = await prisma.grupos.findUnique({
+      where: { ID_Grupo: idGrupo },
+      select: { encargado: { select: { ID_Empleado: true } } }
+    });
+
     const nueva = await prisma.actividad_Recurrencias.create({
       data: {
         ID_Empleado: idEmpleado,
         ID_Grupo: idGrupo,
+        ID_Responsable: encargadoGrupo?.encargado?.ID_Empleado ?? null,
         ID_Tipo_Actividad: idTipoActividad,
         Nombre_Actividad: nombreActividad,
         ID_Empresa: idEmpresa,

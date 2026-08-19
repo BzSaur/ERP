@@ -535,6 +535,7 @@ async function storeRecurrente(req, res, next, miId, esDelegante) {
       for (const dia of dias) {
         data.push({
           ID_Empleado: idEmpleado,
+          ID_Responsable: miId,
           ID_Tipo_Actividad: idTipoActividad,
           Nombre_Actividad: Nombre_Actividad.trim(),
           ID_Empresa: idEmpresa,
@@ -1078,9 +1079,23 @@ export const toggleCelda = async (req, res, next) => {
           });
         }
 
+        // Horario que venga en el reemplazo; si no, se limpia el anterior
+        // (pertenecía a la actividad que se está sustituyendo).
+        const aMinR = (hhmm) => {
+          if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+          const [h, m] = hhmm.split(':').map(Number);
+          return (h > 23 || m > 59) ? null : h * 60 + m;
+        };
+        const hIniR = aMinR(req.body.Hora_Inicio);
+        const hFinR = aMinR(req.body.Hora_Fin);
+
         await prisma.actividad_Asignaciones.update({
           where: { ID_Asignacion: puntual.ID_Asignacion },
-          data: { ID_Actividad: destino.ID_Actividad, Hora_Inicio: null, Hora_Fin: null }
+          data: {
+            ID_Actividad: destino.ID_Actividad,
+            Hora_Inicio: (hIniR != null && hFinR != null && hFinR > hIniR) ? hIniR : null,
+            Hora_Fin: (hIniR != null && hFinR != null && hFinR > hIniR) ? hFinR : null
+          }
         });
 
         // La actividad anterior puede quedarse sin días.
@@ -1186,12 +1201,32 @@ export const toggleCelda = async (req, res, next) => {
       where: { ID_Empresa: idEmpresa },
       select: { Nombre_Empresa: true }
     });
+
+    // Tramo horario opcional ('HH:MM' -> minutos). Solo aplica a puntuales:
+    // una regla recurrente no materializa un día con horario propio.
+    const aMin = (hhmm) => {
+      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+      const [h, m] = hhmm.split(':').map(Number);
+      if (h > 23 || m > 59) return null;
+      return h * 60 + m;
+    };
+    const horaInicioMin = modo === 'PUNTUAL' ? aMin(req.body.Hora_Inicio) : null;
+    const horaFinMin = modo === 'PUNTUAL' ? aMin(req.body.Hora_Fin) : null;
+    if ((horaInicioMin == null) !== (horaFinMin == null)) {
+      return res.status(400).json({ ok: false, error: 'Captura ambas horas, o deja las dos vacías' });
+    }
+    if (horaInicioMin != null && horaFinMin <= horaInicioMin) {
+      return res.status(400).json({ ok: false, error: 'La hora de fin debe ser posterior a la de inicio' });
+    }
+
     // Payload común para repintar la celda sin recargar la página.
     const infoCelda = (esRecurrente) => ({
       nombre: nombreActividad,
       tipo: tipoValido.Nombre,
       color: tipoValido.Color,
       empresa: empresaSel?.Nombre_Empresa || '',
+      horaInicio: esRecurrente ? null : horaInicioMin,
+      horaFin: esRecurrente ? null : horaFinMin,
       esRecurrente
     });
 
@@ -1205,6 +1240,9 @@ export const toggleCelda = async (req, res, next) => {
         data: {
           ID_Empleado: idEmpleado,
           ID_Grupo: grupoDelEncargado?.ID_Grupo ?? null,
+          // Se guarda siempre, aunque no haya grupo: es lo que permite mostrar
+          // el encargado en las tablas de asistencia.
+          ID_Responsable: miId,
           ID_Tipo_Actividad: idTipoActividad,
           Nombre_Actividad: nombreActividad,
           ID_Empresa: idEmpresa,
@@ -1249,7 +1287,12 @@ export const toggleCelda = async (req, res, next) => {
     }
 
     await prisma.actividad_Asignaciones.create({
-      data: { ID_Actividad: actividad.ID_Actividad, ID_Empleado: idEmpleado, Fecha: fecha, CreatedBy: req.user.Email_Office365 }
+      data: {
+        ID_Actividad: actividad.ID_Actividad, ID_Empleado: idEmpleado, Fecha: fecha,
+        // Tramo horario opcional capturado en el mismo paso de creación.
+        Hora_Inicio: horaInicioMin, Hora_Fin: horaFinMin,
+        CreatedBy: req.user.Email_Office365
+      }
     });
 
     await registrarCambio({
@@ -1616,6 +1659,8 @@ export const actualizarRecurrencia = async (req, res, next) => {
           data: seAgregan.map(dia => ({
             ID_Empleado: regla.ID_Empleado,
             ID_Grupo: regla.ID_Grupo,
+            // Las filas hermanas heredan el responsable de la regla original.
+            ID_Responsable: regla.ID_Responsable,
             Dia_Semana: dia,
             CreatedBy: req.user.Email_Office365,
             ...datosComunes

@@ -788,17 +788,21 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           // recurrentes no materializan un día editable).
           ctx.idAsignacion = act ? act.ID_Asignacion : null;
           const wrapH = $('panelHorasWrap');
-          if (act && act.ID_Asignacion) {
+          // Disponible al crear una puntual y al editarla; solo se oculta en
+          // las recurrentes, que no materializan un día con horario propio.
+          if (!ctx.esRecurrente) {
             const aHHMM = m => Number.isFinite(m)
               ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
               : '';
-            $('panelHoraIni').value = aHHMM(act.horaInicio);
-            $('panelHoraFin').value = aHHMM(act.horaFin);
-            $('panelHorasAyuda').textContent = (Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
+            $('panelHoraIni').value = act ? aHHMM(act.horaInicio) : '';
+            $('panelHoraFin').value = act ? aHHMM(act.horaFin) : '';
+            $('panelHorasAyuda').textContent = (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
               ? 'Solo cuenta este tramo; se suma a lo que marcó el checador.'
               : (d.asistencia
                   ? 'Vacío: cuenta desde las 8:00 hasta su primera checada.'
                   : 'Vacío: cuenta jornada completa (9h).');
+            // Guardar solo el horario requiere que el día ya exista.
+            $('panelHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion);
             wrapH.classList.remove('d-none');
           } else {
             wrapH.classList.add('d-none');
@@ -852,6 +856,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       ID_Tipo_Actividad: tipo,
       ID_Empresa: empresa
     };
+
+    // Horario capturado en el mismo paso (solo aplica a puntuales).
+    if (!quiereRecurrente) {
+      const hI = $('panelHoraIni').value, hF = $('panelHoraFin').value;
+      if (!!hI !== !!hF) { mostrarError('Captura ambas horas, o deja las dos vacías'); return; }
+      if (hI && hF && hF <= hI) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+      if (hI && hF) { body.Hora_Inicio = hI; body.Hora_Fin = hF; }
+    }
 
     // Actividad PUNTUAL existente que sigue siendo puntual: UPDATE real sobre
     // la actividad, sin borrar ni recrear el día (conserva ID e histórico).

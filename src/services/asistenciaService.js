@@ -300,6 +300,7 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
     include: {
       empresa: { select: { Nombre_Empresa: true } },
       tipo_actividad: { select: { Nombre: true, Color: true } },
+      responsable: { select: { Nombre: true, Apellido_Paterno: true } },
       grupo: { include: { encargado: { include: { empleado: { select: { Nombre: true, Apellido_Paterno: true } } } } } }
     }
   });
@@ -344,7 +345,11 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
         ID_Recurrencia: regla.ID_Recurrencia,
         nombre: regla.Nombre_Actividad,
         empresa: regla.empresa?.Nombre_Empresa || '',
-        responsable: regla.grupo?.encargado?.empleado
+        // ID_Responsable es la fuente confiable; el grupo es solo respaldo
+        // para reglas viejas creadas antes de ese campo.
+        responsable: regla.responsable
+          ? [regla.responsable.Nombre, regla.responsable.Apellido_Paterno].filter(Boolean).join(' ')
+          : regla.grupo?.encargado?.empleado
           ? [regla.grupo.encargado.empleado.Nombre, regla.grupo.encargado.empleado.Apellido_Paterno].filter(Boolean).join(' ')
           : '',
         tipo: regla.tipo_actividad.Nombre,

@@ -294,6 +294,13 @@
           <span class="badge bg-secondary d-none" id="pcalBadgeRec"><i class="bi bi-arrow-repeat"></i> Recurrente</span>
         </div>
         <div class="card-body">
+          <!-- Aviso para días cubiertos por una regla semanal: lo que se
+               guarda es una excepción de ESE día, la regla no se toca. -->
+          <div class="alert alert-info py-2 px-3 small d-none" id="pcalAvisoRec">
+            <i class="bi bi-info-circle me-1"></i>
+            Este día lo cubre una <strong>recurrencia</strong>. Si lo cambias, se guarda como
+            <strong>excepción solo de este día</strong> — la regla sigue aplicando las demás semanas.
+          </div>
           <div class="mb-2">
             <label class="form-label small mb-1">Nombre</label>
             <input type="text" class="form-control form-control-sm" id="pcalNombreAct" placeholder="Ej: Instalación en obra">
@@ -323,7 +330,7 @@
 
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="pcalRecurrente">
-            <label class="form-check-label small" for="pcalRecurrente">
+            <label class="form-check-label small" for="pcalRecurrente" id="pcalRecLabel">
               <i class="bi bi-arrow-repeat"></i> Repetir cada semana este día
             </label>
           </div>
@@ -561,9 +568,22 @@
         // Sin actividad: precargar lo que haya escrito arriba, como punto de
         // partida (el panel es la vía para un día concreto).
         $$('pcalNombreAct').value = act ? act.nombre : defNombre.value.trim();
-        $$('pcalRecurrente').checked = act ? ctxCal.esRecurrente : chkRecurrente.checked;
+        // En un día cubierto por recurrencia el switch arranca APAGADO: lo
+        // normal ahí es registrar una excepción de ese día (ej. "ese viernes
+        // fui a capacitación"), no reescribir la regla de todas las semanas.
+        $$('pcalRecurrente').checked = act ? false : chkRecurrente.checked;
         $$('pcalBadgeRec').classList.toggle('d-none', !ctxCal.esRecurrente);
+        $$('pcalAvisoRec').classList.toggle('d-none', !ctxCal.esRecurrente);
         $$('pcalQuitar').classList.toggle('d-none', !act);
+        // Sobre una recurrencia, "Quitar" detiene la regla completa: se avisa.
+        $$('pcalQuitar').title = ctxCal.esRecurrente
+          ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
+          : 'Quita la actividad de este día';
+        // Sobre una recurrencia, encender el switch REEMPLAZA la regla; fuera
+        // de ese caso, la crea. El texto lo aclara.
+        $$('pcalRecLabel').innerHTML = ctxCal.esRecurrente
+          ? '<i class="bi bi-arrow-repeat"></i> Reemplazar la regla de todas las semanas'
+          : '<i class="bi bi-arrow-repeat"></i> Repetir cada semana este día';
 
         const opts = (sel, items, k, l, s) => {
           sel.innerHTML = '<option value="">Seleccionar...</option>' + items.map(function(i){
@@ -584,16 +604,19 @@
         opts($$('pcalTipo'), d.tiposActividad, 'ID_Tipo_Actividad', 'Nombre', tSel);
         opts($$('pcalEmpresa'), d.empresas, 'ID_Empresa', 'Nombre_Empresa', eSel);
 
-        // Horario: solo para puntuales (las recurrentes no tienen día editable).
+        // Horario: disponible al crear una puntual y al editarla. Solo se
+        // oculta en las recurrentes, que no materializan un día editable.
         const wrapH = $$('pcalHorasWrap');
-        if (act && act.ID_Asignacion) {
+        if (!ctxCal.esRecurrente) {
           const hhmm = m => Number.isFinite(m)
             ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : '';
-          $$('pcalHoraIni').value = hhmm(act.horaInicio);
-          $$('pcalHoraFin').value = hhmm(act.horaFin);
-          $$('pcalHorasAyuda').textContent = (Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
+          $$('pcalHoraIni').value = act ? hhmm(act.horaInicio) : '';
+          $$('pcalHoraFin').value = act ? hhmm(act.horaFin) : '';
+          $$('pcalHorasAyuda').textContent = (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
             ? 'Solo cuenta este tramo; se suma a la checada.'
             : (d.asistencia ? 'Vacío: cuenta de 8:00 a su primera checada.' : 'Vacío: jornada completa (9h).');
+          // El botón de guardar solo el horario requiere que el día ya exista.
+          $$('pcalHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion);
           wrapH.classList.remove('d-none');
         } else {
           wrapH.classList.add('d-none');
@@ -634,6 +657,14 @@
         ID_Empresa: empresa
       };
       if (idEncargado) body.ID_Encargado_Empleado = idEncargado;
+
+      // Horario capturado en el mismo paso (solo aplica a puntuales).
+      const hIni = $$('pcalHoraIni').value, hFin = $$('pcalHoraFin').value;
+      if (!$$('pcalRecurrente').checked) {
+        if (!!hIni !== !!hFin) { errCal('Captura ambas horas, o deja las dos vacías'); return; }
+        if (hIni && hFin && hFin <= hIni) { errCal('La hora de fin debe ser posterior a la de inicio'); return; }
+        if (hIni && hFin) { body.Hora_Inicio = hIni; body.Hora_Fin = hFin; }
+      }
 
       errCal('');
       fetch('/encargado/actividades/toggle', {
