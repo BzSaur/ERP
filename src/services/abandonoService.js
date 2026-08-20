@@ -52,12 +52,12 @@ export async function detectarAbandono(idEmpleado = null) {
     if (diasFalta.length < FALTAS_CONSECUTIVAS) continue;
     diasFalta.sort((a, b) => a - b);
 
-    // Racha más larga de días laborables seguidos (el domingo no la rompe).
+    // Racha más larga de días laborables seguidos (el fin de semana no la rompe).
     let mejorRacha = 1, racha = 1;
     let inicioRacha = diasFalta[0], mejorInicio = diasFalta[0], mejorFin = diasFalta[0];
     for (let i = 1; i < diasFalta.length; i++) {
       const esperado = new Date(diasFalta[i - 1]);
-      do { esperado.setDate(esperado.getDate() + 1); } while (esperado.getDay() === 0);
+      do { esperado.setDate(esperado.getDate() + 1); } while (asistenciaService.esDiaDescanso(esperado));
 
       if (diasFalta[i].getTime() === esperado.getTime()) {
         racha++;

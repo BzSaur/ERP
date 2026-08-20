@@ -798,6 +798,16 @@ function paresDesdeChecadas(checadas, empleadoRegla) {
 // ya calculadas (no las reemplaza). Si no hubo checada, no aplica: ese caso
 // sigue usando las 9h fijas simples (bloques ya existentes, sin cambio).
 const COMIDA_INI_MIN = 14 * 60, COMIDA_FIN_MIN = 15 * 60;
+
+/**
+ * Días de descanso: sábado (6) y domingo (0). Un día así nunca cuenta como
+ * falta ni resta a las horas esperadas — quien sí labore ese día se registra
+ * por su checada o por una actividad delegada, que sí suman.
+ */
+export function esDiaDescanso(fecha) {
+  const d = new Date(fecha).getDay();
+  return d === 0 || d === 6;
+}
 // Ventana de la jornada estándar. Una actividad sin tramo capturado se asume
 // dentro de ella; lo que otra actividad haga fuera de este rango es adicional.
 const JORNADA_INICIO_MIN = 8 * 60, JORNADA_FIN_MIN = 18 * 60;
@@ -1027,7 +1037,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   // ambos casos — vacaciones/permiso también se pagan completos.
   const ymdConRegistro = new Set(dias.map(d => ymdUTC(d.fecha)));
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === 0) continue; // domingo no laborable
+    if (esDiaDescanso(d)) continue; // sábado y domingo: descanso
     if (ymdConRegistro.has(ymdUTC(d))) continue;
     const periodoAus = periodoAusenciaEnFecha(ausencias, empleadoId, d);
     const actividadRaw = actividadesMap.get(`${empleadoId}_${d.toISOString().slice(0, 10)}`) || null;
@@ -1074,7 +1084,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   let diasLaborables = 0;
   let diasAusenciaJustificada = 0;
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === 0) continue;
+    if (esDiaDescanso(d)) continue;
     if (ausenciaEnFecha(ausencias, empleadoId, d) && !ymdTrabajados.has(ymdUTC(d))) {
       diasAusenciaJustificada++;
       continue;
@@ -1293,10 +1303,16 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const empleadosVisibles = filtroVisibilidad ? empleados.filter(e => empConDatos.has(e.ID_Empleado)) : empleados;
 
 
+  // Días del rango que sí son laborables (lunes a viernes).
+  const diasLaborablesRango = fechas.filter(f => !esDiaDescanso(f)).length;
+
   const filas = empleadosVisibles.map(e => {
     const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
-    const diasSemana = e.tipo_horario?.Dias_Semana || 6;
+    // Cat_Tipo_Horario aún guarda 6 días (nómina lo usa para el sueldo diario y
+    // no debe cambiar aquí). Para las horas esperadas se topa a los días
+    // laborables reales del rango, que ya excluyen sábado y domingo.
+    const diasSemana = Math.min(e.tipo_horario?.Dias_Semana || 6, diasLaborablesRango);
 
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
@@ -1308,7 +1324,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     const celdas = fechas.map(f => {
       const key = f.toISOString().slice(0, 10);
       const c = empDias?.get(key);
-      const esDomingo = f.getDay() === 0;
+      // Sábado y domingo son descanso: no generan falta ni restan esperadas.
+      // (El nombre `esDomingo` se conserva porque las vistas lo usan para
+      // pintar la celda como día no laborable.)
+      const esDomingo = esDiaDescanso(f);
       const actividadRaw = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
       const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, f);
 

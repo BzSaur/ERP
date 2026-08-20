@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -205,7 +205,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const key = d.toISOString().slice(0, 10);
       const a = idx.get(e.ID_Empleado)?.get(key);
       if (!a) {
-        if (d.getDay() === 0) { fila.push('', '', ''); continue; }
+        if (esDiaDescanso(d)) { fila.push('', '', ''); continue; }
         const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, d);
         const actividadRaw = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
         if (!periodoAus && !actividadRaw) { fila.push('', '', ''); continue; }
