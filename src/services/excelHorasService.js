@@ -103,14 +103,15 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const dias = rangoDias(inicio, fin);
 
   let empleados = await prisma.empleados.findMany({
-    // Mismo criterio que la vista HTML: con lista explícita esa lista manda
-    // (incluye vacaciones/incapacidad/suspendidos); solo se excluye BAJA.
+    // Mismo criterio que la vista HTML: sigue quien no está de BAJA, incluidos
+    // vacaciones, incapacidad y suspendidos. Si el Excel filtrara distinto, no
+    // cuadraría con la tabla que el usuario acaba de ver.
     where: filtro?.idsPermitidos
       ? {
           ID_Empleado: { in: filtro.idsPermitidos },
           estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } }
         }
-      : { ID_Estatus: 1 },
+      : { estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } } },
     select: {
       ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },

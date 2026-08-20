@@ -25,6 +25,31 @@ function nombreCompleto(emp) {
     .toUpperCase();
 }
 
+/**
+ * Comando que DESHABILITA a un usuario sin borrar su huella.
+ *
+ * `Enable=0` NO existe en el USERINFO de ZK: el device recibe el campo, no lo
+ * reconoce, lo ignora y aplica el resto — confirma el comando y el usuario
+ * sigue checando. Se verificó en producción (bloqueo confirmado 16:05:01,
+ * checadas aceptadas en vivo 16:06 y 16:08).
+ *
+ * El mecanismo correcto es la franja horaria: `Grp=0` lo saca del grupo de
+ * acceso y `TZ` con todos los ceros no le deja ninguna ventana válida, así que
+ * el lector lo rechaza a cualquier hora. El registro biométrico permanece: al
+ * reactivar basta un UPDATE normal, sin re-enrolar.
+ */
+function comandoBloqueo(pin, name) {
+  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tGrp=0\tTZ=0000000000000000`;
+}
+
+/**
+ * Comando que REHABILITA: devuelve al grupo 1 y limpia la restricción de
+ * franja (`TZ=0` = sin restricción horaria propia, usa la del grupo).
+ */
+function comandoAlta(pin, name) {
+  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tGrp=1\tTZ=0`;
+}
+
 /** Lista de checadores activos y aprobados (destinos de los comandos). */
 async function checadoresDestino() {
   return prisma.checadores.findMany({
@@ -44,7 +69,7 @@ export async function encolarAltaEmpleado(emp, tipo = 'CREATE_USER') {
 
   const pin = emp.ID_Empleado;
   const name = nombreCompleto(emp);
-  const comando = `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0`;
+  const comando = comandoAlta(pin, name);
 
   await prisma.checadores_Comandos.createMany({
     data: destinos.map(d => ({
@@ -159,14 +184,14 @@ export async function sincronizarTodos(idChecador = null) {
           ID_Checador: d.ID_Checador,
           Tipo_Comando: 'CREATE_USER',
           ID_Empleado: e.ID_Empleado,
-          Comando: `DATA UPDATE USERINFO PIN=${e.ID_Empleado}\tName=${nombreCompleto(e)}\tPri=0`
+          Comando: comandoAlta(e.ID_Empleado, nombreCompleto(e))
         }))
       });
       encolados += aAltar.length;
     }
 
-    // BLOQUEOS: suspendidos que el device conoce y siguen habilitados. Se
-    // deshabilitan con Enable=0 (el PIN y la huella permanecen en el device).
+    // BLOQUEOS: suspendidos que el device conoce y siguen habilitados. Se les
+    // quita la franja horaria (el PIN y la huella permanecen en el device).
     const aDeshabilitar = suspendidos.filter(e =>
       enDevice.has(e.ID_Empleado) &&
       !conDeletePend.has(e.ID_Empleado) &&
@@ -178,7 +203,7 @@ export async function sincronizarTodos(idChecador = null) {
           ID_Checador: d.ID_Checador,
           Tipo_Comando: 'UPDATE_USER',
           ID_Empleado: e.ID_Empleado,
-          Comando: `DATA UPDATE USERINFO PIN=${e.ID_Empleado}\tName=${nombreCompleto(e)}\tPri=0\tEnable=0`
+          Comando: comandoBloqueo(e.ID_Empleado, nombreCompleto(e))
         }))
       });
       deshabilitados += aDeshabilitar.length;

@@ -1137,17 +1137,17 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
 
+  // Quien no está de BAJA sigue en la tabla, aunque esté en vacaciones,
+  // incapacidad o SUSPENDIDO por faltas: el suspendido no puede desaparecer
+  // justo del reporte donde se revisan las faltas que lo bloquearon. Solo la
+  // BAJA real sale, porque ya no es empleado.
+  const soloVigentes = { estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } } };
+
   let empleados = await prisma.empleados.findMany({
     where: filtro?.idsPermitidos
-      // Con una lista explícita (equipo de un encargado) esa lista manda: hay
-      // que ver también a quien está en vacaciones, incapacidad o suspendido
-      // por faltas — si no, el bloqueado desaparece justo de la tabla donde se
-      // revisan sus faltas. Solo se excluye la BAJA real.
-      ? {
-          ID_Empleado: { in: filtro.idsPermitidos },
-          estatus: { is: { Nombre_Estatus: { not: 'BAJA' } } }
-        }
-      : { ID_Estatus: 1 },
+      // Con una lista explícita (equipo de un encargado) esa lista manda.
+      ? { ID_Empleado: { in: filtro.idsPermitidos }, ...soloVigentes }
+      : soloVigentes,
     select: {
       ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },
