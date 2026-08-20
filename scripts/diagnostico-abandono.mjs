@@ -21,7 +21,7 @@ const DIAS_VENTANA = 30;
 const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
 const desde = new Date(hoy); desde.setDate(desde.getDate() - DIAS_VENTANA);
 const hace7 = new Date(hoy); hace7.setDate(hace7.getDate() - 7);
-const ymd = (d) => new Date(d).toISOString().slice(0, 10);
+const ymd = (d) => d ? new Date(d).toISOString().slice(0, 10) : '---';
 
 // --- Salud del checador: sin esto, las "faltas" no significan nada ---------
 const [jornadas, jornadas7, activos, porEstatus] = await Promise.all([
@@ -64,8 +64,17 @@ console.log('\n-- Alertas --');
 console.log('ALERTADOS:', alertas.length, `= ${pct}% de los activos`);
 
 if (alertas.length) {
-  console.log('\n  ID   Empleado                        Cons Total  Racha                  Ult.falta');
-  console.log('  ' + '-'.repeat(84));
+  // Última checada real de cada alertado: si es reciente, la racha no es vigente
+  // y algo quedó mal en la detección.
+  const ult = await prisma.empleados_Asistencia.groupBy({
+    by: ['ID_Empleado'],
+    where: { ID_Empleado: { in: alertas.map(a => a.ID_Empleado) }, Presente: true },
+    _max: { Fecha: true }
+  });
+  const mapUlt = new Map(ult.map(u => [u.ID_Empleado, u._max.Fecha]));
+
+  console.log('\n  ID   Empleado                        Cons Total  Racha                  Ult.checada');
+  console.log('  ' + '-'.repeat(86));
   for (const a of alertas.slice(0, 25)) {
     console.log(
       '  ' + String(a.ID_Empleado).padStart(4),
@@ -73,7 +82,7 @@ if (alertas.length) {
       String(a.consecutivas).padStart(4),
       String(a.totalFaltas).padStart(5),
       ' ' + a.rachaDesde + '->' + a.rachaHasta,
-      ' ' + a.ultimaFalta
+      ' ' + ymd(mapUlt.get(a.ID_Empleado))
     );
   }
   if (alertas.length > 25) console.log('  ... +' + (alertas.length - 25) + ' mas');

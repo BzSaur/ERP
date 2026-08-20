@@ -1,7 +1,10 @@
 /**
  * Detección de abandono de trabajo y bloqueo del checador.
  *
- * Criterio (definido por RH): 3 o más faltas CONSECUTIVAS. Es más estricto que
+ * Criterio (definido por RH): 3 o más faltas CONSECUTIVAS Y VIGENTES — la racha
+ * tiene que llegar hasta el último día laborable cerrado. Quien faltó tres días
+ * seguidos y ya volvió no alerta: el propósito es detectar a quien no viene
+ * ahora, no auditar el historial del mes. Es más estricto que
  * la LFT (art. 47-X habla de más de 3 faltas en 30 días, no necesariamente
  * seguidas) y su propósito es operativo, no de rescisión: quien deja de venir
  * varios días seguidos pierde el acceso al checador y tiene que presentarse
@@ -39,46 +42,79 @@ export async function detectarAbandono(idEmpleado = null) {
     idEmpleado ? { idsPermitidos: [idEmpleado] } : null
   );
 
+  // Fecha de ingreso y última checada de cada empleado del rango. Sin esto se
+  // alerta a quien nunca pudo checar: los días anteriores a su alta salen
+  // "vacíos" y se leen como faltas.
+  const idsFilas = datos.filas.map(f => f.ID_Empleado);
+  const [altas, ultimasChecadas] = await Promise.all([
+    prisma.empleados.findMany({
+      where: { ID_Empleado: { in: idsFilas } },
+      select: { ID_Empleado: true, Fecha_Ingreso: true }
+    }),
+    prisma.empleados_Asistencia.groupBy({
+      by: ['ID_Empleado'],
+      where: { ID_Empleado: { in: idsFilas }, Presente: true },
+      _max: { Fecha: true }
+    })
+  ]);
+  const ingresoDe = new Map(altas.map(a => [a.ID_Empleado, a.Fecha_Ingreso]));
+  const tieneHistorial = new Set(ultimasChecadas.filter(u => u._max.Fecha).map(u => u.ID_Empleado));
+
   const alertas = [];
   for (const fila of datos.filas) {
+    // Quien nunca ha checado no puede "abandonar": o no está enrolado en el
+    // device, o su PIN no corresponde. Es un problema de padrón, no de RH.
+    if (!tieneHistorial.has(fila.ID_Empleado)) continue;
+
     // Días con falta real: laborable, sin checada, sin vacaciones/incidencia
-    // ni actividad de campo. Los días de hoy en adelante no cuentan todavía.
+    // ni actividad de campo. Los días de hoy en adelante no cuentan todavía,
+    // ni los anteriores al alta del empleado.
+    const ingreso = ingresoDe.get(fila.ID_Empleado);
+    const desdeAlta = ingreso ? new Date(ingreso) : null;
+    if (desdeAlta) desdeAlta.setHours(0, 0, 0, 0);
+
     const diasFalta = [];
     fila.celdas.forEach((c, i) => {
       const f = datos.fechas[i];
       if (!c.vacio || !f || new Date(f) >= hoy) return;
+      if (desdeAlta && new Date(f) < desdeAlta) return;
       diasFalta.push(new Date(f));
     });
     if (diasFalta.length < FALTAS_CONSECUTIVAS) continue;
     diasFalta.sort((a, b) => a - b);
 
-    // Racha más larga de días laborables seguidos (el fin de semana no la rompe).
-    let mejorRacha = 1, racha = 1;
-    let inicioRacha = diasFalta[0], mejorInicio = diasFalta[0], mejorFin = diasFalta[0];
-    for (let i = 1; i < diasFalta.length; i++) {
-      const esperado = new Date(diasFalta[i - 1]);
-      do { esperado.setDate(esperado.getDate() + 1); } while (asistenciaService.esDiaDescanso(esperado));
+    // Solo interesa la racha VIGENTE: la que llega hasta el último día
+    // laborable cerrado. Una racha de hace tres semanas, ya rota porque la
+    // persona volvió, no es abandono — RH necesita a quien no viene AHORA.
+    const ultimoLaborable = new Date(hoy);
+    do { ultimoLaborable.setDate(ultimoLaborable.getDate() - 1); }
+    while (asistenciaService.esDiaDescanso(ultimoLaborable));
 
-      if (diasFalta[i].getTime() === esperado.getTime()) {
-        racha++;
-      } else {
-        racha = 1;
-        inicioRacha = diasFalta[i];
-      }
-      if (racha > mejorRacha) { mejorRacha = racha; mejorInicio = inicioRacha; mejorFin = diasFalta[i]; }
+    const ultimaFalta = diasFalta[diasFalta.length - 1];
+    if (ultimaFalta.getTime() !== ultimoLaborable.getTime()) continue;
+
+    // Se cuenta hacia atrás desde el último día laborable, hasta que se rompe.
+    let consecutivas = 1;
+    let inicio = ultimaFalta;
+    for (let i = diasFalta.length - 2; i >= 0; i--) {
+      const esperado = new Date(diasFalta[i + 1]);
+      do { esperado.setDate(esperado.getDate() - 1); } while (asistenciaService.esDiaDescanso(esperado));
+      if (diasFalta[i].getTime() !== esperado.getTime()) break;
+      consecutivas++;
+      inicio = diasFalta[i];
     }
 
-    if (mejorRacha < FALTAS_CONSECUTIVAS) continue;
+    if (consecutivas < FALTAS_CONSECUTIVAS) continue;
 
     alertas.push({
       ID_Empleado: fila.ID_Empleado,
       nombre: fila.nombre,
       area: fila.area,
       totalFaltas: diasFalta.length,
-      consecutivas: mejorRacha,
-      rachaDesde: mejorInicio.toISOString().slice(0, 10),
-      rachaHasta: mejorFin.toISOString().slice(0, 10),
-      ultimaFalta: diasFalta[diasFalta.length - 1].toISOString().slice(0, 10)
+      consecutivas,
+      rachaDesde: inicio.toISOString().slice(0, 10),
+      rachaHasta: ultimaFalta.toISOString().slice(0, 10),
+      ultimaFalta: ultimaFalta.toISOString().slice(0, 10)
     });
   }
 
