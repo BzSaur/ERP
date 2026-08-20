@@ -20,6 +20,32 @@ import { getSemanaActual } from '../services/nominaService.js';
 // La detección y el bloqueo viven en abandonoService: la sincronización del
 // checador los ejecuta también, para que apliquen en cuanto llegan checadas.
 import { detectarAbandono, bloquearPorAbandono } from '../services/abandonoService.js';
+import { encolarAltaEmpleado } from '../services/checadorComandosService.js';
+
+/**
+ * Rehabilita en el checador a quien se acaba de reactivar.
+ *
+ * Sin esto, RH cambia el estatus pero la persona sigue sin poder checar hasta
+ * que alguien entre a /admin/checadores a sincronizar — justo lo contrario del
+ * flujo que RH necesita (se presenta, lo reactivan, vuelve a trabajar).
+ *
+ * Se manda CREATE_USER (`Pri=0` sin `Enable=0`), que vuelve a habilitar el PIN
+ * conservando la huella ya enrolada. Best-effort: si falla, la reactivación en
+ * BD no se revierte — la sincronización periódica lo corrige después.
+ *
+ * @returns {Promise<number>} comandos encolados (uno por checador activo)
+ */
+async function rehabilitarEnChecador(empleados) {
+  let total = 0;
+  for (const e of empleados) {
+    try {
+      total += await encolarAltaEmpleado(e, 'CREATE_USER');
+    } catch (err) {
+      // best-effort: no romper la reactivación por un fallo de cola
+    }
+  }
+  return total;
+}
 
 // Días naturales que abarca un rango, ambos extremos incluidos.
 function diasEntre(inicio, fin) {
@@ -451,7 +477,7 @@ export const reactivarEmpleado = async (req, res, next) => {
     const id = parseInt(req.params.idEmpleado);
     const empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: id },
-      select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, estatus: { select: { Nombre_Estatus: true } } }
+      select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true, estatus: { select: { Nombre_Estatus: true } } }
     });
     if (!empleado) {
       req.flash('error', 'Empleado no encontrado');
@@ -479,7 +505,10 @@ export const reactivarEmpleado = async (req, res, next) => {
       ip: obtenerIP(req)
     });
 
-    req.flash('success', `${empleado.Nombre} ${empleado.Apellido_Paterno} reactivado — volverá al checador en la próxima sincronización`);
+    const encolados = await rehabilitarEnChecador([empleado]);
+    req.flash('success', encolados > 0
+      ? `${empleado.Nombre} ${empleado.Apellido_Paterno} reactivado — ya puede checar (conserva su huella)`
+      : `${empleado.Nombre} ${empleado.Apellido_Paterno} reactivado — sin checadores activos para notificar`);
     res.redirect('/incidencias');
   } catch (error) {
     next(error);
@@ -508,7 +537,7 @@ export const reactivarLote = async (req, res, next) => {
 
     const aReactivar = await prisma.empleados.findMany({
       where,
-      select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true }
+      select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
     });
     if (aReactivar.length === 0) {
       req.flash('info', 'No hay empleados bloqueados que reactivar');
@@ -538,7 +567,10 @@ export const reactivarLote = async (req, res, next) => {
       }
     }
 
-    req.flash('success', `${aReactivar.length} empleado(s) reactivados — vuelven al checador en la próxima sincronización (conservan su huella)`);
+    const encolados = await rehabilitarEnChecador(aReactivar);
+    req.flash('success', encolados > 0
+      ? `${aReactivar.length} empleado(s) reactivados — ya pueden checar (conservan su huella)`
+      : `${aReactivar.length} empleado(s) reactivados — sin checadores activos para notificar`);
     res.redirect('/incidencias');
   } catch (error) {
     next(error);
