@@ -87,18 +87,11 @@ export async function sincronizarTodos(idChecador = null) {
   // consecutivas. Va aquí y no en una pantalla para que surta efecto en cuanto
   // llegan las checadas nuevas — quien completó su racha sale del checador en
   // esta misma pasada. Import diferido: evita un ciclo con asistenciaService.
+  // DESACTIVADO: el bloqueo automático suspendió a media plantilla en su
+  // primer uso real (las faltas de días sin sincronizar se leyeron como
+  // abandono). Queda solo como alerta en /incidencias, donde RH decide caso
+  // por caso. Para reactivarlo hay que validar antes contra datos reales.
   let bloqueadosPorAbandono = [];
-  try {
-    const { evaluarYBloquear } = await import('./abandonoService.js');
-    const r = await evaluarYBloquear(null, null);
-    bloqueadosPorAbandono = r.bloqueados;
-    if (bloqueadosPorAbandono.length) {
-      logger.info(`[ADMS] Bloqueo por faltas: ${bloqueadosPorAbandono.length} empleado(s) retirados del checador`);
-    }
-  } catch (err) {
-    // Nunca debe impedir la sincronización.
-    logger.error(`[ADMS] Error al evaluar abandono: ${err.message}`);
-  }
 
   // Tres grupos, porque el device se trata distinto en cada uno:
   //  - ACTIVOS (incl. VACACIONES/INCAPACIDAD): alta normal, pueden checar.

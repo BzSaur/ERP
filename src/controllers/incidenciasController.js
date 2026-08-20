@@ -83,9 +83,21 @@ export const index = async (req, res, next) => {
     // rango visible): un patrón de faltas no se corta por el filtro de fechas.
     const alertas = await detectarAbandono(idEmpleadoFiltro);
 
-    // Respaldo del bloqueo que ya corre en la sincronización del checador:
-    // cubre el caso de alguien cuya racha se completó sin checadas nuevas.
-    const bloqueadosAhora = await bloquearPorAbandono(alertas, req.user, obtenerIP(req));
+    // DESACTIVADO: ver nota en checadorComandosService. El patrón se muestra
+    // como alerta y RH bloquea manualmente desde el panel.
+    const bloqueadosAhora = [];
+
+    // Empleados actualmente fuera del checador. Va aparte de las alertas: uno
+    // puede seguir suspendido aunque ya no cumpla el patrón de faltas, y sin
+    // esta lista no habría forma de reactivarlo desde la interfaz.
+    const suspendidos = await prisma.empleados.findMany({
+      where: { estatus: { is: { Nombre_Estatus: 'SUSPENDIDO' } } },
+      select: {
+        ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
+        area: { select: { Nombre_Area: true } }
+      },
+      orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
+    });
 
     // Estatus actual de los alertados, para mostrar si ya están bloqueados.
     if (alertas.length) {
@@ -147,6 +159,7 @@ export const index = async (req, res, next) => {
       faltas,
       alertas,
       bloqueadosAhora,
+      suspendidos,
       tipos,
       empleados,
       stats: {

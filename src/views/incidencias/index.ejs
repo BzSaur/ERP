@@ -83,6 +83,78 @@
   </div>
 <% } %>
 
+<% if (suspendidos && suspendidos.length > 0) { %>
+<form action="/incidencias/reactivar-lote" method="POST" id="formSusp">
+<div class="card border-dark mb-4">
+  <div class="card-header bg-dark bg-opacity-10 d-flex flex-wrap align-items-center gap-2">
+    <i class="bi bi-lock-fill"></i>
+    <strong>Bloqueados del checador</strong>
+    <span class="badge bg-dark ms-1"><%= suspendidos.length %></span>
+    <small class="text-body-secondary">No pueden checar hasta que RH los reactive</small>
+    <div class="ms-auto d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-success" id="btnReactSel" disabled>
+        <i class="bi bi-unlock me-1"></i>Reactivar seleccionados (<span id="contReact">0</span>)
+      </button>
+      <button type="submit" name="Todos" value="on" class="btn btn-sm btn-outline-success"
+              onclick="return confirm('¿Reactivar a los <%= suspendidos.length %> empleados bloqueados? Volverán al checador en la próxima sincronización.')">
+        <i class="bi bi-unlock-fill me-1"></i>Reactivar todos
+      </button>
+    </div>
+  </div>
+  <div class="table-responsive" style="max-height:340px; overflow-y:auto;">
+    <table class="table table-hover table-sm mb-0">
+      <thead class="table-light" style="position:sticky; top:0; z-index:1">
+        <tr>
+          <th style="width:36px"><input type="checkbox" class="form-check-input" id="chkTodosSusp" title="Seleccionar todos"></th>
+          <th>ID</th>
+          <th>Empleado</th>
+          <th>Área</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% suspendidos.forEach(function(s) { %>
+        <tr>
+          <td><input type="checkbox" class="form-check-input chk-susp" name="empleados" value="<%= s.ID_Empleado %>"></td>
+          <td class="text-body-secondary"><%= s.ID_Empleado %></td>
+          <td><%= [s.Nombre, s.Apellido_Paterno, s.Apellido_Materno].filter(Boolean).join(' ') %></td>
+          <td><small class="text-body-secondary"><%= s.area ? s.area.Nombre_Area : '—' %></small></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer small text-body-secondary">
+    Su huella sigue registrada en el checador: al reactivarlos vuelven a marcar sin re-enrolar.
+  </div>
+</div>
+</form>
+
+<script>
+(function(){
+  const chkTodos = document.getElementById('chkTodosSusp');
+  const btnSel = document.getElementById('btnReactSel');
+  const cont = document.getElementById('contReact');
+  if (!btnSel) return;
+  const casillas = () => Array.from(document.querySelectorAll('.chk-susp'));
+  function refrescar(){
+    const n = casillas().filter(c => c.checked).length;
+    cont.textContent = n;
+    btnSel.disabled = n === 0;
+  }
+  chkTodos.addEventListener('change', function(){
+    casillas().forEach(c => { c.checked = chkTodos.checked; });
+    refrescar();
+  });
+  casillas().forEach(c => c.addEventListener('change', refrescar));
+  btnSel.addEventListener('click', function(ev){
+    const n = casillas().filter(c => c.checked).length;
+    if (!confirm('¿Reactivar ' + n + ' empleado(s)?')) ev.preventDefault();
+  });
+  refrescar();
+})();
+</script>
+<% } %>
+
 <% if (alertas && alertas.length > 0) { %>
 <% const hayBloqueados = alertas.some(a => a.bloqueado); %>
 <form action="/incidencias/reactivar-lote" method="POST" id="formLote">
