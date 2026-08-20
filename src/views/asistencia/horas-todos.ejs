@@ -358,7 +358,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    const tinteActividad = c.actividad && c.actividad.color
                      ? 'background-color:' + c.actividad.color + '22;'
                      : '';
-                   if (c.esDomingo) { cls='cel-dom'; }
+                   // Día de descanso (sáb/dom) SIN nada que mostrar. Quien vino
+                   // a recuperar horas sí checó: esa celda se pinta como
+                   // cualquier otra, si no el sábado trabajado desaparece.
+                   const descansoVacio = c.esDomingo && !c.presente && !c.ausencia && !c.actividad;
+                   if (descansoVacio) { cls='cel-dom'; }
                    else if (!c.presente && c.ausencia) {
                      cls = c.sinGoce ? 'cel-singoce' : 'cel-vacacion';
                      tip = c.ausencia + (c.sinGoce
@@ -382,7 +386,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                      }
                    }
               %>
-                <td class="text-center <%= cls %> cel-dia<%= (typeof panelEditable !== 'undefined' && panelEditable && !c.esDomingo) ? ' cel-editable' : '' %>"
+                <td class="text-center <%= cls %> cel-dia<%= (typeof panelEditable !== 'undefined' && panelEditable && !descansoVacio) ? ' cel-editable' : '' %>"
                     style="<%= bgStyle %>"
                     title="<%= tip %>"
                     data-emp="<%= f.ID_Empleado %>"
@@ -391,10 +395,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-sal="<%= c.salida || '' %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
-                    data-dom="<%= c.esDomingo ? 1 : 0 %>"
+                    data-dom="<%= descansoVacio ? 1 : 0 %>"
                     data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
-                  <% if (c.esDomingo) { %>
-                    <span class="text-body-secondary small">Dom</span>
+                  <% if (descansoVacio) { %>
+                    <span class="text-body-secondary small"><%= new Date(fechaCelda + 'T00:00:00').getDay() === 6 ? 'Sáb' : 'Dom' %></span>
                   <% } else if (!c.presente && c.ausencia) { %>
                     <% if (c.sinGoce) { %>
                       <span class="fw-bold d-block" style="color:#b02a37; font-size:.7rem" title="<%= c.ausencia %> — sin goce de sueldo"><%= c.ausencia.length > 12 ? c.ausencia.slice(0,11) + '…' : c.ausencia %></span>
