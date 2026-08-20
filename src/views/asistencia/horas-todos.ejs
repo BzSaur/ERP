@@ -249,6 +249,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .cel-act-info > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* El nombre lleva el color del tipo (inline, desde Cat_Tipo_Actividad.Color) */
   .cel-act-info .act-nom { font-weight:700; font-size:.66rem; }
+  .cel-act-info .act-hora { color:#495057; font-size:.62rem; font-variant-numeric:tabular-nums; font-weight:600; }
   .cel-act-info .act-emp { color:#495057; font-size:.6rem; }
   .cel-act-info .act-enc { color:#6c757d; font-size:.58rem; font-style:italic; }
   .matriz-horas .col-id  { position:sticky; left:0; background:#fff; z-index:2; min-width:48px; }
@@ -358,8 +359,17 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
                     <% } %>
                   <% } else if (!c.presente && c.actividad) { %>
+                    <%
+                      const hhmmSA = (m) => Number.isFinite(m)
+                        ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
+                      const saIni = hhmmSA(c.actividad.horaInicio);
+                      const saFin = hhmmSA(c.actividad.horaFin);
+                    %>
                     <div class="cel-act-info">
                       <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
+                      <% if (saIni && saFin) { %>
+                        <div class="act-hora" title="Horario de la actividad"><%= saIni %>–<%= saFin %></div>
+                      <% } %>
                       <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                       <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
                     </div>
@@ -377,8 +387,18 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                         <div class="hrs"><%= (c.horas||0).toFixed(1) %>h</div>
                       <% } %>
                       <% if (c.actividad) { %>
+                        <%
+                          // Tramo capturado de la actividad, si lo tiene.
+                          const hhmmAct = (m) => Number.isFinite(m)
+                            ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
+                          const actIni = hhmmAct(c.actividad.horaInicio);
+                          const actFin = hhmmAct(c.actividad.horaFin);
+                        %>
                         <div class="cel-act-info mt-1 pt-1 border-top">
                           <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
+                          <% if (actIni && actFin) { %>
+                            <div class="act-hora" title="Horario de la actividad"><%= actIni %>–<%= actFin %></div>
+                          <% } %>
                           <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                           <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
                         </div>

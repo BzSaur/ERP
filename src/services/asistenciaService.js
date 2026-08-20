@@ -802,12 +802,35 @@ export function horasActividadHastaEntrada(horaEntrada) {
  * @param {Object|null} actividad  entrada resuelta (trae horaInicio/horaFin)
  * @param {Date|null} horaEntrada  primera checada real del día, si la hubo
  */
-export function horasDeActividad(actividad, horaEntrada) {
+export function horasDeActividad(actividad, horaEntrada, horaSalida = null) {
   if (!actividad) return 0;
   const { horaInicio, horaFin } = actividad;
+
   if (Number.isFinite(horaInicio) && Number.isFinite(horaFin)) {
+    // Con checada real, el tramo de actividad solo aporta lo que la jornada
+    // NO cubrió: si alguien checa 09:03 y su actividad va de 16:00 a 19:00,
+    // las horas hasta su salida ya vienen del checador y contarlas otra vez
+    // inflaría el día. Solo se suma la parte que queda fuera.
+    if (horaEntrada) {
+      const ent = new Date(horaEntrada);
+      const entMin = ent.getHours() * 60 + ent.getMinutes();
+      // Sin salida marcada, la jornada se estima hasta las 18:00 (mismo
+      // criterio que usa el resto del cálculo).
+      let salMin;
+      if (horaSalida) {
+        const sal = new Date(horaSalida);
+        salMin = sal.getHours() * 60 + sal.getMinutes();
+      } else {
+        salMin = 18 * 60;
+      }
+      // Partes del tramo anteriores y posteriores a la jornada registrada.
+      const antes = horasNetasTramo(horaInicio, Math.min(horaFin, entMin));
+      const despues = horasNetasTramo(Math.max(horaInicio, salMin), horaFin);
+      return Math.round((antes + despues) * 100) / 100;
+    }
     return horasNetasTramo(horaInicio, horaFin);
   }
+
   return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
 }
 
@@ -861,7 +884,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: el
     // tramo de la actividad (capturado, o 8am→primera entrada) más las horas
     // reales ya calculadas por admsService.
-    const horas = (Number(a.Horas_Trabajadas) || 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada);
+    const horas = (Number(a.Horas_Trabajadas) || 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
     const retardoDia = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
@@ -1106,8 +1129,27 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // virtual 8am-primera entrada, con descuento de comida, + horas reales).
     const keyActividad = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
     const actividadDelDia = actividadesMap.get(keyActividad) || null;
-    const horasActividadDia = horasDeActividad(actividadDelDia, a.Hora_Entrada);
-    const h = (Number(a.Horas_Trabajadas) || 0) + horasActividadDia;
+    const horasActividadDia = horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
+
+    // Jornada real: si quedó abierta (entrada sin salida) y no hay horas
+    // guardadas, se estima el cierre. Va ANTES de sumar la actividad: si no,
+    // el aporte de la actividad haría creer que el día ya tiene horas y la
+    // jornada se perdería.
+    let horasReales = Number(a.Horas_Trabajadas) || 0;
+    if (horasReales === 0 && a.Presente && a.Hora_Entrada) {
+      const entR = new Date(a.Hora_Entrada);
+      const entMinR = entR.getHours() * 60 + entR.getMinutes();
+      let cierreR;
+      if (a.Hora_Salida) {
+        // Salida marcada pero sin horas consolidadas: se calcula del par.
+        const salR = new Date(a.Hora_Salida);
+        cierreR = salR.getHours() * 60 + salR.getMinutes();
+      } else {
+        cierreR = esDiaEnCurso(a.Fecha) ? minutosDelDiaAhora() : 18 * 60;
+      }
+      horasReales = horasNetasTramo(entMinR, cierreR);
+    }
+    const h = horasReales + horasActividadDia;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
     // Con actividad delegada NO hay retardo: la actividad justifica que no
     // llegara a la hora normal (ej. home office que sella al mediodía).
@@ -1139,15 +1181,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // Jornada abierta sin horas guardadas:
     //  - día pasado (cerrado): estimar hasta 18:00
     //  - día en curso: cerrar a la hora actual (NO estima jornada completa)
-    let horasCelda = h;
-    if (incompleta && h === 0 && entrada) {
-      const entMin = entrada.getHours() * 60 + entrada.getMinutes();
-      const CIERRE = enCurso ? minutosDelDiaAhora() : 18 * 60;
-      const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
-      let netos = Math.max(0, CIERRE - entMin);
-      if (entMin < COMIDA_FIN) netos -= Math.max(0, Math.min(CIERRE, COMIDA_FIN) - Math.max(entMin, COMIDA_INI));
-      horasCelda = Math.round((netos / 60) * 100) / 100;
-    }
+    // `h` ya trae la jornada (real o estimada) más el aporte de la actividad.
+    const horasCelda = h;
     diasEmp.get(a.ID_Empleado).set(key, {
       presente: a.Presente,
       horas: horasCelda,

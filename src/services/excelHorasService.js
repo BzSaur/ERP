@@ -258,7 +258,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // mismo criterio que la vista HTML /asistencia/horas.
       const actividadConChecada = d.getDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
       if (actividadConChecada) {
-        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada);
+        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida);
       }
 
       totalHoras += horas;
