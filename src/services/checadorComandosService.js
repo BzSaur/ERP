@@ -116,11 +116,31 @@ export async function sincronizarTodos(idChecador = null) {
   // consecutivas. Va aquí y no en una pantalla para que surta efecto en cuanto
   // llegan las checadas nuevas — quien completó su racha sale del checador en
   // esta misma pasada. Import diferido: evita un ciclo con asistenciaService.
-  // DESACTIVADO: el bloqueo automático suspendió a media plantilla en su
-  // primer uso real (las faltas de días sin sincronizar se leyeron como
-  // abandono). Queda solo como alerta en /incidencias, donde RH decide caso
-  // por caso. Para reactivarlo hay que validar antes contra datos reales.
+  //
+  // Estuvo desactivado tras suspender a 60 personas en su primer uso: las
+  // faltas de días sin sincronizar se leyeron como abandono. Se reactivó
+  // (20-ago-2026) después de corregir la detección y validar contra datos
+  // reales — de 49 alertados bajó a 7 (5% de la plantilla). Lo que cambió:
+  //  - solo cuenta la racha VIGENTE, no la más larga del mes
+  //  - no cuenta días anteriores al alta del empleado
+  //  - exige historial de checadas (quien nunca checó no "abandona")
+  //  - quien ya checó hoy queda fuera
+  //  - los sabatinos no se bloquean solos (el sábado no genera falta)
+  // Las guardas de bloquearPorAbandono siguen activas: no bloquea si el
+  // checador no reportó nada en 7 días, ni si alerta a más del 50%.
   let bloqueadosPorAbandono = [];
+  try {
+    const { evaluarYBloquear } = await import('./abandonoService.js');
+    const r = await evaluarYBloquear(null, null);
+    bloqueadosPorAbandono = r.bloqueados || [];
+    if (bloqueadosPorAbandono.length > 0) {
+      logger.warn(`Bloqueo por abandono: ${bloqueadosPorAbandono.length} empleado(s) a SUSPENDIDO`,
+        { ids: bloqueadosPorAbandono.map(b => b.ID_Empleado) });
+    }
+  } catch (err) {
+    // Best-effort: un fallo aquí no debe romper la sincronización del checador.
+    logger.error('Fallo la evaluacion de abandono: ' + err.message);
+  }
 
   // Tres grupos, porque el device se trata distinto en cada uno:
   //  - ACTIVOS (incl. VACACIONES/INCAPACIDAD): alta normal, pueden checar.

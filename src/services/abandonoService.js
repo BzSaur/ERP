@@ -60,11 +60,24 @@ export async function detectarAbandono(idEmpleado = null) {
   const ingresoDe = new Map(altas.map(a => [a.ID_Empleado, a.Fecha_Ingreso]));
   const tieneHistorial = new Set(ultimasChecadas.filter(u => u._max.Fecha).map(u => u.ID_Empleado));
 
+  // Quien ya checó HOY rompió la racha, aunque el día no haya cerrado. La
+  // racha se mide hasta el último día laborable cerrado (ayer), así que sin
+  // esto alguien que se presentó esta mañana seguiría saliendo como abandono.
+  const ymdHoy = hoy.toISOString().slice(0, 10);
+  const checoHoy = new Set(
+    ultimasChecadas
+      .filter(u => u._max.Fecha && new Date(u._max.Fecha).toISOString().slice(0, 10) >= ymdHoy)
+      .map(u => u.ID_Empleado)
+  );
+
   const alertas = [];
   for (const fila of datos.filas) {
     // Quien nunca ha checado no puede "abandonar": o no está enrolado en el
     // device, o su PIN no corresponde. Es un problema de padrón, no de RH.
     if (!tieneHistorial.has(fila.ID_Empleado)) continue;
+
+    // Se presentó hoy: la racha ya no está vigente.
+    if (checoHoy.has(fila.ID_Empleado)) continue;
 
     // Días con falta real: laborable, sin checada, sin vacaciones/incidencia
     // ni actividad de campo. Los días de hoy en adelante no cuentan todavía,
@@ -162,13 +175,30 @@ export async function bloquearPorAbandono(alertas, usuario = null, ip = null) {
   const alertadosActivos = alertas.length;
   if (totalActivos > 0 && alertadosActivos > totalActivos * 0.5) return [];
 
+  // Quien trabaja en sábado no se bloquea automáticamente. El sábado no genera
+  // falta (es opcional, para recuperar horas), así que alguien cuyo trabajo
+  // real cae ahí acumula "faltas" de lunes a viernes sin haber faltado nunca.
+  // Sigue apareciendo en la alerta de /incidencias para que RH lo revise; solo
+  // se le exime del bloqueo sin intervención.
+  const sabatinos = new Set();
+  for (const a of alertas) {
+    const enSabado = await prisma.empleados_Asistencia.findMany({
+      where: { ID_Empleado: a.ID_Empleado, Presente: true, Fecha: { gte: desde, lte: hoy } },
+      select: { Fecha: true }
+    });
+    // getUTCDay: Fecha es @db.Date (00:00Z); getDay() correría el día en CDMX.
+    if (enSabado.some(x => new Date(x.Fecha).getUTCDay() === 6)) sabatinos.add(a.ID_Empleado);
+  }
+  const bloqueables = alertas.filter(a => !sabatinos.has(a.ID_Empleado));
+  if (bloqueables.length === 0) return [];
+
   const suspendido = await prisma.cat_Estatus_Empleado.findFirst({ where: { Nombre_Estatus: 'SUSPENDIDO' } });
   if (!suspendido) return [];
 
   // Solo los que hoy están ACTIVO: no tocar bajas, incapacidades ni vacaciones.
   const candidatos = await prisma.empleados.findMany({
     where: {
-      ID_Empleado: { in: alertas.map(a => a.ID_Empleado) },
+      ID_Empleado: { in: bloqueables.map(a => a.ID_Empleado) },
       estatus: { is: { Nombre_Estatus: 'ACTIVO' } }
     },
     select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true }
