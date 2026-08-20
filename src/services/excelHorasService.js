@@ -190,6 +190,11 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   aoa.push(head1);
   aoa.push(head2);
 
+  // Detalle plano de actividades, para la hoja aparte. Con ~120 empleados y
+  // pocos con actividad, buscarlas dentro de la matriz es impráctico: esta
+  // lista solo tiene las filas que existen.
+  const detalleActividades = [];
+
   // Construir fila por empleado (con total para poder ordenar)
   const filas = empleados.map(e => {
     const nombre = [e.Nombre, e.Apellido_Paterno, e.Apellido_Materno].filter(Boolean).join(' ');
@@ -210,14 +215,30 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         if (ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
           // Sin checada: el tramo capturado manda; si no hay, jornada fija.
           const horasAct = horasDeActividad(actividadRaw, null);
-          const empresaTxt = actividadRaw.empresa ? ` (${actividadRaw.empresa})` : '';
-          const tieneTramo = Number.isFinite(actividadRaw.horaInicio) && Number.isFinite(actividadRaw.horaFin);
-          fila.push(
-            `${actividadRaw.tipo.toUpperCase()}: ${actividadRaw.nombre}${empresaTxt}`,
-            tieneTramo ? `${fmtMin(actividadRaw.horaInicio)}-${fmtMin(actividadRaw.horaFin)}` : '',
-            horasAct
-          );
+          // Un día puede tener VARIAS actividades: el Excel las lista todas,
+          // porque este reporte también justifica el trabajo realizado.
+          const listaAct = actividadRaw.todas || [actividadRaw];
+          const desc = listaAct.map(av => {
+            const emp = av.empresa ? ` (${av.empresa})` : '';
+            return `${av.tipo.toUpperCase()}: ${av.nombre}${emp}${av.esRecurrente ? ' [recurrente]' : ''}`;
+          }).join(' + ');
+          const horarios = listaAct
+            .filter(av => Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
+            .map(av => `${fmtMin(av.horaInicio)}-${fmtMin(av.horaFin)}`)
+            .join(' + ');
+          fila.push(desc, horarios, horasAct);
           totalHoras += horasAct;
+
+          listaAct.forEach(av => detalleActividades.push({
+            id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
+            fecha: key, nombreDia: NOMBRES_DIA[d.getDay()],
+            tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
+            horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
+              ? `${fmtMin(av.horaInicio)}-${fmtMin(av.horaFin)}` : 'Jornada completa',
+            recurrente: av.esRecurrente ? 'Sí' : 'No',
+            encargado: av.responsable || '',
+            checada: 'Sin checada'
+          }));
         } else {
           // Ausencia: paga jornada completa solo si es CON goce de sueldo.
           // Las sin goce (falta injustificada, permiso sin goce…) se etiquetan
@@ -259,6 +280,28 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const actividadConChecada = d.getDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
       if (actividadConChecada) {
         horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida);
+
+        // El reporte también justifica el trabajo delegado: la actividad se
+        // anota junto a la checada, no solo sus horas. Antes se perdía.
+        const fmtMinC = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+        const listaC = actividadConChecada.todas || [actividadConChecada];
+        const descC = listaC.map(av => {
+          const tramo = (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
+            ? ` ${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : '';
+          return `${av.tipo.toUpperCase()}: ${av.nombre}${tramo}${av.esRecurrente ? ' [recurrente]' : ''}`;
+        }).join(' + ');
+        entMostrar = entMostrar ? `${entMostrar}\n${descC}` : descC;
+
+        listaC.forEach(av => detalleActividades.push({
+          id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
+          fecha: key, nombreDia: NOMBRES_DIA[d.getDay()],
+          tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
+          horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
+            ? `${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : 'Jornada completa',
+          recurrente: av.esRecurrente ? 'Sí' : 'No',
+          encargado: av.responsable || '',
+          checada: `${entRaw || '--:--'} / ${salRaw || '--:--'}`
+        }));
       }
 
       totalHoras += horas;
@@ -273,16 +316,20 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     return { fila, id: e.ID_Empleado, nombre, total };
   });
 
-  // Ordenar según el filtro seleccionado en la vista (id | nombre | total)
-  if (sort) {
-    const asc = dir !== 'desc';
-    filas.sort((a, b) => {
-      if (sort === 'id') return asc ? a.id - b.id : b.id - a.id;
-      if (sort === 'total') return asc ? a.total - b.total : b.total - a.total;
-      // nombre
-      return asc ? a.nombre.localeCompare(b.nombre) : b.nombre.localeCompare(a.nombre);
-    });
-  }
+  // Orden del reporte. Con ~120 empleados el orden importa para poder
+  // comparar descargas entre sí, así que SIEMPRE se ordena de forma
+  // determinista: por lo que pidió la vista, y en su defecto por nombre.
+  // El ID desempata para que dos homónimos no bailen entre descargas.
+  const asc = dir !== 'desc';
+  const criterio = sort || 'nombre';
+  filas.sort((a, b) => {
+    let cmp;
+    if (criterio === 'id') cmp = a.id - b.id;
+    else if (criterio === 'total') cmp = a.total - b.total;
+    else cmp = a.nombre.localeCompare(b.nombre, 'es');
+    if (cmp === 0) cmp = a.id - b.id; // desempate estable
+    return asc ? cmp : -cmp;
+  });
 
   for (const r of filas) aoa.push(r.fila);
 
@@ -298,6 +345,41 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Horas');
+
+  // ---- Hoja 2: detalle de actividades delegadas ----
+  // Una fila por actividad y día. Sirve para justificar el trabajo sin tener
+  // que rastrearlo dentro de la matriz de toda la plantilla.
+  if (detalleActividades.length > 0) {
+    // Mismo orden que la matriz, para poder leerlas en paralelo.
+    const posEmpleado = new Map(filas.map((f, i) => [f.id, i]));
+    detalleActividades.sort((a, b) => {
+      const pa = posEmpleado.get(a.id) ?? 0, pb = posEmpleado.get(b.id) ?? 0;
+      return pa - pb || a.fecha.localeCompare(b.fecha) || a.horario.localeCompare(b.horario);
+    });
+
+    const aoaAct = [
+      [`Actividades delegadas — ${fmtFechaCorta(inicio)} al ${fmtFechaCorta(fin)}`],
+      [`${detalleActividades.length} actividad(es) en el periodo`],
+      [],
+      ['ID', 'Empleado', 'Área', 'Día', 'Fecha', 'Tipo', 'Actividad', 'Empresa', 'Horario', 'Recurrente', 'Encargado', 'Checada del día']
+    ];
+    for (const r of detalleActividades) {
+      aoaAct.push([
+        r.id, r.nombre, r.area, r.nombreDia,
+        new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-MX'),
+        r.tipo, r.actividad, r.empresa, r.horario, r.recurrente, r.encargado, r.checada
+      ]);
+    }
+
+    const wsAct = XLSX.utils.aoa_to_sheet(aoaAct);
+    wsAct['!cols'] = [
+      { wch: 6 }, { wch: 28 }, { wch: 16 }, { wch: 6 }, { wch: 12 },
+      { wch: 14 }, { wch: 26 }, { wch: 18 }, { wch: 15 }, { wch: 11 }, { wch: 22 }, { wch: 16 }
+    ];
+    wsAct['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: aoaAct.length - 1, c: 11 } }) };
+    wsAct['!freeze'] = { xSplit: 0, ySplit: 4 };
+    XLSX.utils.book_append_sheet(wb, wsAct, 'Actividades');
+  }
 
   return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 }

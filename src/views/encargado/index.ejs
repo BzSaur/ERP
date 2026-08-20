@@ -339,6 +339,10 @@
             <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="pcalGuardar">
               <i class="bi bi-check-lg me-1"></i>Guardar
             </button>
+            <button type="button" class="btn btn-sm btn-success d-none" id="pcalAgregar"
+                    title="Suma otra actividad a este día, sin quitar la que ya está">
+              <i class="bi bi-plus-lg me-1"></i>Agregar otra
+            </button>
             <button type="button" class="btn btn-sm btn-outline-danger d-none" id="pcalQuitar">
               <i class="bi bi-trash me-1"></i>Quitar
             </button>
@@ -575,6 +579,8 @@
         $$('pcalBadgeRec').classList.toggle('d-none', !ctxCal.esRecurrente);
         $$('pcalAvisoRec').classList.toggle('d-none', !ctxCal.esRecurrente);
         $$('pcalQuitar').classList.toggle('d-none', !act);
+        // Agregar otra solo aplica si el día ya tiene algo.
+        $$('pcalAgregar').classList.toggle('d-none', !act);
         // Sobre una recurrencia, "Quitar" detiene la regla completa: se avisa.
         $$('pcalQuitar').title = ctxCal.esRecurrente
           ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
@@ -607,20 +613,19 @@
         // Horario: disponible al crear una puntual y al editarla. Solo se
         // oculta en las recurrentes, que no materializan un día editable.
         const wrapH = $$('pcalHorasWrap');
-        if (!ctxCal.esRecurrente) {
-          const hhmm = m => Number.isFinite(m)
-            ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : '';
-          $$('pcalHoraIni').value = act ? hhmm(act.horaInicio) : '';
-          $$('pcalHoraFin').value = act ? hhmm(act.horaFin) : '';
-          $$('pcalHorasAyuda').textContent = (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
+        // Horario siempre visible: en un día recurrente sirve para el tramo
+        // de la actividad ADICIONAL que se vaya a agregar.
+        const hhmm = m => Number.isFinite(m)
+          ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : '';
+        $$('pcalHoraIni').value = (act && !ctxCal.esRecurrente) ? hhmm(act.horaInicio) : '';
+        $$('pcalHoraFin').value = (act && !ctxCal.esRecurrente) ? hhmm(act.horaFin) : '';
+        $$('pcalHorasAyuda').textContent = ctxCal.esRecurrente
+          ? 'Necesario para agregar otra actividad a este día.'
+          : (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
             ? 'Solo cuenta este tramo; se suma a la checada.'
             : (d.asistencia ? 'Vacío: cuenta de 8:00 a su primera checada.' : 'Vacío: jornada completa (9h).');
-          // El botón de guardar solo el horario requiere que el día ya exista.
-          $$('pcalHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion);
-          wrapH.classList.remove('d-none');
-        } else {
-          wrapH.classList.add('d-none');
-        }
+        $$('pcalHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion || ctxCal.esRecurrente);
+        wrapH.classList.remove('d-none');
 
         // Enlace a la pantalla que gestiona TODOS los días de esa actividad.
         const link = $$('pcalLink');
@@ -673,6 +678,41 @@
         .then(r => r.json())
         .then(function(res){
           if (!res.ok) { errCal(res.error || 'No se pudo guardar'); return; }
+          window.location.reload();
+        })
+        .catch(function(){ errCal('Error de conexión'); });
+    });
+
+    // Sumar OTRA actividad al mismo día, sin quitar la que ya está.
+    $$('pcalAgregar').addEventListener('click', function(){
+      const nombre = $$('pcalNombreAct').value.trim();
+      const tipo = $$('pcalTipo').value;
+      const empresa = $$('pcalEmpresa').value;
+      const hI = $$('pcalHoraIni').value, hF = $$('pcalHoraFin').value;
+      if (!nombre || !tipo || !empresa) { errCal('Completa nombre, tipo y empresa'); return; }
+      if (!hI || !hF) { errCal('Para agregar otra actividad al día, captura su horario'); return; }
+      if (hF <= hI) { errCal('La hora de fin debe ser posterior a la de inicio'); return; }
+
+      const body = {
+        agregar: true,
+        ID_Empleado: parseInt(ctxCal.emp),
+        fecha: ctxCal.fecha,
+        modo: 'PUNTUAL',
+        Nombre_Actividad: nombre,
+        ID_Tipo_Actividad: tipo,
+        ID_Empresa: empresa,
+        Hora_Inicio: hI,
+        Hora_Fin: hF
+      };
+      if (idEncargado) body.ID_Encargado_Empleado = idEncargado;
+
+      errCal('');
+      fetch('/encargado/actividades/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      })
+        .then(r => r.json())
+        .then(function(res){
+          if (!res.ok) { errCal(res.error || 'No se pudo agregar'); return; }
           window.location.reload();
         })
         .catch(function(){ errCal('Error de conexión'); });

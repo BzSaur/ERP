@@ -885,29 +885,26 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             ? '<i class="bi bi-arrow-repeat"></i> Reemplazar la regla de todas las semanas'
             : '<i class="bi bi-arrow-repeat"></i> Repetir cada semana este día';
 
-          // Horario: solo tiene sentido en actividades puntuales (las
-          // recurrentes no materializan un día editable).
+          // Horario: siempre disponible. En un día recurrente sirve para
+          // capturar el tramo de la actividad ADICIONAL que se va a agregar
+          // (ej. una guardia de 19-21 sobre el home office recurrente).
           ctx.idAsignacion = act ? act.ID_Asignacion : null;
-          const wrapH = $('panelHorasWrap');
-          // Disponible al crear una puntual y al editarla; solo se oculta en
-          // las recurrentes, que no materializan un día con horario propio.
-          if (!ctx.esRecurrente) {
-            const aHHMM = m => Number.isFinite(m)
-              ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
-              : '';
-            $('panelHoraIni').value = act ? aHHMM(act.horaInicio) : '';
-            $('panelHoraFin').value = act ? aHHMM(act.horaFin) : '';
-            $('panelHorasAyuda').textContent = (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
+          const aHHMM = m => Number.isFinite(m)
+            ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+            : '';
+          // En recurrentes los campos arrancan vacíos: son para la nueva.
+          $('panelHoraIni').value = (act && !ctx.esRecurrente) ? aHHMM(act.horaInicio) : '';
+          $('panelHoraFin').value = (act && !ctx.esRecurrente) ? aHHMM(act.horaFin) : '';
+          $('panelHorasAyuda').textContent = ctx.esRecurrente
+            ? 'Necesario para agregar otra actividad a este día.'
+            : (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
               ? 'Solo cuenta este tramo; se suma a lo que marcó el checador.'
               : (d.asistencia
                   ? 'Vacío: cuenta desde las 8:00 hasta su primera checada.'
                   : 'Vacío: cuenta jornada completa (9h).');
-            // Guardar solo el horario requiere que el día ya exista.
-            $('panelHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion);
-            wrapH.classList.remove('d-none');
-          } else {
-            wrapH.classList.add('d-none');
-          }
+          // Guardar solo el horario aplica a una asignación puntual existente.
+          $('panelHorasGuardar').classList.toggle('d-none', !act || !act.ID_Asignacion || ctx.esRecurrente);
+          $('panelHorasWrap').classList.remove('d-none');
 
           let tipoSel = '', empSel = '';
           if (act) {
