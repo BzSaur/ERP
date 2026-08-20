@@ -934,10 +934,16 @@ model Actividad_Asignaciones {
   actividad Actividades_Campo @relation(fields: [ID_Actividad], references: [ID_Actividad], onDelete: Cascade)
   empleado  Empleados         @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
 
-  @@unique([ID_Empleado, Fecha])
+  // Un empleado puede tener VARIAS actividades el mismo día (ej. home office
+  // por la mañana y una capacitación por la tarde). Cada una lleva su tramo
+  // horario; las horas se suman sin contar dos veces lo que se traslape.
+  // La unicidad es por actividad+empleado+día: la misma actividad no se
+  // duplica en el mismo día.
+  @@unique([ID_Actividad, ID_Empleado, Fecha])
   @@index([ID_Actividad])
   @@index([ID_Empleado])
   @@index([Fecha])
+  @@index([ID_Empleado, Fecha])
   @@map("Actividad_Asignaciones")
 }
 

@@ -407,14 +407,21 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <%
                       const hhmmSA = (m) => Number.isFinite(m)
                         ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
-                      const saIni = hhmmSA(c.actividad.horaInicio);
-                      const saFin = hhmmSA(c.actividad.horaFin);
+                      // Un día puede tener varias actividades: se listan todas.
+                      const actsSA = c.actividad.todas || [c.actividad];
                     %>
                     <div class="cel-act-info">
-                      <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
-                      <% if (saIni && saFin) { %>
-                        <div class="act-hora" title="Horario de la actividad"><%= saIni %>–<%= saFin %></div>
-                      <% } %>
+                      <% actsSA.forEach(function(av, iSa){ %>
+                        <% const sIni = hhmmSA(av.horaInicio), sFin = hhmmSA(av.horaFin); %>
+                        <div class="<%= iSa > 0 ? 'mt-1 pt-1 border-top' : '' %>">
+                          <div class="act-nom" style="color:<%= av.color %>" title="<%= av.nombre %>">
+                            <%= av.nombre %><% if (av.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
+                          </div>
+                          <% if (sIni && sFin) { %>
+                            <div class="act-hora" title="Horario de la actividad"><%= sIni %>–<%= sFin %></div>
+                          <% } %>
+                        </div>
+                      <% }); %>
                       <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                       <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
                     </div>
@@ -433,17 +440,23 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <% } %>
                       <% if (c.actividad) { %>
                         <%
-                          // Tramo capturado de la actividad, si lo tiene.
                           const hhmmAct = (m) => Number.isFinite(m)
                             ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
-                          const actIni = hhmmAct(c.actividad.horaInicio);
-                          const actFin = hhmmAct(c.actividad.horaFin);
+                          // Un día puede tener varias actividades: se listan todas.
+                          const actsDia = c.actividad.todas || [c.actividad];
                         %>
                         <div class="cel-act-info mt-1 pt-1 border-top">
-                          <div class="act-nom" style="color:<%= c.actividad.color %>" title="<%= c.actividad.nombre %>"><%= c.actividad.nombre %></div>
-                          <% if (actIni && actFin) { %>
-                            <div class="act-hora" title="Horario de la actividad"><%= actIni %>–<%= actFin %></div>
-                          <% } %>
+                          <% actsDia.forEach(function(av, iAv){ %>
+                            <% const aIni = hhmmAct(av.horaInicio), aFin = hhmmAct(av.horaFin); %>
+                            <div class="<%= iAv > 0 ? 'mt-1 pt-1 border-top' : '' %>">
+                              <div class="act-nom" style="color:<%= av.color %>" title="<%= av.nombre %>">
+                                <%= av.nombre %><% if (av.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
+                              </div>
+                              <% if (aIni && aFin) { %>
+                                <div class="act-hora" title="Horario de la actividad"><%= aIni %>–<%= aFin %></div>
+                              <% } %>
+                            </div>
+                          <% }); %>
                           <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                           <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
                         </div>
@@ -742,6 +755,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="panelGuardar">
               <i class="bi bi-check-lg me-1"></i>Asignar
             </button>
+            <button type="button" class="btn btn-sm btn-outline-success d-none" id="panelAgregar"
+                    title="Suma otra actividad a este día, sin quitar la que ya está">
+              <i class="bi bi-plus-lg me-1"></i>Agregar otra
+            </button>
             <button type="button" class="btn btn-sm btn-outline-danger d-none" id="panelQuitar">
               <i class="bi bi-trash me-1"></i>Quitar
             </button>
@@ -849,6 +866,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           $('panelSinActividad').classList.toggle('d-none', !!act);
           $('panelBadgeRec').classList.toggle('d-none', !(act && act.esRecurrente));
           $('panelQuitar').classList.toggle('d-none', !act);
+          // Agregar otra solo tiene sentido si ya hay algo ese día.
+          $('panelAgregar').classList.toggle('d-none', !act);
           $('panelQuitar').title = ctx.esRecurrente
             ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
             : 'Quita la actividad de este día';
@@ -981,6 +1000,41 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     } else {
       enviarToggle(body, function(){ window.location.reload(); });
     }
+  });
+
+  // Sumar OTRA actividad al mismo día, sin quitar la que ya está.
+  $('panelAgregar').addEventListener('click', function(){
+    const nombre = $('panelNombreAct').value.trim();
+    const tipo = $('panelTipo').value;
+    const empresa = $('panelEmpresa').value;
+    const hI = $('panelHoraIni').value, hF = $('panelHoraFin').value;
+    if (!nombre || !tipo || !empresa) { mostrarError('Completa nombre, tipo y empresa'); return; }
+    if (!hI || !hF) { mostrarError('Para agregar otra actividad al día, captura su horario'); return; }
+    if (hF <= hI) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+
+    const body = {
+      agregar: true,
+      ID_Empleado: parseInt(ctx.emp),
+      fecha: ctx.fecha,
+      modo: 'PUNTUAL',
+      Nombre_Actividad: nombre,
+      ID_Tipo_Actividad: tipo,
+      ID_Empresa: empresa,
+      Hora_Inicio: hI,
+      Hora_Fin: hF
+    };
+    if (encDelegado) body.ID_Encargado_Empleado = encDelegado;
+
+    mostrarError('');
+    fetch('/encargado/actividades/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { mostrarError(res.error || 'No se pudo agregar'); return; }
+        window.location.reload();
+      })
+      .catch(function(){ mostrarError('Error de conexión'); });
   });
 
   // Guardar solo el tramo horario, sin tocar el resto de la actividad.

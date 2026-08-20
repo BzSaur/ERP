@@ -1036,7 +1036,11 @@ export const toggleCelda = async (req, res, next) => {
     }
 
     // 1) ¿Hay una asignación puntual ese día? -> quitarla.
-    const puntual = await prisma.actividad_Asignaciones.findFirst({
+    // `agregar: true` pide SUMAR otra actividad al día en vez de reemplazar la
+    // que ya está (ej. home office por la mañana + capacitación por la tarde).
+    const modoAgregar = req.body.agregar === true || req.body.agregar === 'true';
+
+    const puntual = modoAgregar ? null : await prisma.actividad_Asignaciones.findFirst({
       where: { ID_Empleado: idEmpleado, Fecha: fecha },
       include: { actividad: { select: { ID_Actividad: true, Nombre_Actividad: true, ID_Responsable: true } } }
     });
@@ -1217,6 +1221,11 @@ export const toggleCelda = async (req, res, next) => {
     }
     if (horaInicioMin != null && horaFinMin <= horaInicioMin) {
       return res.status(400).json({ ok: false, error: 'La hora de fin debe ser posterior a la de inicio' });
+    }
+    // Al sumar una segunda actividad al día, el tramo es obligatorio: sin él
+    // no se sabría cuánto aporta cada una.
+    if (modoAgregar && horaInicioMin == null) {
+      return res.status(400).json({ ok: false, error: 'Para agregar otra actividad al día, captura su horario' });
     }
 
     // Payload común para repintar la celda sin recargar la página.

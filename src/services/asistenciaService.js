@@ -250,10 +250,13 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
     }
   });
 
-  const mapa = new Map();
+  // Un día puede tener VARIAS actividades (ej. home office + capacitación).
+  // El Map guarda la principal —la de tramo más temprano, para compatibilidad
+  // con quien espera un solo objeto— y en `todas` la lista completa del día.
+  const porDia = new Map();
   for (const a of asignaciones) {
     const key = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
-    mapa.set(key, {
+    const item = {
       ID_Actividad: a.actividad.ID_Actividad,
       // Identifica el día concreto: necesario para capturarle su tramo horario.
       ID_Asignacion: a.ID_Asignacion,
@@ -269,7 +272,16 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
       horaInicio: a.Hora_Inicio,
       horaFin: a.Hora_Fin,
       esRecurrente: false
-    });
+    };
+    if (!porDia.has(key)) porDia.set(key, []);
+    porDia.get(key).push(item);
+  }
+
+  const mapa = new Map();
+  for (const [key, lista] of porDia) {
+    // Orden por hora de inicio; las sin tramo van primero (cubren el día).
+    lista.sort((x, y) => (x.horaInicio ?? -1) - (y.horaInicio ?? -1));
+    mapa.set(key, { ...lista[0], todas: lista });
   }
   return mapa;
 }
@@ -327,7 +339,12 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
 
     for (const empId of empleadosAEvaluar) {
       const key = `${empId}_${ymd}`;
-      if (resultado.has(key)) continue; // puntual ya cubre este día: gana, sin tocar
+      const yaPuntual = resultado.get(key) || null;
+
+      // Una puntual SIN tramo horario cubre la jornada completa: la regla
+      // recurrente queda desplazada ese día (comportamiento clásico). Si la
+      // puntual sí define horario, ambas conviven y sus horas se suman.
+      if (yaPuntual && (yaPuntual.todas || []).some(a => !Number.isFinite(a.horaInicio))) continue;
 
       const candidatas = reglasPorEmpDia.get(`${empId}_${diaSemana}`);
       if (!candidatas) continue;
@@ -338,7 +355,7 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
       });
       if (!regla) continue;
 
-      resultado.set(key, {
+      const itemRec = {
         ID_Actividad: null,
         // Las recurrencias no materializan filas: no hay asignación que editar.
         ID_Asignacion: null,
@@ -359,7 +376,15 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
         horaInicio: null,
         horaFin: null,
         esRecurrente: true
-      });
+      };
+
+      if (yaPuntual) {
+        // Convive con las puntuales con horario: se agrega a la lista del día
+        // sin desplazar a la principal.
+        yaPuntual.todas.push(itemRec);
+      } else {
+        resultado.set(key, { ...itemRec, todas: [itemRec] });
+      }
     }
   }
 
@@ -773,6 +798,9 @@ function paresDesdeChecadas(checadas, empleadoRegla) {
 // ya calculadas (no las reemplaza). Si no hubo checada, no aplica: ese caso
 // sigue usando las 9h fijas simples (bloques ya existentes, sin cambio).
 const COMIDA_INI_MIN = 14 * 60, COMIDA_FIN_MIN = 15 * 60;
+// Ventana de la jornada estándar. Una actividad sin tramo capturado se asume
+// dentro de ella; lo que otra actividad haga fuera de este rango es adicional.
+const JORNADA_INICIO_MIN = 8 * 60, JORNADA_FIN_MIN = 18 * 60;
 
 // Horas netas de un tramo [desdeMin, hastaMin] descontando la comida si lo
 // cruza. Mismo criterio de overlap que calcularHorasPorPares.
@@ -802,8 +830,62 @@ export function horasActividadHastaEntrada(horaEntrada) {
  * @param {Object|null} actividad  entrada resuelta (trae horaInicio/horaFin)
  * @param {Date|null} horaEntrada  primera checada real del día, si la hubo
  */
-export function horasDeActividad(actividad, horaEntrada, horaSalida = null) {
+export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinPiso = false) {
   if (!actividad) return 0;
+
+  // Varias actividades el mismo día: se fusionan sus tramos para no contar
+  // dos veces lo que se traslape entre ellas, y luego se resta lo que ya
+  // cubrió la checada real.
+  const lista = actividad.todas && actividad.todas.length > 1 ? actividad.todas : null;
+  if (lista) {
+    const conTramo = lista.filter(a => Number.isFinite(a.horaInicio) && Number.isFinite(a.horaFin));
+    const sinTramo = lista.filter(a => !Number.isFinite(a.horaInicio) || !Number.isFinite(a.horaFin));
+
+    // Solo actividades sin tramo: jornada implícita.
+    if (sinTramo.length > 0 && conTramo.length === 0) {
+      return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
+    }
+
+    // Mezcla de ambas: la actividad sin tramo cubre la jornada estándar
+    // (08:00–18:00) y las que sí lo tienen aportan lo que caiga FUERA de esa
+    // ventana. Así un home office recurrente más una actividad nocturna de
+    // 19-21 dan 9 + 2 = 11h, en vez de perderse las dos horas extra.
+    if (sinTramo.length > 0) {
+      let extra = 0;
+      for (const a of conTramo) {
+        extra += horasNetasTramo(a.horaInicio, Math.min(a.horaFin, JORNADA_INICIO_MIN));
+        extra += horasNetasTramo(Math.max(a.horaInicio, JORNADA_FIN_MIN), a.horaFin);
+      }
+      const base = horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
+      return Math.round((base + extra) * 100) / 100;
+    }
+
+    // Fusionar intervalos solapados entre sí.
+    const ordenados = conTramo
+      .map(a => [a.horaInicio, a.horaFin])
+      .sort((x, y) => x[0] - y[0]);
+    const fusionados = [];
+    for (const [ini, fin] of ordenados) {
+      const ultimo = fusionados[fusionados.length - 1];
+      if (ultimo && ini <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], fin);
+      else fusionados.push([ini, fin]);
+    }
+
+    let total = 0;
+    for (const [ini, fin] of fusionados) {
+      // sinPiso: cada tramo aporta lo suyo; el piso se aplica al total.
+      total += horasDeActividad({ horaInicio: ini, horaFin: fin }, horaEntrada, horaSalida, true);
+    }
+    total = Math.round(total * 100) / 100;
+
+    // Piso de jornada: un día cubierto SOLO por actividad paga la jornada
+    // completa aunque los tramos sumen menos (los horarios documentan qué se
+    // hizo, no recortan el día). Si los tramos dan más, se respeta el exceso.
+    // Con checada real no aplica: ahí manda lo efectivamente trabajado.
+    if (!horaEntrada) total = Math.max(total, HORAS_FIJAS_JORNADA);
+    return total;
+  }
+
   const { horaInicio, horaFin } = actividad;
 
   if (Number.isFinite(horaInicio) && Number.isFinite(horaFin)) {
@@ -828,7 +910,11 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null) {
       const despues = horasNetasTramo(Math.max(horaInicio, salMin), horaFin);
       return Math.round((antes + despues) * 100) / 100;
     }
-    return horasNetasTramo(horaInicio, horaFin);
+    // Sin checada: la jornada completa es el piso (los tramos documentan, no
+    // recortan). `sinPiso` lo desactiva cuando este cálculo es una parte de
+    // una suma mayor, donde el piso se aplica al total.
+    const netas = horasNetasTramo(horaInicio, horaFin);
+    return sinPiso ? netas : Math.max(netas, HORAS_FIJAS_JORNADA);
   }
 
   return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
