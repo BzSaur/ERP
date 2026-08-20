@@ -188,10 +188,19 @@ const faltaElegirEncargado = delegando && !idEncSel;
 <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador','ENCARGADO') && datos.totalActividades && datos.totalActividades > 0) { %>
 <div class="card border-primary mb-4" id="panelActividadesCampo">
   <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+    <%
+      let nPuntuales = 0, nRecurrentes = 0;
+      datos.actividades.forEach(r => r.dias.forEach(d => d.esRecurrente ? nRecurrentes++ : nPuntuales++));
+    %>
     <span class="fw-semibold">
       <i class="bi bi-signpost-split-fill text-primary me-2"></i>
-      <%= datos.totalActividades %> día(s) de actividad (campo/home office) en este periodo
-      <small class="text-body-secondary ms-1">(asistencia delegada por un encargado — no cuentan como falta)</small>
+      <%= nPuntuales %> día(s) de actividad asignada en este periodo
+      <% if (nRecurrentes > 0) { %>
+        <small class="text-body-secondary ms-1">
+          + <%= nRecurrentes %> por recurrencia <i class="bi bi-arrow-repeat"></i>
+        </small>
+      <% } %>
+      <small class="text-body-secondary ms-1">(no cuentan como falta)</small>
     </span>
     <div class="d-flex gap-2">
       <a href="/encargado" class="btn btn-sm btn-outline-primary">Ver actividades</a>
@@ -202,21 +211,57 @@ const faltaElegirEncargado = delegando && !idEncSel;
   </div>
   <div class="collapse show" id="listaActividadesCampo">
     <div class="list-group list-group-flush">
-      <% datos.actividades.forEach(function(r){ %>
+      <%
+        // Las asignaciones puntuales son las que requieren atención; las
+        // recurrentes son la rutina ya definida y van atenuadas al final.
+        const conPuntuales = datos.actividades.filter(r => r.dias.some(d => !d.esRecurrente));
+        const soloRecurrentes = datos.actividades.filter(r => r.dias.every(d => d.esRecurrente));
+      %>
+      <% conPuntuales.forEach(function(r){ %>
         <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2">
           <div>
             <span class="fw-semibold"><%= r.nombre %></span>
             <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
             <div class="mt-1 d-flex flex-wrap gap-1">
-              <% r.dias.forEach(function(d){ %>
+              <% r.dias.filter(d => !d.esRecurrente).forEach(function(d){ %>
                 <span class="badge bg-primary bg-opacity-75" title="Tipo: <%= d.tipo %> · Encargado: <%= d.responsable %> · Actividad: <%= d.nombre %><%= d.empresa ? ' · Empresa: ' + d.empresa : '' %>">
                   <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>: <%= d.tipo %>
+                </span>
+              <% }); %>
+              <% r.dias.filter(d => d.esRecurrente).forEach(function(d){ %>
+                <span class="badge bg-light text-body-secondary border" title="Recurrente · <%= d.nombre %><%= d.empresa ? ' · ' + d.empresa : '' %>">
+                  <i class="bi bi-arrow-repeat"></i>
+                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>
                 </span>
               <% }); %>
             </div>
           </div>
         </div>
       <% }); %>
+
+      <% if (soloRecurrentes.length > 0) { %>
+        <div class="list-group-item bg-body-tertiary py-1">
+          <small class="text-body-secondary">
+            <i class="bi bi-arrow-repeat me-1"></i>Recurrentes (rutina ya definida)
+          </small>
+        </div>
+        <% soloRecurrentes.forEach(function(r){ %>
+          <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2 py-2">
+            <div class="text-body-secondary">
+              <span class="fw-semibold"><%= r.nombre %></span>
+              <% if (r.area) { %><small class="ms-1"><%= r.area %></small><% } %>
+              <div class="mt-1 d-flex flex-wrap gap-1">
+                <% r.dias.forEach(function(d){ %>
+                  <span class="badge bg-light text-body-secondary border" title="Recurrente · <%= d.nombre %><%= d.empresa ? ' · ' + d.empresa : '' %>">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>
+                  </span>
+                <% }); %>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      <% } %>
     </div>
   </div>
 </div>
@@ -647,6 +692,13 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           <div id="panelSinActividad" class="text-body-secondary small mb-3 d-none">
             Sin actividad asignada este día.
           </div>
+          <!-- Día cubierto por una regla semanal: lo que se guarda es una
+               excepción de ESE día; la regla no se toca. -->
+          <div class="alert alert-info py-2 px-3 small d-none" id="panelAvisoRec">
+            <i class="bi bi-info-circle me-1"></i>
+            Este día lo cubre una <strong>recurrencia</strong>. Si lo cambias, se guarda como
+            <strong>excepción solo de este día</strong> — la regla sigue aplicando las demás semanas.
+          </div>
           <div class="mb-2">
             <label class="form-label small mb-1">Nombre de la actividad</label>
             <input type="text" class="form-control form-control-sm" id="panelNombreAct" placeholder="Ej: Instalación en obra">
@@ -682,7 +734,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="panelRecurrente">
-            <label class="form-check-label small" for="panelRecurrente">
+            <label class="form-check-label small" for="panelRecurrente" id="panelRecLabel">
               <i class="bi bi-arrow-repeat"></i> Repetir cada semana este día
             </label>
           </div>
@@ -797,12 +849,22 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           $('panelSinActividad').classList.toggle('d-none', !!act);
           $('panelBadgeRec').classList.toggle('d-none', !(act && act.esRecurrente));
           $('panelQuitar').classList.toggle('d-none', !act);
+          $('panelQuitar').title = ctx.esRecurrente
+            ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
+            : 'Quita la actividad de este día';
           $('panelGuardar').innerHTML = act
             ? '<i class="bi bi-check-lg me-1"></i>Actualizar'
             : '<i class="bi bi-check-lg me-1"></i>Asignar';
 
           $('panelNombreAct').value = act ? act.nombre : '';
-          $('panelRecurrente').checked = !!(act && act.esRecurrente);
+          // En un día cubierto por recurrencia el switch arranca APAGADO: lo
+          // normal es registrar una excepción de ese día, no reescribir la
+          // regla de todas las semanas.
+          $('panelRecurrente').checked = false;
+          $('panelAvisoRec').classList.toggle('d-none', !ctx.esRecurrente);
+          $('panelRecLabel').innerHTML = ctx.esRecurrente
+            ? '<i class="bi bi-arrow-repeat"></i> Reemplazar la regla de todas las semanas'
+            : '<i class="bi bi-arrow-repeat"></i> Repetir cada semana este día';
 
           // Horario: solo tiene sentido en actividades puntuales (las
           // recurrentes no materializan un día editable).
