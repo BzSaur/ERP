@@ -654,7 +654,7 @@ export function calcularHorasDesdeChecadas(checadasHistorial, fecha, opts = {}) 
     })
     .sort((a, b) => a.totalMinutos - b.totalMinutos);
 
-  const esSabado = new Date(fecha).getDay() === 6;
+  const esSabado = new Date(fecha).getUTCDay() === 6; // .Date: UTC
   // Día en curso: no estimar salida a 18:00; cerrar a la hora actual (México).
   const minutoCierre = esDiaEnCurso(fecha) ? minutosDelDiaAhora() : undefined;
   const { toleranciaMin, aplicaCobertura } = reglaToleranciaPorFecha(fecha);
@@ -800,12 +800,21 @@ function paresDesdeChecadas(checadas, empleadoRegla) {
 const COMIDA_INI_MIN = 14 * 60, COMIDA_FIN_MIN = 15 * 60;
 
 /**
- * Días de descanso: sábado (6) y domingo (0). Un día así nunca cuenta como
- * falta ni resta a las horas esperadas — quien sí labore ese día se registra
- * por su checada o por una actividad delegada, que sí suman.
+ * Días que no generan falta: sábado (6) y domingo (0).
+ *
+ * La jornada obligatoria es de lunes a viernes (45h). El sábado es OPCIONAL:
+ * se trabaja para recuperar horas o hacer extras — 94 de 135 activos checaron
+ * algún sábado en los últimos 60 días. Por eso no puede generar falta, pero
+ * las horas de quien sí va cuentan al total y empujan las extras.
+ *
+ * No confundir con "no se trabaja": las esperadas siguen siendo 45h
+ * (Horas_Semana), no 40, para que el sábado no se vuelva extra automática.
  */
 export function esDiaDescanso(fecha) {
-  const d = new Date(fecha).getDay();
+  // getUTCDay, NO getDay: las fechas vienen de columnas @db.Date, que llegan
+  // como 00:00Z. En CDMX (UTC-6) getDay() las corre un día — un sábado se lee
+  // como viernes y un lunes como domingo.
+  const d = new Date(fecha).getUTCDay();
   return d === 0 || d === 6;
 }
 // Ventana de la jornada estándar. Una actividad sin tramo capturado se asume
@@ -998,7 +1007,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
 
     dias.push({
       fecha,
-      nombreDia: NOMBRES_DIA[fecha.getDay()],
+      nombreDia: NOMBRES_DIA[fecha.getUTCDay()],
       // Vacaciones / incidencia aprobada ese día (etiqueta o null). El día no
       // cuenta como falta; si además hay checadas, se muestran normal.
       ausencia: ausenciaEnFecha(ausencias, empleadoId, fecha),
@@ -1055,7 +1064,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     totalHoras += horasDia;
     dias.push({
       fecha,
-      nombreDia: NOMBRES_DIA[fecha.getDay()],
+      nombreDia: NOMBRES_DIA[fecha.getUTCDay()],
       ausencia: etiqueta,
       ausenciaDesplazada: gana === 'ACTIVIDAD' && periodoAus ? periodoAus.etiqueta : null,
       actividad: actividadDia,
@@ -1152,7 +1161,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       ID_Empleado: true, ID_Area: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true,
       area: { select: { Nombre_Area: true } },
       puesto: { select: { Nombre_Puesto: true } },
-      tipo_horario: { select: { Horas_Jornada: true, Dias_Semana: true } }
+      tipo_horario: { select: { Horas_Jornada: true, Dias_Semana: true, Horas_Semana: true } }
     },
     orderBy: [{ Apellido_Paterno: 'asc' }, { Nombre: 'asc' }]
   });
@@ -1303,16 +1312,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
   const empleadosVisibles = filtroVisibilidad ? empleados.filter(e => empConDatos.has(e.ID_Empleado)) : empleados;
 
 
-  // Días del rango que sí son laborables (lunes a viernes).
-  const diasLaborablesRango = fechas.filter(f => !esDiaDescanso(f)).length;
-
   const filas = empleadosVisibles.map(e => {
     const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
-    // Cat_Tipo_Horario aún guarda 6 días (nómina lo usa para el sueldo diario y
-    // no debe cambiar aquí). Para las horas esperadas se topa a los días
-    // laborables reales del rango, que ya excluyen sábado y domingo.
-    const diasSemana = Math.min(e.tipo_horario?.Dias_Semana || 6, diasLaborablesRango);
 
     // Matriz: una celda por cada fecha del rango
     const empDias = diasEmp.get(e.ID_Empleado);
@@ -1339,7 +1341,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       const ausenciaDesplazada = gana === 'ACTIVIDAD' && periodoAus ? periodoAus.etiqueta : null;
 
       if (actividad) {
-        actividadesEmp.push({ fecha: key, nombreDia: NOMBRES_DIA_CORTO[f.getDay()], ...actividad });
+        actividadesEmp.push({ fecha: key, nombreDia: NOMBRES_DIA_CORTO[f.getUTCDay()], ...actividad });
       }
       if (ausencia && !esDomingo && !(c && c.presente && c.horas > 0)) diasAusencia++;
       if (!c) {
@@ -1370,7 +1372,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       if (requiereRevision) {
         revisiones.push({
           fecha: key,
-          nombreDia: NOMBRES_DIA_CORTO[f.getDay()],
+          nombreDia: NOMBRES_DIA_CORTO[f.getUTCDay()],
           horas: c.horas,
           entrada: c.entrada || null,
           salida: c.salida || null,
@@ -1388,9 +1390,14 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
     const normales = Math.round((horas - extras) * 100) / 100;
 
-    // Horas esperadas: la jornada completa del periodo. Los días de ausencia o
-    // actividad sin checada YA aportan sus 9h al total, así que no se descuentan.
-    const esperadas = jornada * diasSemana;
+    // Horas esperadas: la jornada obligatoria de lunes a viernes (45h por
+    // defecto). El sábado es opcional — quien va a recuperar o a hacer extras
+    // suma por encima de esto, no eleva lo que se le exige. Por eso NO se
+    // calcula multiplicando días del rango: eso daría 40h y volvería "extra"
+    // todo lo del sábado.
+    // Los días de ausencia o actividad sin checada YA aportan sus 9h al total,
+    // así que no se descuentan.
+    const esperadas = e.tipo_horario?.Horas_Semana || LIMITE_SEMANAL_HORAS;
 
     return {
       ID_Empleado: e.ID_Empleado,

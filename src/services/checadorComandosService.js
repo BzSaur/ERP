@@ -26,28 +26,32 @@ function nombreCompleto(emp) {
 }
 
 /**
- * Comando que DESHABILITA a un usuario sin borrar su huella.
+ * Comando que BLOQUEA a un usuario sin borrar su huella.
  *
- * `Enable=0` NO existe en el USERINFO de ZK: el device recibe el campo, no lo
- * reconoce, lo ignora y aplica el resto — confirma el comando y el usuario
- * sigue checando. Se verificó en producción (bloqueo confirmado 16:05:01,
- * checadas aceptadas en vivo 16:06 y 16:08).
+ * `Verify=2` obliga a verificar por contraseña, y `Passwd=999999` fija una que
+ * el empleado no conoce. La huella sigue enrolada pero deja de ser método
+ * válido de entrada: el lector la rechaza y muestra que pide contraseña, así
+ * que la persona SÍ se entera en el momento y va a RH.
  *
- * El mecanismo correcto es la franja horaria: `Grp=0` lo saca del grupo de
- * acceso y `TZ` con todos los ceros no le deja ninguna ventana válida, así que
- * el lector lo rechaza a cualquier hora. El registro biométrico permanece: al
- * reactivar basta un UPDATE normal, sin re-enrolar.
+ * Se llegó a esto por descarte, probando contra el device real (20-ago-2026):
+ *  - `Enable=0`: no es campo del USERINFO de ZK. El device lo ignora, confirma
+ *    el comando y el usuario sigue checando (checada en vivo 34s después).
+ *  - `Grp=0 TZ=0000000000000000`: tampoco bloquea, mismo resultado.
+ *
+ * No usar `DATA DELETE USERINFO` para esto: sí bloquea, pero borra la huella y
+ * obliga a re-enrolar biométricos al reactivar. Eso queda solo para BAJA.
  */
 function comandoBloqueo(pin, name) {
-  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tGrp=0\tTZ=0000000000000000`;
+  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tPasswd=999999\tVerify=2`;
 }
 
 /**
- * Comando que REHABILITA: devuelve al grupo 1 y limpia la restricción de
- * franja (`TZ=0` = sin restricción horaria propia, usa la del grupo).
+ * Comando que REHABILITA: limpia la contraseña forzada y devuelve la
+ * verificación por defecto (`Verify=0` = cualquier método enrolado, incluida
+ * la huella que nunca se borró).
  */
 function comandoAlta(pin, name) {
-  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tGrp=1\tTZ=0`;
+  return `DATA UPDATE USERINFO PIN=${pin}\tName=${name}\tPri=0\tPasswd=\tVerify=0`;
 }
 
 /** Lista de checadores activos y aprobados (destinos de los comandos). */

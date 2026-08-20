@@ -183,7 +183,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const head1 = ['ID', 'Nombre', 'Área'];
   const head2 = ['', '', ''];
   for (const d of dias) {
-    head1.push(`${NOMBRES_DIA[d.getDay()]} ${fmtFechaCorta(d)}`, '', '');
+    head1.push(`${NOMBRES_DIA[d.getUTCDay()]} ${fmtFechaCorta(d)}`, '', '');
     head2.push('Entrada', 'Salida', 'Horas');
   }
   head1.push('Total hrs', 'Normal', 'Extra');
@@ -232,7 +232,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
 
           listaAct.forEach(av => detalleActividades.push({
             id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
-            fecha: key, nombreDia: NOMBRES_DIA[d.getDay()],
+            fecha: key, nombreDia: NOMBRES_DIA[d.getUTCDay()],
             tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
             horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
               ? `${fmtMin(av.horaInicio)}-${fmtMin(av.horaFin)}` : 'Jornada completa',
@@ -278,7 +278,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la
       // actividad (capturado, o 8am→primera entrada) y las horas reales —
       // mismo criterio que la vista HTML /asistencia/horas.
-      const actividadConChecada = d.getDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
+      const actividadConChecada = d.getUTCDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
       if (actividadConChecada) {
         horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida);
 
@@ -295,7 +295,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
 
         listaC.forEach(av => detalleActividades.push({
           id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
-          fecha: key, nombreDia: NOMBRES_DIA[d.getDay()],
+          fecha: key, nombreDia: NOMBRES_DIA[d.getUTCDay()],
           tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
           horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
             ? `${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : 'Jornada completa',
