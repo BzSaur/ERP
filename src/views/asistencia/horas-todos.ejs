@@ -338,8 +338,18 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           </tr>
         </thead>
         <tbody id="matrizBody">
-          <% if (datos.filas && datos.filas.length > 0) { %>
-            <% datos.filas.forEach(function(f) { %>
+          <%
+            // Areas ocultas SOLO en pantalla, temporal. El servicio sigue
+            // devolviendolas: sus horas, faltas y alertas de abandono se
+            // calculan igual, y el Excel las incluye. Vaciar el array para
+            // volver a mostrarlas.
+            const AREAS_OCULTAS = ['SISTEMAS'];
+            const filasVisibles = (datos.filas || []).filter(function(f) {
+              return !AREAS_OCULTAS.includes((f.area || '').toUpperCase());
+            });
+          %>
+          <% if (filasVisibles.length > 0) { %>
+            <% filasVisibles.forEach(function(f) { %>
             <tr data-id="<%= f.ID_Empleado %>" data-nombre="<%= f.nombre.toLowerCase() %>" data-total="<%= f.horas %>">
               <td class="col-id text-center text-body-secondary"><%= f.ID_Empleado %></td>
               <td class="col-emp">
