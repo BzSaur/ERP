@@ -232,6 +232,17 @@ export async function bloquearPorAbandono(alertas, usuario = null, ip = null) {
       // La bitácora es best-effort: no debe impedir el bloqueo.
     }
 
+    // El estatus solo no basta: hay que decirle al device que deje de
+    // aceptarlo. Sin esto seguiría checando hasta que alguien sincronice a
+    // mano desde /admin/checadores, que es justo lo que este bloqueo evita.
+    // Import diferido: checadorComandosService importa este módulo.
+    try {
+      const { encolarBloqueoEmpleado } = await import('./checadorComandosService.js');
+      await encolarBloqueoEmpleado(emp.ID_Empleado);
+    } catch (err) {
+      // Best-effort: el estatus ya cambió; la sincronización lo corrige después.
+    }
+
     bloqueados.push({ ID_Empleado: emp.ID_Empleado, nombre: `${emp.Nombre} ${emp.Apellido_Paterno}`, motivo });
   }
 

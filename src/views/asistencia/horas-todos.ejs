@@ -537,20 +537,19 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   });
 
   // ---- Redondeo de horas ----
-  function redondearEntrada(hhmm) {
+  // Ambos extremos van a la hora MAS CERCANA (>=30 min sube, <30 baja).
+  // Las reglas anteriores estaban sesgadas en la misma direccion — la entrada
+  // subia desde el minuto 16 y la salida bajaba hasta el 55 — asi que el error
+  // se acumulaba SIEMPRE en contra del trabajador: sobre 10 jornadas reales
+  // restaba 5.68 h (08:16-18:30 = 9.23 h reales se mostraban como 8.00).
+  // Al mas cercano la desviacion se reparte y queda en +/- 0.5 h por dia.
+  function aLaHoraMasCercana(hhmm) {
     if (!hhmm) return hhmm;
     const [h, m] = hhmm.split(':').map(Number);
-    if (m <= 15) return String(h).padStart(2,'0') + ':00';
-    return String(h + 1).padStart(2,'0') + ':00';
+    return String(m >= 30 ? h + 1 : h).padStart(2,'0') + ':00';
   }
-  function redondearSalida(hhmm) {
-    if (!hhmm) return hhmm;
-    const [h, m] = hhmm.split(':').map(Number);
-    // Baja a la hora si faltan 5+ min para la siguiente (m<=55); sube solo en
-    // los últimos 4 min (m>=56). Ej: 8:54->8:00, 8:56->9:00, 18:30->18:00.
-    if (m <= 55) return String(h).padStart(2,'0') + ':00';
-    return String(h + 1).padStart(2,'0') + ':00';
-  }
+  const redondearEntrada = aLaHoraMasCercana;
+  const redondearSalida = aLaHoraMasCercana;
   function minutosEntre(ent, sal) {
     const [he, me] = ent.split(':').map(Number);
     const [hs, ms] = sal.split(':').map(Number);
@@ -575,19 +574,34 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     getRows().forEach(tr => {
       let totalFila = 0;
       tr.querySelectorAll('.cel-dia').forEach(td => {
-        if (td.dataset.dom === '1' || td.dataset.vacio === '1' || td.dataset.presente !== '1') return;
+        if (td.dataset.dom === '1' || td.dataset.vacio === '1') return;
+        const horasRaw = parseFloat(td.dataset.horas) || 0;
+
+        // Dias cubiertos por actividad o ausencia (vacaciones, permiso con
+        // goce): no hay checada, pero SI aportan sus 9h. Se suman tal cual —
+        // no hay entrada/salida que redondear. Sin esto el total se derrumbaba
+        // al activar el redondeo, porque solo se contaban las celdas con
+        // checada real.
+        if (td.dataset.presente !== '1') {
+          totalFila += horasRaw;
+          return;
+        }
+
         const entRaw = td.dataset.ent;
         const salRaw = td.dataset.sal;
-        const horasRaw = parseFloat(td.dataset.horas) || 0;
         const celEs = td.querySelector('.cel-es');
-        if (!celEs) return;
+        if (!celEs) { totalFila += horasRaw; return; }
 
         let entMostrar, salMostrar, horasMostrar;
         if (activo && entRaw && salRaw) {
           entMostrar = redondearEntrada(entRaw);
           salMostrar = redondearSalida(salRaw);
           const mins = minutosEntre(entMostrar, salMostrar);
-          horasMostrar = Math.round((mins / 60) * 10) / 10;
+          // Jornada tan corta que el redondeo la colapsa (09:16-09:50 caeria a
+          // 0 h): se conservan las horas reales en vez de borrar el registro.
+          horasMostrar = mins > 0
+            ? Math.round((mins / 60) * 10) / 10
+            : Math.round(horasRaw * 10) / 10;
         } else {
           entMostrar = entRaw || '--:--';
           salMostrar = salRaw || '--:--';

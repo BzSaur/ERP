@@ -254,6 +254,38 @@ export async function sincronizarTodos(idChecador = null) {
   return { encolados, eliminados, deshabilitados, checadores: destinos.length, bloqueadosPorAbandono };
 }
 
+/**
+ * Encola el BLOQUEO de un empleado en todos los checadores activos, sin correr
+ * la reconciliación completa de la plantilla.
+ *
+ * Lo usa el bloqueo por abandono: cambiar el estatus a SUSPENDIDO no sirve de
+ * nada si el device no se entera — la persona seguiría checando hasta la
+ * próxima sincronización manual.
+ *
+ * @returns {Promise<number>} comandos encolados (uno por checador activo)
+ */
+export async function encolarBloqueoEmpleado(idEmpleado) {
+  const emp = await prisma.empleados.findUnique({
+    where: { ID_Empleado: idEmpleado },
+    select: { ID_Empleado: true, Nombre: true, Apellido_Paterno: true, Apellido_Materno: true }
+  });
+  if (!emp) return 0;
+
+  const destinos = await checadoresDestino();
+  if (destinos.length === 0) return 0;
+
+  const comando = comandoBloqueo(idEmpleado, nombreCompleto(emp));
+  await prisma.checadores_Comandos.createMany({
+    data: destinos.map(d => ({
+      ID_Checador: d.ID_Checador,
+      Tipo_Comando: 'UPDATE_USER',
+      ID_Empleado: idEmpleado,
+      Comando: comando
+    }))
+  });
+  return destinos.length;
+}
+
 /** Encola DELETE_USER (baja) en todos los checadores activos. */
 export async function encolarBajaEmpleado(idEmpleado) {
   const destinos = await checadoresDestino();

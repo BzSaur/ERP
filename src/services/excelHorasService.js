@@ -68,18 +68,22 @@ function rangoDias(inicio, fin) {
  * @param {Date} fechaFin
  * @returns {Buffer}
  */
-function redondearEntradaExcel(hhmm) {
+/**
+ * Redondeo a la hora MAS CERCANA (>=30 min sube, <30 baja), igual en entrada y
+ * salida. Debe coincidir con `aLaHoraMasCercana` de horas-todos.ejs: si el
+ * Excel redondeara distinto, no cuadraria con la tabla que RH acaba de ver.
+ *
+ * Las reglas anteriores (entrada subia desde el minuto 16, salida bajaba hasta
+ * el 55) sesgaban el resultado siempre en la misma direccion y restaban 5.68 h
+ * sobre 10 jornadas reales.
+ */
+function redondearHoraExcel(hhmm) {
   if (!hhmm) return hhmm;
   const [h, m] = hhmm.split(':').map(Number);
-  return String(m <= 15 ? h : h + 1).padStart(2, '0') + ':00';
+  return String(m >= 30 ? h + 1 : h).padStart(2, '0') + ':00';
 }
-function redondearSalidaExcel(hhmm) {
-  if (!hhmm) return hhmm;
-  const [h, m] = hhmm.split(':').map(Number);
-  // Baja a la hora si m<=55; sube solo en los últimos 4 min (m>=56).
-  // Ej: 8:54->8:00, 8:56->9:00, 18:30->18:00.
-  return String(m <= 55 ? h : h + 1).padStart(2, '0') + ':00';
-}
+const redondearEntradaExcel = redondearHoraExcel;
+const redondearSalidaExcel = redondearHoraExcel;
 
 // Límite semanal fijo de horas normales; el excedente es extra.
 const LIMITE_SEMANAL_HORAS = 45;
@@ -272,7 +276,10 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         const salR = redondearSalidaExcel(salRaw);
         entMostrar = `${entR}${plantaEnt ? ' (' + plantaEnt + ')' : ''}`;
         salMostrar = `${salR}${plantaSal ? ' (' + plantaSal + ')' : ''}`;
-        horas = horasEntreRedondeadas(entR, salR);
+        const hr = horasEntreRedondeadas(entR, salR);
+        // Jornada tan corta que el redondeo la colapsa: se conservan las horas
+        // reales en vez de escribir 0 (mismo criterio que la vista HTML).
+        horas = hr > 0 ? hr : horas;
       }
 
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la

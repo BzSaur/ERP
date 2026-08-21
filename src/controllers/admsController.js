@@ -14,6 +14,46 @@ function bodyTexto(req) {
   return '';
 }
 
+// --- Evaluación de abandono al llegar checadas -----------------------------
+// El bloqueo por faltas consecutivas tiene que aplicarse solo, sin que nadie
+// entre a /admin/checadores a sincronizar. El punto natural es aquí: cada vez
+// que un device sube checadas, los datos cambiaron y la racha puede haberse
+// roto o completado.
+//
+// Dos cuidados:
+//  - Nunca antes del ack: el device espera "OK" y reintenta si tarda. Se lanza
+//    después de responder, sin await.
+//  - No en cada ATTLOG: con varios devices subiendo seguido sería recalcular la
+//    matriz de 30 días decenas de veces por minuto. Se limita a una corrida
+//    cada INTERVALO_ABANDONO_MS.
+const INTERVALO_ABANDONO_MS = 15 * 60 * 1000; // 15 min
+let ultimaEvaluacionAbandono = 0;
+let evaluacionEnCurso = false;
+
+function evaluarAbandonoEnSegundoPlano() {
+  const ahora = Date.now();
+  if (evaluacionEnCurso) return;
+  if (ahora - ultimaEvaluacionAbandono < INTERVALO_ABANDONO_MS) return;
+  ultimaEvaluacionAbandono = ahora;
+  evaluacionEnCurso = true;
+
+  // Import diferido: evita cargar asistenciaService en el arranque del ADMS.
+  import('../services/abandonoService.js')
+    .then(({ evaluarYBloquear }) => evaluarYBloquear(null, null))
+    .then(({ bloqueados }) => {
+      if (bloqueados?.length) {
+        logAdms({
+          sn: 'SISTEMA', endpoint: 'abandono:bloqueo', responseCode: 200,
+          error: `Bloqueados por abandono: ${bloqueados.map(b => b.ID_Empleado).join(', ')}`
+        });
+      }
+    })
+    .catch(err => {
+      logAdms({ sn: 'SISTEMA', endpoint: 'abandono:error', responseCode: 200, error: err.message });
+    })
+    .finally(() => { evaluacionEnCurso = false; });
+}
+
 /**
  * GET/POST /iclock/ping?SN=<sn> -> heartbeat del device.
  * admsAuth ya actualizó Ultima_Conexion/IP. Sólo se responde OK.
@@ -61,6 +101,9 @@ export async function cdata(req, res) {
         processingMs: Date.now() - inicio,
         error: resumen.errores.length ? JSON.stringify(resumen).slice(0, 1500) : null
       });
+      // Llegaron checadas nuevas: reevaluar abandono. Va después del ack y sin
+      // await, para no hacer esperar al device.
+      evaluarAbandonoEnSegundoPlano();
       return;
     }
 
