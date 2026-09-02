@@ -202,16 +202,24 @@
                   <td><%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %></td>
                   <% [1,2,3,4,5,6].forEach(function(dia) { %>
                   <% const activo = recurrenciasKeys.has(m.ID_Empleado + '_' + dia); %>
+                  <% const idRec = recurrenciasIds.get(m.ID_Empleado + '_' + dia); %>
                   <td class="text-center">
-                    <button type="button"
-                            class="btn btn-sm rounded-circle btn-celda-recurrencia <%= activo ? 'btn-primary' : 'btn-outline-secondary' %>"
-                            style="width:32px;height:32px;padding:0;"
-                            data-empleado="<%= m.ID_Empleado %>"
-                            data-dia="<%= dia %>"
-                            data-activo="<%= activo ? '1' : '0' %>"
-                            title="<%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %> — <%= nombresDiaCorto[dia] %>">
-                      <% if (activo) { %><i class="bi bi-check-lg"></i><% } %>
-                    </button>
+                    <div class="d-inline-flex align-items-center gap-1">
+                      <button type="button"
+                              class="btn btn-sm rounded-circle btn-celda-recurrencia <%= activo ? 'btn-primary' : 'btn-outline-secondary' %>"
+                              style="width:32px;height:32px;padding:0;"
+                              data-empleado="<%= m.ID_Empleado %>"
+                              data-dia="<%= dia %>"
+                              data-activo="<%= activo ? '1' : '0' %>"
+                              title="<%= [m.empleado.Nombre, m.empleado.Apellido_Paterno].filter(Boolean).join(' ') %> — <%= nombresDiaCorto[dia] %>">
+                        <% if (activo) { %><i class="bi bi-check-lg"></i><% } %>
+                      </button>
+                      <% if (activo && idRec) { %>
+                      <a href="/encargado/recurrencias/<%= idRec %>" class="btn btn-sm btn-link p-0" title="Editar días/datos o eliminar esta regla" target="_blank">
+                        <i class="bi bi-pencil-square"></i>
+                      </a>
+                      <% } %>
+                    </div>
                   </td>
                   <% }); %>
                 </tr>

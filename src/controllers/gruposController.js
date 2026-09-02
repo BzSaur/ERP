@@ -304,10 +304,13 @@ export const editar = async (req, res, next) => {
     // Set de claves "ID_Empleado_Dia_Semana" con recurrencia activa, para
     // pre-marcar la matriz clic-para-alternar sin recorrerla en la vista.
     const recurrenciasKeys = new Set(recurrencias.map(r => `${r.ID_Empleado}_${r.Dia_Semana}`));
+    // Mismo criterio: ID de la regla por celda, para linkear al detalle
+    // completo (editar días/datos, o eliminar) en /encargado/recurrencias/:id.
+    const recurrenciasIds = new Map(recurrencias.map(r => [`${r.ID_Empleado}_${r.Dia_Semana}`, r.ID_Recurrencia]));
 
     res.render('admin/grupos/editar', {
       title: `Editar: ${grupo.Nombre_Grupo}`,
-      grupo, encargados, disponibles, recurrencias, tiposActividad, empresas, recurrenciasKeys,
+      grupo, encargados, disponibles, recurrencias, tiposActividad, empresas, recurrenciasKeys, recurrenciasIds,
       nombresDiaCorto: NOMBRES_DIA_CORTO
     });
   } catch (error) {
@@ -600,8 +603,12 @@ export const toggleRecurrencia = async (req, res, next) => {
     const grupo = await prisma.grupos.findUnique({ where: { ID_Grupo: idGrupo } });
     if (!grupo) return res.status(404).json({ ok: false, error: 'Grupo no encontrado' });
 
+    // Sin filtro de ID_Grupo: la matriz de la vista (ver `editar`) marca la
+    // celda activa buscando solo por empleado+día, sin importar bajo qué
+    // grupo se creó la regla — el toggle debe encontrar la misma fila o el
+    // botón nunca se apaga y pide de nuevo nombre/tipo/empresa.
     const existente = await prisma.actividad_Recurrencias.findFirst({
-      where: { ID_Empleado: idEmpleado, Dia_Semana: diaSemana, Activo: true, ID_Grupo: idGrupo }
+      where: { ID_Empleado: idEmpleado, Dia_Semana: diaSemana, Activo: true }
     });
 
     if (existente) {

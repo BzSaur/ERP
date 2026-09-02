@@ -581,14 +581,15 @@
         $$('pcalQuitar').classList.toggle('d-none', !act);
         // Agregar otra solo aplica si el día ya tiene algo.
         $$('pcalAgregar').classList.toggle('d-none', !act);
-        // Sobre una recurrencia, "Quitar" detiene la regla completa: se avisa.
+        // Sobre una recurrencia, "Quitar" solo salta ese día; la regla sigue
+        // aplicando las demás semanas.
         $$('pcalQuitar').title = ctxCal.esRecurrente
-          ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
+          ? 'Salta la actividad SOLO este día (la regla sigue las demás semanas)'
           : 'Quita la actividad de este día';
         // Sobre una recurrencia, encender el switch REEMPLAZA la regla; fuera
         // de ese caso, la crea. El texto lo aclara.
         $$('pcalRecLabel').innerHTML = ctxCal.esRecurrente
-          ? '<i class="bi bi-arrow-repeat"></i> Reemplazar la regla de todas las semanas'
+          ? '<i class="bi bi-arrow-repeat"></i> Reemplazar la regla desde este día en adelante'
           : '<i class="bi bi-arrow-repeat"></i> Repetir cada semana este día';
 
         const opts = (sel, items, k, l, s) => {

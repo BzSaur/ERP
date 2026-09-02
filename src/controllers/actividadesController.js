@@ -455,6 +455,55 @@ async function hayTraslapeRecurrencia(idEmpleado, diaSemana, fechaInicio, fechaF
   return !!existente;
 }
 
+// Salta SOLO el día `fecha` de una regla recurrente, sin detenerla para las
+// demás semanas (ej. ese día el empleado vino presencial en vez de hacer la
+// actividad delegada). Corta la regla el día anterior y crea una gemela que
+// arranca al día siguiente, mismo día de semana — la regla original nunca se
+// desactiva, así que sigue aplicando el resto de las semanas sin acción manual.
+// Si `fecha` es el primer día de vigencia de la regla, basta con recorrer el
+// inicio (no hace falta gemela).
+async function saltarDiaRecurrencia(regla, fecha, usuario, ip) {
+  const unDiaMs = 24 * 3600 * 1000;
+  const diaAnterior = new Date(fecha.getTime() - unDiaMs);
+  const diaSiguiente = new Date(fecha.getTime() + unDiaMs);
+  const inicioRegla = new Date(regla.Fecha_Inicio);
+
+  if (fecha.getTime() <= inicioRegla.getTime()) {
+    await prisma.actividad_Recurrencias.update({
+      where: { ID_Recurrencia: regla.ID_Recurrencia },
+      data: { Fecha_Inicio: diaSiguiente }
+    });
+  } else {
+    await prisma.actividad_Recurrencias.update({
+      where: { ID_Recurrencia: regla.ID_Recurrencia },
+      data: { Fecha_Fin: diaAnterior }
+    });
+    await prisma.actividad_Recurrencias.create({
+      data: {
+        ID_Empleado: regla.ID_Empleado,
+        ID_Grupo: regla.ID_Grupo,
+        ID_Responsable: regla.ID_Responsable,
+        ID_Tipo_Actividad: regla.ID_Tipo_Actividad,
+        Nombre_Actividad: regla.Nombre_Actividad,
+        ID_Empresa: regla.ID_Empresa,
+        Dia_Semana: regla.Dia_Semana,
+        Fecha_Inicio: diaSiguiente,
+        Fecha_Fin: regla.Fecha_Fin,
+        CreatedBy: usuario.Email_Office365
+      }
+    });
+  }
+
+  await registrarCambio({
+    usuario,
+    accion: 'UPDATE',
+    tabla: 'Actividad_Recurrencias',
+    idRegistro: regla.ID_Recurrencia.toString(),
+    descripcion: `Recurrencia saltada un día vía calendario: empleado ${regla.ID_Empleado}, ${fecha.toISOString().slice(0, 10)} (${NOMBRES_DIA[regla.Dia_Semana]})`,
+    ip
+  });
+}
+
 // POST /encargado/actividades (Modo=RECURRENTE) - Una regla de recurrencia
 // por cada (empleado × día de semana marcado en su fila de la tabla).
 // Empieza automáticamente al día siguiente, sin fecha de fin.
@@ -1166,22 +1215,66 @@ export const toggleCelda = async (req, res, next) => {
 
     if (regla) {
       if (modo === 'RECURRENTE') {
-        // Detener la regla completa (soft-stop, no borra histórico).
-        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-        const corte = new Date(hoy.getTime() - 24 * 3600 * 1000);
-        await prisma.actividad_Recurrencias.update({
-          where: { ID_Recurrencia: regla.ID_Recurrencia },
-          data: { Fecha_Fin: corte < regla.Fecha_Inicio ? regla.Fecha_Inicio : corte, Activo: false }
-        });
+        // Sin datos de actividad = botón "Quitar": saltar SOLO ese día (ej.
+        // vino presencial esta semana); la regla sigue viva las demás.
+        // Con datos = "Guardar" desde el panel: reemplaza la regla completa
+        // (nombre/tipo/empresa) de ahí en adelante, sin tocar el pasado.
+        const nombreNuevo = (req.body.Nombre_Actividad || '').trim();
+        const tipoNuevo = parseInt(req.body.ID_Tipo_Actividad);
+        const empresaNueva = parseInt(req.body.ID_Empresa);
+        const traeDatos = nombreNuevo && Number.isInteger(tipoNuevo) && Number.isInteger(empresaNueva);
+
+        if (!traeDatos) {
+          await saltarDiaRecurrencia(regla, fecha, req.user, obtenerIP(req));
+          return res.json({ ok: true, estado: 'VACIO' });
+        }
+
+        const tipoOk = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: tipoNuevo } });
+        if (!tipoOk || !tipoOk.Activo) {
+          return res.status(400).json({ ok: false, error: 'El tipo de actividad seleccionado ya no está disponible' });
+        }
+        const empresaOk = await prisma.cat_Empresas.findUnique({ where: { ID_Empresa: empresaNueva }, select: { Nombre_Empresa: true } });
+
+        const diaAnterior = new Date(fecha.getTime() - 24 * 3600 * 1000);
+        if (fecha.getTime() <= new Date(regla.Fecha_Inicio).getTime()) {
+          await prisma.actividad_Recurrencias.update({
+            where: { ID_Recurrencia: regla.ID_Recurrencia },
+            data: { Nombre_Actividad: nombreNuevo, ID_Tipo_Actividad: tipoNuevo, ID_Empresa: empresaNueva }
+          });
+        } else {
+          await prisma.actividad_Recurrencias.update({
+            where: { ID_Recurrencia: regla.ID_Recurrencia },
+            data: { Fecha_Fin: diaAnterior }
+          });
+          await prisma.actividad_Recurrencias.create({
+            data: {
+              ID_Empleado: regla.ID_Empleado,
+              ID_Grupo: regla.ID_Grupo,
+              ID_Responsable: regla.ID_Responsable,
+              ID_Tipo_Actividad: tipoNuevo,
+              Nombre_Actividad: nombreNuevo,
+              ID_Empresa: empresaNueva,
+              Dia_Semana: regla.Dia_Semana,
+              Fecha_Inicio: fecha,
+              Fecha_Fin: regla.Fecha_Fin,
+              CreatedBy: req.user.Email_Office365
+            }
+          });
+        }
+
         await registrarCambio({
           usuario: req.user,
-          accion: 'DELETE',
+          accion: 'UPDATE',
           tabla: 'Actividad_Recurrencias',
           idRegistro: regla.ID_Recurrencia.toString(),
-          descripcion: `Recurrencia detenida vía calendario: empleado ${idEmpleado}, ${NOMBRES_DIA[diaSemana]}`,
+          descripcion: `Recurrencia reemplazada vía calendario desde ${fechaStr}: empleado ${idEmpleado}, ${NOMBRES_DIA[diaSemana]} [${tipoOk.Nombre}]`,
           ip: obtenerIP(req)
         });
-        return res.json({ ok: true, estado: 'VACIO' });
+
+        return res.json({
+          ok: true, estado: 'RECURRENTE',
+          actividad: { nombre: nombreNuevo, tipo: tipoOk.Nombre, color: tipoOk.Color, empresa: empresaOk?.Nombre_Empresa || '', horaInicio: null, horaFin: null, esRecurrente: true }
+        });
       }
       // Modo PUNTUAL sobre un día que cubre una recurrencia: NO es un error.
       // La puntual siempre gana sobre la regla (así se resuelve en consulta),
