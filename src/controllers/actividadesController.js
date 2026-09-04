@@ -4,6 +4,7 @@ import { crearNotificacionParaEmpleado } from '../services/notificacionesService
 import { obtenerEquipoVigente, empleadoEnEquipoDeEncargado } from '../services/gruposService.js';
 import { resolverActividadesPorRango } from '../services/asistenciaService.js';
 import { getSemanaActual } from '../services/nominaService.js';
+import { fechaLocalDB } from '../utils/tiempo.js';
 
 // ============================================================
 // CONTROLADOR DE ENCARGADOS / ACTIVIDADES DE CAMPO Y HOME OFFICE
@@ -465,32 +466,56 @@ async function hayTraslapeRecurrencia(idEmpleado, diaSemana, fechaInicio, fechaF
 async function saltarDiaRecurrencia(regla, fecha, usuario, ip) {
   const unDiaMs = 24 * 3600 * 1000;
   const diaAnterior = new Date(fecha.getTime() - unDiaMs);
-  const diaSiguiente = new Date(fecha.getTime() + unDiaMs);
-  const inicioRegla = new Date(regla.Fecha_Inicio);
+  // El siguiente día que la regla vuelve a aplicar: la MISMA semana siguiente,
+  // no el día natural siguiente. Recorrer +1 día dejaba Fecha_Inicio en un día
+  // de la semana distinto a Dia_Semana (regla incoherente).
+  const proximaOcurrencia = new Date(fecha.getTime() + 7 * unDiaMs);
+  // Fecha_Inicio es @db.Date: Prisma lo devuelve a medianoche UTC, mientras
+  // que `fecha` es medianoche LOCAL. Comparar en crudo hacía que el mismo día
+  // saliera "posterior" (6h de desfase en México) y se creara una gemela de
+  // más, dejando la regla original cortada antes de su propio inicio.
+  const inicioRegla = fechaLocalDB(regla.Fecha_Inicio);
 
   if (fecha.getTime() <= inicioRegla.getTime()) {
     await prisma.actividad_Recurrencias.update({
       where: { ID_Recurrencia: regla.ID_Recurrencia },
-      data: { Fecha_Inicio: diaSiguiente }
+      data: { Fecha_Inicio: proximaOcurrencia }
     });
   } else {
-    await prisma.actividad_Recurrencias.update({
-      where: { ID_Recurrencia: regla.ID_Recurrencia },
-      data: { Fecha_Fin: diaAnterior }
-    });
-    await prisma.actividad_Recurrencias.create({
-      data: {
-        ID_Empleado: regla.ID_Empleado,
-        ID_Grupo: regla.ID_Grupo,
-        ID_Responsable: regla.ID_Responsable,
-        ID_Tipo_Actividad: regla.ID_Tipo_Actividad,
-        Nombre_Actividad: regla.Nombre_Actividad,
-        ID_Empresa: regla.ID_Empresa,
-        Dia_Semana: regla.Dia_Semana,
-        Fecha_Inicio: diaSiguiente,
-        Fecha_Fin: regla.Fecha_Fin,
-        CreatedBy: usuario.Email_Office365
-      }
+    // Corte + gemela en una sola transacción: si el segundo paso falla, la
+    // regla no queda cortada y muerta. Un doble clic en "Quitar" llegaba a
+    // crear dos gemelas idénticas, así que la creación va condicionada a que
+    // no exista ya una regla activa que cubra la reanudación.
+    await prisma.$transaction(async (tx) => {
+      await tx.actividad_Recurrencias.update({
+        where: { ID_Recurrencia: regla.ID_Recurrencia },
+        data: { Fecha_Fin: diaAnterior }
+      });
+      const yaExiste = await tx.actividad_Recurrencias.findFirst({
+        where: {
+          ID_Empleado: regla.ID_Empleado,
+          Dia_Semana: regla.Dia_Semana,
+          Activo: true,
+          ID_Recurrencia: { not: regla.ID_Recurrencia },
+          Fecha_Inicio: { lte: regla.Fecha_Fin ?? new Date('9999-12-31') },
+          OR: [{ Fecha_Fin: null }, { Fecha_Fin: { gte: proximaOcurrencia } }]
+        }
+      });
+      if (yaExiste) return;
+      await tx.actividad_Recurrencias.create({
+        data: {
+          ID_Empleado: regla.ID_Empleado,
+          ID_Grupo: regla.ID_Grupo,
+          ID_Responsable: regla.ID_Responsable,
+          ID_Tipo_Actividad: regla.ID_Tipo_Actividad,
+          Nombre_Actividad: regla.Nombre_Actividad,
+          ID_Empresa: regla.ID_Empresa,
+          Dia_Semana: regla.Dia_Semana,
+          Fecha_Inicio: proximaOcurrencia,
+          Fecha_Fin: regla.Fecha_Fin,
+          CreatedBy: usuario.Email_Office365
+        }
+      });
     });
   }
 
@@ -1236,7 +1261,10 @@ export const toggleCelda = async (req, res, next) => {
         const empresaOk = await prisma.cat_Empresas.findUnique({ where: { ID_Empresa: empresaNueva }, select: { Nombre_Empresa: true } });
 
         const diaAnterior = new Date(fecha.getTime() - 24 * 3600 * 1000);
-        if (fecha.getTime() <= new Date(regla.Fecha_Inicio).getTime()) {
+        // fechaLocalDB normaliza el @db.Date (medianoche UTC) a medianoche
+        // local: sin eso el mismo día se lee como posterior y se parte la
+        // regla en dos en vez de editarla en sitio.
+        if (fecha.getTime() <= fechaLocalDB(regla.Fecha_Inicio).getTime()) {
           await prisma.actividad_Recurrencias.update({
             where: { ID_Recurrencia: regla.ID_Recurrencia },
             data: { Nombre_Actividad: nombreNuevo, ID_Tipo_Actividad: tipoNuevo, ID_Empresa: empresaNueva }

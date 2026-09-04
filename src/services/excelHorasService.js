@@ -285,7 +285,14 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la
       // actividad (capturado, o 8am→primera entrada) y las horas reales —
       // mismo criterio que la vista HTML /asistencia/horas.
-      const actividadConChecada = d.getUTCDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
+      // Si además hay una ausencia justificada ese día, decide ganadorDelDia
+      // igual que las vistas: sin esto el Excel sumaba la actividad aunque las
+      // vacaciones la hubieran desplazado, y el total no cuadraba con pantalla.
+      const actividadRawChecada = d.getUTCDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
+      const ausConChecada = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, d);
+      const actividadConChecada = ganadorDelDia(ausConChecada, actividadRawChecada) === 'ACTIVIDAD'
+        ? actividadRawChecada
+        : null;
       if (actividadConChecada) {
         horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida);
 
@@ -298,7 +305,11 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
             ? ` ${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : '';
           return `${av.tipo.toUpperCase()}: ${av.nombre}${tramo}${av.esRecurrente ? ' [recurrente]' : ''}`;
         }).join(' + ');
-        entMostrar = entMostrar ? `${entMostrar}\n${descC}` : descC;
+        // Un solo renglón: el writer de xlsx (build comunitario) descarta los
+        // estilos de celda, así que sin wrapText un "\n" queda pintado en una
+        // línea y el ancho de columna se come la actividad. Con " · " el texto
+        // sigue siendo legible al ensanchar o al leerlo desde la barra.
+        entMostrar = entMostrar ? `${entMostrar} · ${descC}` : descC;
 
         listaC.forEach(av => detalleActividades.push({
           id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
@@ -344,7 +355,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   // ---- Hoja + anchos ----
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const cols = [{ wch: 6 }, { wch: 28 }, { wch: 16 }];
-  for (let i = 0; i < dias.length; i++) cols.push({ wch: 14 }, { wch: 14 }, { wch: 7 });
+  // Entrada más ancha que Salida: además de la hora puede llevar la actividad
+  // delegada del día ("07:47 (RAM 1) · CAMPO: HOME OFFICE [recurrente]").
+  for (let i = 0; i < dias.length; i++) cols.push({ wch: 30 }, { wch: 14 }, { wch: 7 });
   cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 });
   ws['!cols'] = cols;
 
