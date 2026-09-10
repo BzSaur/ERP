@@ -224,7 +224,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         const fmtMin = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
         if (esDescanso || ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
           // Sin checada: el tramo capturado manda; si no hay, jornada fija.
-          const horasAct = horasDeActividad(actividadRaw, null);
+          // En día de descanso solo cuenta el tramo documentado (sábado no
+          // obligatorio → no se regala jornada completa).
+          const horasAct = horasDeActividad(actividadRaw, null, null, esDescanso);
           // Un día puede tener VARIAS actividades: el Excel las lista todas,
           // porque este reporte también justifica el trabajo realizado.
           const listaAct = actividadRaw.todas || [actividadRaw];

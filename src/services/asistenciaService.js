@@ -869,6 +869,9 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinP
     // (08:00–18:00) y las que sí lo tienen aportan lo que caiga FUERA de esa
     // ventana. Así un home office recurrente más una actividad nocturna de
     // 19-21 dan 9 + 2 = 11h, en vez de perderse las dos horas extra.
+    // sinPiso (día de descanso): la actividad sin tramo no puede cuantificarse
+    // por horario, así que se toma la jornada estándar como base igual —
+    // documenta un día trabajado sin registro de horas.
     if (sinTramo.length > 0) {
       let extra = 0;
       for (const a of conTramo) {
@@ -901,7 +904,9 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinP
     // completa aunque los tramos sumen menos (los horarios documentan qué se
     // hizo, no recortan el día). Si los tramos dan más, se respeta el exceso.
     // Con checada real no aplica: ahí manda lo efectivamente trabajado.
-    if (!horaEntrada) total = Math.max(total, HORAS_FIJAS_JORNADA);
+    // sinPiso: día de descanso (sábado/domingo). El sábado no es obligatorio,
+    // así que no se regala jornada completa: cuenta solo el tramo documentado.
+    if (!horaEntrada && !sinPiso) total = Math.max(total, HORAS_FIJAS_JORNADA);
     return total;
   }
 
@@ -1061,10 +1066,11 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const actividadDia = gana === 'ACTIVIDAD' ? actividadRaw : null;
     const etiqueta = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
     const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
-    // Actividad: tramo capturado o jornada implícita. Ausencia: 9h solo si es
-    // con goce de sueldo (ver obtenerAusenciasJustificadas).
+    // Actividad: tramo capturado o jornada implícita. En día de descanso cuenta
+    // solo el tramo documentado (sábado no obligatorio, no se regala jornada).
+    // Ausencia: 9h solo si es con goce (ver obtenerAusenciasJustificadas).
     const horasDia = actividadDia
-      ? horasDeActividad(actividadDia, null)
+      ? horasDeActividad(actividadDia, null, null, esDescanso)
       : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
     totalHoras += horasDia;
     dias.push({
@@ -1360,12 +1366,14 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
         //   - Ausencia: solo en día laborable (L-V). No tiene sentido
         //     "ausentarse" un día de descanso: no hay jornada que cubrir.
         if (actividad || (ausencia && !esDomingo)) {
-          // Actividad: tramo capturado o jornada implícita.
+          // Actividad: tramo capturado o jornada implícita. En día de descanso
+          // (esDomingo abarca sábado y domingo) se cuenta SOLO el tramo
+          // documentado — el sábado no es obligatorio, no se regala jornada.
           // Ausencia: 9h solo si es CON goce de sueldo (vacaciones, permiso
           // con goce, incapacidad RT…). Las sin goce (falta injustificada,
           // permiso sin goce, abandono) se etiquetan pero no pagan horas.
           const horasDia = actividad
-            ? horasDeActividad(actividad, null)
+            ? horasDeActividad(actividad, null, null, esDomingo)
             : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
           horasCubiertasSinSello += horasDia;
           if (horasDia > 0) diasCubiertosSinSello++;
