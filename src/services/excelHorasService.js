@@ -210,14 +210,19 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const key = d.toISOString().slice(0, 10);
       const a = idx.get(e.ID_Empleado)?.get(key);
       if (!a) {
-        if (esDiaDescanso(d)) { fila.push('', '', ''); continue; }
+        const esDescanso = esDiaDescanso(d);
         const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, d);
         const actividadRaw = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
+        // Sábado/domingo: descanso. Solo cuenta si hay actividad delegada
+        // explícita para ese día (trabajo planeado, ej. instalación en sábado
+        // laborable). La ausencia en día de descanso se ignora: no hay jornada.
+        if (esDescanso && !actividadRaw) { fila.push('', '', ''); continue; }
         if (!periodoAus && !actividadRaw) { fila.push('', '', ''); continue; }
 
         // Ausencia y actividad el mismo día: gana la asignada al último.
+        // En día de descanso no hay ausencia válida que oponer: manda la actividad.
         const fmtMin = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-        if (ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
+        if (esDescanso || ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
           // Sin checada: el tramo capturado manda; si no hay, jornada fija.
           const horasAct = horasDeActividad(actividadRaw, null);
           // Un día puede tener VARIAS actividades: el Excel las lista todas,
@@ -288,9 +293,14 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // Si además hay una ausencia justificada ese día, decide ganadorDelDia
       // igual que las vistas: sin esto el Excel sumaba la actividad aunque las
       // vacaciones la hubieran desplazado, y el total no cuadraba con pantalla.
-      const actividadRawChecada = d.getUTCDay() !== 0 ? (actividadesMap.get(`${e.ID_Empleado}_${key}`) || null) : null;
+      // Actividad delegada con checada: cuenta cualquier día, incluido fin de
+      // semana. Si además hay ausencia, la ausencia solo puede ganar en día
+      // laborable (en descanso no hay jornada de la cual ausentarse).
+      const esDescansoChecada = esDiaDescanso(d);
+      const actividadRawChecada = actividadesMap.get(`${e.ID_Empleado}_${key}`) || null;
       const ausConChecada = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, d);
-      const actividadConChecada = ganadorDelDia(ausConChecada, actividadRawChecada) === 'ACTIVIDAD'
+      const actividadConChecada = (esDescansoChecada && actividadRawChecada) ||
+        ganadorDelDia(ausConChecada, actividadRawChecada) === 'ACTIVIDAD'
         ? actividadRawChecada
         : null;
       if (actividadConChecada) {

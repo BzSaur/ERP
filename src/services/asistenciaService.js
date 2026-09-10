@@ -1046,13 +1046,18 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   // ambos casos — vacaciones/permiso también se pagan completos.
   const ymdConRegistro = new Set(dias.map(d => ymdUTC(d.fecha)));
   for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-    if (esDiaDescanso(d)) continue; // sábado y domingo: descanso
     if (ymdConRegistro.has(ymdUTC(d))) continue;
+    const esDescanso = esDiaDescanso(d);
     const periodoAus = periodoAusenciaEnFecha(ausencias, empleadoId, d);
     const actividadRaw = actividadesMap.get(`${empleadoId}_${d.toISOString().slice(0, 10)}`) || null;
+    // Sábado/domingo: descanso. Solo genera fila si hay actividad delegada
+    // explícita para ese día (trabajo planeado, ej. instalación en sábado
+    // laborable). La ausencia en día de descanso se ignora: no hay jornada.
+    if (esDescanso && !actividadRaw) continue;
     if (!periodoAus && !actividadRaw) continue;
     // Ausencia y actividad el mismo día: gana la asignada al último.
-    const gana = ganadorDelDia(periodoAus, actividadRaw);
+    // En día de descanso no hay ausencia válida que oponer: manda la actividad.
+    const gana = esDescanso ? 'ACTIVIDAD' : ganadorDelDia(periodoAus, actividadRaw);
     const actividadDia = gana === 'ACTIVIDAD' ? actividadRaw : null;
     const etiqueta = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
     const fecha = new Date(d); fecha.setHours(0, 0, 0, 0);
@@ -1334,7 +1339,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       const periodoAus = periodoAusenciaEnFecha(ausencias, e.ID_Empleado, f);
 
       // Ausencia y actividad el mismo día: gana la asignada al último.
-      const gana = ganadorDelDia(periodoAus, actividadRaw);
+      // En sábado/domingo no hay ausencia que oponer: si hay actividad, manda.
+      const gana = (esDomingo && actividadRaw) ? 'ACTIVIDAD' : ganadorDelDia(periodoAus, actividadRaw);
       const actividad = gana === 'ACTIVIDAD' ? actividadRaw : null;
       const ausencia = gana === 'AUSENCIA' ? periodoAus.etiqueta : null;
       // La etiqueta desplazada se conserva solo como dato informativo.
@@ -1347,7 +1353,13 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       if (!c) {
         // Día sin checada cubierto por actividad delegada O por ausencia
         // justificada: en ambos casos son 9h fijas de jornada cumplida.
-        if (!esDomingo && (actividad || ausencia)) {
+        //   - Actividad: cuenta SIEMPRE, incluso en sábado/domingo. Alguien la
+        //     asignó a propósito para ese día (ej. instalación en sábado
+        //     laborable opcional); sus horas son trabajo real planeado y
+        //     empujan el total como cualquier sábado checado.
+        //   - Ausencia: solo en día laborable (L-V). No tiene sentido
+        //     "ausentarse" un día de descanso: no hay jornada que cubrir.
+        if (actividad || (ausencia && !esDomingo)) {
           // Actividad: tramo capturado o jornada implícita.
           // Ausencia: 9h solo si es CON goce de sueldo (vacaciones, permiso
           // con goce, incapacidad RT…). Las sin goce (falta injustificada,
