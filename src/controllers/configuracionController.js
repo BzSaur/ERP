@@ -250,11 +250,20 @@ export const nominaConfig = async (req, res) => {
       configMap[c.Clave] = c;
     });
 
+    const cronActual = configMap.REPORTES_ASISTENCIA_CRON?.Valor || '0 22 * * 4';
+    const partesCron = cronActual.match(/^([0-9]+)\s+([0-9]+)\s+\*\s+\*\s+([0-7])$/);
+    const reporteAsistenciaHorario = {
+      minuto: partesCron ? partesCron[1].padStart(2, '0') : '00',
+      hora: partesCron ? partesCron[2].padStart(2, '0') : '22',
+      dia: partesCron ? partesCron[3] : '4'
+    };
+
     res.render('configuracion/nomina-config', {
       title: 'Configuración de Nómina',
       configuraciones,
       categorias,
-      configMap
+      configMap,
+      reporteAsistenciaHorario
     });
   } catch (error) {
     console.error('Error al cargar config nómina:', error);
@@ -305,9 +314,10 @@ export const actualizarCategoriaNominaConfig = async (req, res) => {
   try {
     const configs = req.body;
     let actualizados = 0;
+    const camposHorario = ['REPORTES_ASISTENCIA_DIA', 'REPORTES_ASISTENCIA_HORA'];
     
     for (const [clave, valor] of Object.entries(configs)) {
-      if (clave === '_method') continue; // Skip method override
+      if (clave === '_method' || camposHorario.includes(clave)) continue;
       
       try {
         await updateConfig(clave, valor, req.session.user?.Email_Office365 || 'SuperAdmin');
@@ -315,6 +325,18 @@ export const actualizarCategoriaNominaConfig = async (req, res) => {
       } catch (err) {
         console.error(`Error actualizando ${clave}:`, err);
       }
+    }
+
+    if (configs.REPORTES_ASISTENCIA_DIA !== undefined || configs.REPORTES_ASISTENCIA_HORA !== undefined) {
+      const dia = String(configs.REPORTES_ASISTENCIA_DIA || '4');
+      const horaCompleta = String(configs.REPORTES_ASISTENCIA_HORA || '22:00');
+      const [hora, minuto] = horaCompleta.split(':').map(Number);
+      if (!/^[0-7]$/.test(dia) || !Number.isInteger(hora) || hora < 0 || hora > 23 || !Number.isInteger(minuto) || minuto < 0 || minuto > 59) {
+        req.flash('error', 'El día o la hora del reporte no son válidos');
+        return res.redirect('/configuracion/nomina');
+      }
+      await updateConfig('REPORTES_ASISTENCIA_CRON', `${minuto} ${hora} * * ${dia}`, req.session.user?.Email_Office365 || 'SuperAdmin');
+      actualizados++;
     }
 
     if (Object.keys(configs).some(clave => clave.startsWith('REPORTES_ASISTENCIA_'))) {

@@ -120,7 +120,24 @@
                         </span>
                       </td>
                       <td>
-                        <% if (cfg.Tipo_Dato === 'BOOLEAN') { %>
+                        <% if (clave === 'REPORTES_ASISTENCIA_CRON') { %>
+                          <div class="row g-2">
+                            <div class="col-6">
+                              <select name="REPORTES_ASISTENCIA_DIA" class="form-select form-select-sm">
+                                <option value="1" <%= reporteAsistenciaHorario?.dia === '1' ? 'selected' : '' %>>Lunes</option>
+                                <option value="2" <%= reporteAsistenciaHorario?.dia === '2' ? 'selected' : '' %>>Martes</option>
+                                <option value="3" <%= reporteAsistenciaHorario?.dia === '3' ? 'selected' : '' %>>Miércoles</option>
+                                <option value="4" <%= reporteAsistenciaHorario?.dia === '4' ? 'selected' : '' %>>Jueves</option>
+                                <option value="5" <%= reporteAsistenciaHorario?.dia === '5' ? 'selected' : '' %>>Viernes</option>
+                                <option value="6" <%= reporteAsistenciaHorario?.dia === '6' ? 'selected' : '' %>>Sábado</option>
+                                <option value="0" <%= reporteAsistenciaHorario?.dia === '0' ? 'selected' : '' %>>Domingo</option>
+                              </select>
+                            </div>
+                            <div class="col-6">
+                              <input type="time" name="REPORTES_ASISTENCIA_HORA" value="<%= reporteAsistenciaHorario?.hora %>:<%= reporteAsistenciaHorario?.minuto %>" class="form-control form-control-sm">
+                            </div>
+                          </div>
+                        <% } else if (cfg.Tipo_Dato === 'BOOLEAN') { %>
                           <select name="<%= cfg.Clave %>" class="form-select form-select-sm">
                             <option value="true" <%= cfg.Valor === 'true' ? 'selected' : '' %>>Sí (Activado)</option>
                             <option value="false" <%= cfg.Valor === 'false' ? 'selected' : '' %>>No (Desactivado)</option>
