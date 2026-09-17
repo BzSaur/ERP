@@ -39,6 +39,15 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       SESSION_SECRET: ${SESSION_SECRET:-change_me_in_production_min_32_chars}
       TZ: ${TZ:-America/Mexico_City}
+      REPORTES_ASISTENCIA_CRON: ${REPORTES_ASISTENCIA_CRON:-0 22 * * 4}
+      REPORTES_ASISTENCIA_TZ: ${REPORTES_ASISTENCIA_TZ:-America/Mexico_City}
+      REPORTES_ASISTENCIA_EMAILS: ${REPORTES_ASISTENCIA_EMAILS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     ports:
       - "${PORT:-3001}:3001"
     depends_on:

@@ -51,12 +51,12 @@ function fmtFechaCorta(d) {
 }
 
 /** Lista de días (Date a medianoche) entre inicio y fin inclusive. */
-function rangoDias(inicio, fin) {
+function rangoDias(inicio, fin, excluirDomingos = false) {
   const dias = [];
   const cur = new Date(inicio); cur.setHours(0, 0, 0, 0);
   const end = new Date(fin); end.setHours(0, 0, 0, 0);
   while (cur <= end) {
-    dias.push(new Date(cur));
+    if (!excluirDomingos || cur.getDay() !== 0) dias.push(new Date(cur));
     cur.setDate(cur.getDate() + 1);
   }
   return dias;
@@ -101,10 +101,10 @@ function horasEntreRedondeadas(ent, sal) {
 }
 
 export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
-  const { sort = null, dir = 'asc', redondear = false, filtro = null } = opciones;
+  const { sort = null, dir = 'asc', redondear = false, filtro = null, excluirDomingos = false } = opciones;
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
-  const dias = rangoDias(inicio, fin);
+  const dias = rangoDias(inicio, fin, excluirDomingos);
 
   let empleados = await prisma.empleados.findMany({
     // Mismo criterio que la vista HTML: sigue quien no está de BAJA, incluidos

@@ -24,7 +24,10 @@ const optionalEnvVars = {
   'ADMS_TIME_DRIFT_MAX_MIN': '5',
   'ADMS_DEDUP_WINDOW_SEC': '0',
   'ADMS_PENDIENTES_MAX': '10',
-  'ADMS_TIMEZONE': '-6'
+  'ADMS_TIMEZONE': '-6',
+  // Reporte semanal de asistencia por correo (jueves 22:00 CDMX)
+  'REPORTES_ASISTENCIA_CRON': '0 22 * * 4',
+  'REPORTES_ASISTENCIA_TZ': 'America/Mexico_City'
 };
 
 // ============================================================

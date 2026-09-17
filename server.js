@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { validateEnv, config } from './src/config/env.js';
 import app from './src/app.js';
 import { testConnection } from './src/config/database.js';
+import { iniciarCronReporteAsistencia } from './src/services/reporteAsistenciaCronService.js';
 
 // ============================================================
 // VALIDAR VARIABLES DE ENTORNO
@@ -23,6 +24,8 @@ async function startServer() {
       console.log('💡 Asegúrate de que PostgreSQL esté corriendo y las credenciales sean correctas');
       process.exit(1);
     }
+
+    await iniciarCronReporteAsistencia();
 
     // Iniciar servidor
     app.listen(PORT, () => {

@@ -14,7 +14,6 @@
     "seed:catalogos": "node prisma/seed-catalogos.js",
     "seed:config": "node prisma/seed-configuracion.js",
     "seed:all": "npm run seed && npm run seed:catalogos && npm run seed:config",
-
     "vita:up": "docker compose up -d",
     "vita:up:seed": "cross-env RUN_SEED=true docker compose up -d",
     "vita:down": "docker compose down",
@@ -52,6 +51,8 @@
     "helmet": "^7.1.0",
     "method-override": "^3.0.0",
     "multer": "^2.0.2",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^10.0.10",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.11.3",
