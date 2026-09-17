@@ -13,6 +13,7 @@
     "seed": "node prisma/seed.js",
     "seed:catalogos": "node prisma/seed-catalogos.js",
     "seed:config": "node prisma/seed-configuracion.js",
+    "config:reporte-asistencia": "node scripts/configurar-reporte-asistencia.js",
     "seed:all": "npm run seed && npm run seed:catalogos && npm run seed:config",
     "vita:up": "docker compose up -d",
     "vita:up:seed": "cross-env RUN_SEED=true docker compose up -d",

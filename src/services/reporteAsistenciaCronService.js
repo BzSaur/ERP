@@ -1,6 +1,10 @@
 import prisma from '../config/database.js';
 import { generarExcelHoras } from './excelHorasService.js';
 import { enviarCorreo } from './correoService.js';
+import { getConfigMultiple } from './nominaService.js';
+import cron from 'node-cron';
+
+let tareaReporteAsistencia = null;
 
 const ROLES_DESTINATARIOS = new Set([
   'RH',
@@ -32,11 +36,20 @@ export function obtenerRangoCicloAsistencia(fecha = new Date()) {
   return { inicio, fin };
 }
 
-function obtenerDestinatarios() {
-  return (process.env.REPORTES_ASISTENCIA_EMAILS || '')
-    .split(',')
-    .map(email => email.trim())
-    .filter(Boolean);
+async function obtenerConfiguracionReporte() {
+  const config = await getConfigMultiple([
+    'REPORTES_ASISTENCIA_EMAILS',
+    'REPORTES_ASISTENCIA_CRON',
+    'REPORTES_ASISTENCIA_TZ',
+    'REPORTES_ASISTENCIA_ACTIVO'
+  ]);
+
+  return {
+    emails: config.REPORTES_ASISTENCIA_EMAILS ?? process.env.REPORTES_ASISTENCIA_EMAILS ?? '',
+    cron: config.REPORTES_ASISTENCIA_CRON || process.env.REPORTES_ASISTENCIA_CRON || '0 22 * * 4',
+    timezone: config.REPORTES_ASISTENCIA_TZ || process.env.REPORTES_ASISTENCIA_TZ || 'America/Mexico_City',
+    activo: config.REPORTES_ASISTENCIA_ACTIVO ?? true
+  };
 }
 
 async function obtenerDestinatariosDesdeUsuarios() {
@@ -53,7 +66,11 @@ async function obtenerDestinatariosDesdeUsuarios() {
 
 export async function enviarReporteAsistenciaSemanal(fecha = new Date()) {
   const { inicio, fin } = obtenerRangoCicloAsistencia(fecha);
-  const destinatarios = obtenerDestinatarios();
+  const configuracion = await obtenerConfiguracionReporte();
+  const destinatarios = configuracion.emails
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean);
   const destinatariosFinales = destinatarios.length
     ? destinatarios
     : await obtenerDestinatariosDesdeUsuarios();
@@ -76,23 +93,32 @@ export async function enviarReporteAsistenciaSemanal(fecha = new Date()) {
   return { inicio, fin, destinatarios: destinatariosFinales };
 }
 
-export function iniciarCronReporteAsistencia() {
-  const cron = process.env.REPORTES_ASISTENCIA_CRON || '0 22 * * 4';
-  const timezone = process.env.REPORTES_ASISTENCIA_TZ || 'America/Mexico_City';
+export async function iniciarCronReporteAsistencia() {
+  if (tareaReporteAsistencia) tareaReporteAsistencia.destroy();
+  tareaReporteAsistencia = null;
 
-  return import('node-cron').then(({ default: nodeCron }) => {
-    const tarea = nodeCron.schedule(cron, async () => {
+  const configuracion = await obtenerConfiguracionReporte();
+  if (!configuracion.activo) {
+    console.log('CRON de asistencia desactivado desde configuración');
+    return null;
+  }
+  if (!cron.validate(configuracion.cron)) {
+    throw new Error(`Expresión CRON inválida para asistencia: ${configuracion.cron}`);
+  }
+
+  tareaReporteAsistencia = cron.schedule(configuracion.cron, async () => {
       try {
         const resultado = await enviarReporteAsistenciaSemanal();
         console.log(`Reporte de asistencia enviado a ${resultado.destinatarios.length} destinatario(s)`);
       } catch (error) {
         console.error('Error al enviar el reporte de asistencia por correo:', error.message);
       }
-    }, { timezone });
+    }, { timezone: configuracion.timezone });
 
-    console.log(`CRON de asistencia activo: ${cron} (${timezone})`);
-    return tarea;
-  });
+  console.log(`CRON de asistencia activo: ${configuracion.cron} (${configuracion.timezone})`);
+  return tareaReporteAsistencia;
 }
 
-export default { enviarReporteAsistenciaSemanal, iniciarCronReporteAsistencia, obtenerRangoCicloAsistencia };
+export const reprogramarCronReporteAsistencia = iniciarCronReporteAsistencia;
+
+export default { enviarReporteAsistenciaSemanal, iniciarCronReporteAsistencia, reprogramarCronReporteAsistencia, obtenerRangoCicloAsistencia };

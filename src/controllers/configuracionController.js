@@ -5,6 +5,7 @@
 import prisma from '../config/database.js';
 import { getAllConfig, updateConfig, getConfig } from '../services/nominaService.js';
 import { simularChecada } from '../services/admsService.js';
+import { reprogramarCronReporteAsistencia } from '../services/reporteAsistenciaCronService.js';
 
 // Panel de configuración
 export const index = async (req, res) => {
@@ -231,6 +232,11 @@ export const nominaConfig = async (req, res) => {
         icono: 'bi-exclamation-triangle',
         claves: ['FALTAS_PARA_RESCISION', 'DIAS_ABANDONO_TRABAJO', 'LICENCIA_LUTO_DIAS', 'LICENCIA_PATERNIDAD_DIAS']
       },
+      reportesAsistencia: {
+        titulo: 'Reporte de Asistencia por Correo',
+        icono: 'bi-envelope-paper',
+        claves: ['REPORTES_ASISTENCIA_ACTIVO', 'REPORTES_ASISTENCIA_EMAILS', 'REPORTES_ASISTENCIA_CRON', 'REPORTES_ASISTENCIA_TZ']
+      },
       otros: {
         titulo: 'Otros',
         icono: 'bi-three-dots',
@@ -283,6 +289,7 @@ export const actualizarNominaConfig = async (req, res) => {
     }
     
     await updateConfig(clave, valor, req.session.user?.Email_Office365 || 'SuperAdmin');
+    if (clave.startsWith('REPORTES_ASISTENCIA_')) await reprogramarCronReporteAsistencia();
     
     req.flash('success', `Configuración "${clave}" actualizada a "${valor}"`);
     res.redirect('/configuracion/nomina');
@@ -308,6 +315,10 @@ export const actualizarCategoriaNominaConfig = async (req, res) => {
       } catch (err) {
         console.error(`Error actualizando ${clave}:`, err);
       }
+    }
+
+    if (Object.keys(configs).some(clave => clave.startsWith('REPORTES_ASISTENCIA_'))) {
+      await reprogramarCronReporteAsistencia();
     }
     
     req.flash('success', `${actualizados} parámetro(s) actualizados correctamente`);
