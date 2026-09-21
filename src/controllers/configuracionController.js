@@ -5,7 +5,7 @@
 import prisma from '../config/database.js';
 import { getAllConfig, updateConfig, getConfig } from '../services/nominaService.js';
 import { simularChecada } from '../services/admsService.js';
-import { reprogramarCronReporteAsistencia } from '../services/reporteAsistenciaCronService.js';
+import { reprogramarCronReporteAsistencia, enviarReporteAsistenciaSemanal } from '../services/reporteAsistenciaCronService.js';
 
 // Panel de configuración
 export const index = async (req, res) => {
@@ -307,6 +307,26 @@ export const actualizarNominaConfig = async (req, res) => {
     req.flash('error', 'Error al actualizar la configuración');
     res.redirect('/configuracion/nomina');
   }
+};
+
+// Enviar manualmente el reporte de asistencia de la semana elegida (viernes a jueves)
+export const enviarReporteAsistenciaManual = async (req, res) => {
+  try {
+    const { fecha } = req.body;
+    const fechaRef = fecha ? new Date(`${fecha}T12:00:00`) : new Date();
+    if (isNaN(fechaRef.getTime())) {
+      req.flash('error', 'Fecha inválida');
+      return res.redirect('/configuracion/nomina');
+    }
+    const resultado = await enviarReporteAsistenciaSemanal(fechaRef);
+    const f1 = resultado.inicio.toISOString().slice(0, 10);
+    const f2 = resultado.fin.toISOString().slice(0, 10);
+    req.flash('success', `Reporte ${f1} al ${f2} enviado a ${resultado.destinatarios.length} destinatario(s)`);
+  } catch (error) {
+    console.error('Error al enviar reporte de asistencia manual:', error);
+    req.flash('error', `No se pudo enviar el reporte: ${error.message}`);
+  }
+  res.redirect('/configuracion/nomina');
 };
 
 // Actualizar múltiples parámetros de una categoría

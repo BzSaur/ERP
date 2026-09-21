@@ -182,6 +182,21 @@
               </button>
             </div>
           </form>
+          <% if (catKey === 'reportesAsistencia') { %>
+            <form action="/configuracion/nomina/reporte-asistencia/enviar" method="POST" class="row g-2 justify-content-end align-items-center mt-2">
+              <div class="col-auto">
+                <label class="col-form-label col-form-label-sm">Semana (cualquier día viernes-jueves)</label>
+              </div>
+              <div class="col-auto">
+                <input type="date" name="fecha" class="form-control form-control-sm">
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                  <i class="bi bi-send me-1"></i> Enviar
+                </button>
+              </div>
+            </form>
+          <% } %>
         </div>
       </div>
     </div>

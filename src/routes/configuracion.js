@@ -29,6 +29,7 @@ router.put('/estatus/:id', configuracionController.actualizarEstatus);
 router.get('/nomina', configuracionController.nominaConfig);
 router.put('/nomina/:clave', configuracionController.actualizarNominaConfig);
 router.post('/nomina/categoria', configuracionController.actualizarCategoriaNominaConfig);
+router.post('/nomina/reporte-asistencia/enviar', configuracionController.enviarReporteAsistenciaManual);
 
 // Simulador de checador (QA · solo SuperAdmin).
 router.get('/_qa-checador', configuracionController.qaChecadorForm);
