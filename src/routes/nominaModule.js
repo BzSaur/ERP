@@ -58,8 +58,8 @@ router.get('/nomina/periodos/:periodoId/empleado/:empleadoId', nominaController.
 // Listar vacaciones
 router.get('/vacaciones', vacacionesController.index);
 
-// Elegibilidad de empleados
-router.get('/vacaciones/elegibilidad', vacacionesController.elegibilidad);
+// La elegibilidad se fusionó en /vacaciones; se conserva por bookmarks viejos.
+router.get('/vacaciones/elegibilidad', (req, res) => res.redirect('/vacaciones'));
 
 // Generar vacaciones automáticas
 router.post('/vacaciones/generar', vacacionesController.generarVacaciones);

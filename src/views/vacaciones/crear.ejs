@@ -8,6 +8,12 @@
   </a>
 </div>
 
+<% if (typeof errorFormulario !== 'undefined' && errorFormulario) { %>
+  <div class="alert alert-danger">
+    <i class="bi bi-exclamation-circle me-2"></i><strong>No se pudo registrar:</strong> <%= errorFormulario %>
+  </div>
+<% } %>
+
 <% if (typeof messages !== 'undefined' && messages.error) { %>
   <div class="alert alert-danger alert-dismissible fade show">
     <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
@@ -24,22 +30,29 @@
           <select class="form-select" id="ID_Empleado" name="ID_Empleado" required>
             <option value="">Seleccionar empleado...</option>
             <% empleados.forEach(emp => { %>
-              <option value="<%= emp.ID_Empleado %>">
+              <option value="<%= emp.ID_Empleado %>"
+                      data-dias-pendientes="<%= emp.diasPendientes !== null ? emp.diasPendientes : '' %>"
+                      <%= String(valores.ID_Empleado) === String(emp.ID_Empleado) ? 'selected' : '' %>>
                 <%= emp.Nombre %> <%= emp.Apellido_Paterno %> <%= emp.Apellido_Materno || '' %>
               </option>
             <% }) %>
           </select>
-          <div class="form-text">Solo empleados con al menos 1 año de antigüedad pueden solicitar vacaciones</div>
+          <div class="form-text">Solo se listan empleados con al menos 1 año de antigüedad (elegibles)</div>
+          <div class="alert alert-secondary py-2 mt-2" id="saldoInfo" style="display: none;">
+            Días pendientes de este empleado: <strong id="saldoTexto"></strong>
+          </div>
         </div>
-        
+
         <div class="col-md-6">
           <label for="Fecha_Inicio" class="form-label">Fecha de Inicio *</label>
-          <input type="date" class="form-control" id="Fecha_Inicio" name="Fecha_Inicio" required>
+          <input type="date" class="form-control" id="Fecha_Inicio" name="Fecha_Inicio"
+                 value="<%= valores.Fecha_Inicio %>" required>
         </div>
-        
+
         <div class="col-md-6">
           <label for="Fecha_Fin" class="form-label">Fecha de Fin *</label>
-          <input type="date" class="form-control" id="Fecha_Fin" name="Fecha_Fin" required>
+          <input type="date" class="form-control" id="Fecha_Fin" name="Fecha_Fin"
+                 value="<%= valores.Fecha_Fin %>" required>
         </div>
 
         <div class="col-md-12">
@@ -49,23 +62,23 @@
             vacaciones en asistencia y nómina (no cuentan como falta).
           </div>
         </div>
-        
+
         <div class="col-md-12">
           <div class="alert alert-info" id="diasInfo" style="display: none;">
             <i class="bi bi-info-circle me-1"></i>
             <span id="diasTexto"></span>
           </div>
         </div>
-        
+
         <div class="col-md-12">
           <label for="Observaciones" class="form-label">Observaciones</label>
           <textarea class="form-control" id="Observaciones" name="Observaciones" rows="2"
-                    placeholder="Notas adicionales..."></textarea>
+                    placeholder="Notas adicionales..."><%= valores.Observaciones %></textarea>
         </div>
       </div>
-      
+
       <hr class="my-4">
-      
+
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-check-lg me-1"></i> Registrar Vacaciones
@@ -78,27 +91,51 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  const empleadoSelect = document.getElementById('ID_Empleado');
   const fechaInicio = document.getElementById('Fecha_Inicio');
   const fechaFin = document.getElementById('Fecha_Fin');
   const diasInfo = document.getElementById('diasInfo');
   const diasTexto = document.getElementById('diasTexto');
-  
+  const saldoInfo = document.getElementById('saldoInfo');
+  const saldoTexto = document.getElementById('saldoTexto');
+
+  function mostrarSaldo() {
+    const opcion = empleadoSelect.selectedOptions[0];
+    const dias = opcion ? opcion.dataset.diasPendientes : '';
+    if (opcion && opcion.value && dias !== '') {
+      saldoTexto.textContent = dias;
+      saldoInfo.style.display = 'block';
+    } else {
+      saldoInfo.style.display = 'none';
+    }
+  }
+
   function calcularDias() {
     if (fechaInicio.value && fechaFin.value) {
-      const inicio = new Date(fechaInicio.value);
-      const fin = new Date(fechaFin.value);
-      const dias = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-      
+      const inicio = new Date(fechaInicio.value + 'T00:00:00Z');
+      const fin = new Date(fechaFin.value + 'T00:00:00Z');
+      // Días hábiles (L-V): sábado y domingo no cuentan, igual que el servidor.
+      let dias = 0;
+      for (const cursor = new Date(inicio); cursor <= fin; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+        const diaSemana = cursor.getUTCDay();
+        if (diaSemana !== 0 && diaSemana !== 6) dias++;
+      }
+
       if (dias > 0) {
-        diasTexto.textContent = `Se solicitarán ${dias} día(s) de vacaciones`;
+        diasTexto.textContent = `Se solicitarán ${dias} día(s) hábil(es) de vacaciones`;
         diasInfo.style.display = 'block';
       } else {
-        diasInfo.style.display = 'none';
+        diasTexto.textContent = 'El rango no incluye ningún día hábil (L-V)';
+        diasInfo.style.display = 'block';
       }
     }
   }
-  
+
+  empleadoSelect.addEventListener('change', mostrarSaldo);
   fechaInicio.addEventListener('change', calcularDias);
   fechaFin.addEventListener('change', calcularDias);
+
+  mostrarSaldo();
+  calcularDias();
 });
 </script>

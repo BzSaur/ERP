@@ -1,7 +1,7 @@
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
     <h2 class="mb-1"><i class="bi bi-sun me-2"></i>Vacaciones</h2>
-    <p class="text-body-secondary mb-0">Gestión de vacaciones de empleados</p>
+    <p class="text-body-secondary mb-0">Derecho a vacaciones e histórico de periodos <%= anioActual %></p>
   </div>
   <div class="d-flex gap-2">
     <form action="/vacaciones/generar" method="POST" class="d-inline">
@@ -9,9 +9,6 @@
         <i class="bi bi-arrow-repeat me-1"></i> Generar Vacaciones
       </button>
     </form>
-    <a href="/vacaciones/elegibilidad" class="btn btn-outline-info">
-      <i class="bi bi-people me-1"></i> Ver Elegibilidad
-    </a>
     <a href="/vacaciones/crear" class="btn btn-primary">
       <i class="bi bi-plus-lg me-1"></i> Registrar
     </a>
@@ -28,6 +25,12 @@
   <% if (messages.error) { %>
     <div class="alert alert-danger alert-dismissible fade show">
       <i class="bi bi-exclamation-circle me-2"></i><%= messages.error %>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <% } %>
+  <% if (messages.info) { %>
+    <div class="alert alert-info alert-dismissible fade show">
+      <i class="bi bi-info-circle me-2"></i><%= messages.info %>
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   <% } %>
@@ -80,36 +83,25 @@
 <div class="card mb-4">
   <div class="card-body">
     <form action="/vacaciones" method="GET" class="row g-3 align-items-end">
-      <div class="col-6 col-md-3">
-        <label for="empleado" class="form-label">Empleado</label>
-        <select class="form-select" id="empleado" name="empleado">
-          <option value="">Todos</option>
-          <% empleados.forEach(emp => { %>
-            <option value="<%= emp.ID_Empleado %>" <%= filtros.empleado == emp.ID_Empleado ? 'selected' : '' %>>
-              <%= emp.Nombre %> <%= emp.Apellido_Paterno %>
-            </option>
-          <% }) %>
-        </select>
+      <input type="hidden" name="buscar" value="1">
+      <div class="col-12 col-md-5">
+        <label for="q" class="form-label">Buscar empleado</label>
+        <input type="text" class="form-control" id="q" name="q"
+               value="<%= filtros.q %>" placeholder="Nombre o apellido...">
       </div>
-      <div class="col-md-2">
-        <label for="anio" class="form-label">Año</label>
-        <select class="form-select" id="anio" name="anio">
-          <option value="">Todos</option>
-          <% for (let y = new Date().getFullYear(); y >= 2020; y--) { %>
-            <option value="<%= y %>" <%= filtros.anio == y ? 'selected' : '' %>><%= y %></option>
-          <% } %>
-        </select>
+      <div class="col-12 col-md-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="soloElegibles"
+                 name="soloElegibles" value="1" <%= filtros.soloElegibles ? 'checked' : '' %>>
+          <label class="form-check-label" for="soloElegibles">
+            Solo elegibles
+            <% if (totalNoElegibles > 0) { %>
+              <span class="text-body-secondary">(<%= totalNoElegibles %> con menos de 1 año)</span>
+            <% } %>
+          </label>
+        </div>
       </div>
-      <div class="col-md-2">
-        <label for="estado" class="form-label">Estado</label>
-        <select class="form-select" id="estado" name="estado">
-          <option value="">Todos</option>
-          <option value="PENDIENTE" <%= filtros.estado === 'PENDIENTE' ? 'selected' : '' %>>Pendiente</option>
-          <option value="EN_CURSO" <%= filtros.estado === 'EN_CURSO' ? 'selected' : '' %>>En Curso</option>
-          <option value="TOMADAS" <%= filtros.estado === 'TOMADAS' ? 'selected' : '' %>>Tomadas</option>
-        </select>
-      </div>
-      <div class="col-md-5">
+      <div class="col-12 col-md-3">
         <button type="submit" class="btn btn-primary me-2">
           <i class="bi bi-search me-1"></i> Filtrar
         </button>
@@ -123,85 +115,180 @@
 <div class="card">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover mb-0">
+      <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
+            <th style="width:2.5rem"></th>
             <th>Empleado</th>
-            <th class="text-center">Año</th>
+            <th class="text-center">Antigüedad</th>
             <th class="text-center">Días Corresp.</th>
             <th class="text-center">Días Tomados</th>
             <th class="text-center">Días Pend.</th>
-            <th>Fechas</th>
             <th>Estado</th>
-            <th class="text-end">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          <% if (vacaciones.length === 0) { %>
+          <% if (filas.length === 0) { %>
             <tr>
-              <td colspan="8" class="text-center py-4 text-body-secondary">
-                <i class="bi bi-sun fs-1 d-block mb-2"></i>
-                No hay registros de vacaciones
+              <td colspan="7" class="text-center py-4 text-body-secondary">
+                No hay empleados que coincidan con el filtro
               </td>
             </tr>
           <% } else { %>
-            <% vacaciones.forEach(v => { %>
+            <% filas.forEach(f => { %>
+              <%
+                const nombre = [f.Nombre, f.Apellido_Paterno, f.Apellido_Materno].filter(Boolean).join(' ');
+                const fmt = d => new Date(d).toLocaleDateString('es-MX', { timeZone: 'UTC' });
+              %>
               <tr>
                 <td>
-                  <strong><%= v.empleado.Nombre %> <%= v.empleado.Apellido_Paterno %></strong>
-                </td>
-                <td class="text-center"><%= v.Anio %></td>
-                <td class="text-center"><%= v.Dias_Correspondientes %></td>
-                <td class="text-center"><%= v.Dias_Tomados %></td>
-                <td class="text-center">
-                  <strong class="<%= v.Dias_Pendientes > 0 ? 'text-success' : 'text-body-secondary' %>">
-                    <%= v.Dias_Pendientes %>
-                  </strong>
-                </td>
-                <td>
-                  <% if (v.periodos && v.periodos.length > 0) { %>
-                    <% v.periodos.forEach(p => { %>
-                      <% const cancelado = p.Estado === 'CANCELADO'; %>
-                      <a href="/vacaciones/periodos/<%= p.ID_Periodo_Vac %>/editar"
-                         class="badge <%= cancelado ? 'bg-secondary' : 'bg-light text-dark border' %> d-inline-block mb-1 text-decoration-none"
-                         style="<%= cancelado ? 'text-decoration:line-through !important;' : '' %>"
-                         title="<%= p.Dias %> día(s)<%= cancelado ? ' · CANCELADO' : '' %><%= p.Observaciones ? ' · ' + p.Observaciones : '' %> — clic para editar">
-                        <%= p.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> -
-                        <%= p.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
-                        (<%= p.Dias %>d)
-                        <i class="bi bi-pencil ms-1" style="font-size:.7em"></i>
-                      </a>
-                    <% }) %>
-                  <% } else if (v.Fecha_Inicio && v.Fecha_Fin) { %>
-                    <small>
-                      <%= v.Fecha_Inicio.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %> -
-                      <%= v.Fecha_Fin.toLocaleDateString('es-MX', { timeZone: 'UTC' }) %>
-                    </small>
-                  <% } else { %>
-                    <span class="text-body-secondary">-</span>
+                  <% if (f.elegible) { %>
+                    <button class="btn btn-sm btn-link p-0 text-body-secondary" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#detalle-<%= f.ID_Empleado %>"
+                            aria-expanded="false" title="Ver histórico y registrar">
+                      <i class="bi bi-chevron-down"></i>
+                    </button>
                   <% } %>
                 </td>
                 <td>
-                  <% if (v.Estado === 'PENDIENTE') { %>
+                  <strong><%= nombre %></strong>
+                  <% if (f.puesto || f.area) { %>
+                    <div class="small text-body-secondary">
+                      <%= [f.puesto?.Nombre_Puesto, f.area?.Nombre_Area].filter(Boolean).join(' · ') %>
+                    </div>
+                  <% } %>
+                </td>
+                <td class="text-center">
+                  <% if (f.antiguedad.anos > 0) { %>
+                    <strong><%= f.antiguedad.anos %></strong> años
+                    <% if (f.antiguedad.meses > 0) { %>
+                      <span class="small text-body-secondary"><%= f.antiguedad.meses %> m</span>
+                    <% } %>
+                  <% } else { %>
+                    <span class="small text-body-secondary"><%= f.antiguedad.meses %> meses</span>
+                  <% } %>
+                </td>
+                <td class="text-center">
+                  <%= f.elegible ? f.diasCorrespondientes : '-' %>
+                </td>
+                <td class="text-center">
+                  <%= f.elegible ? f.diasTomados : '-' %>
+                </td>
+                <td class="text-center">
+                  <% if (f.elegible) { %>
+                    <strong class="<%= f.diasPendientes > 0 ? 'text-success' : 'text-body-secondary' %>">
+                      <%= f.diasPendientes %>
+                    </strong>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td>
+                  <% if (!f.elegible) { %>
+                    <span class="badge bg-secondary">No elegible</span>
+                  <% } else if (!f.vacacion) { %>
+                    <span class="badge bg-warning text-dark">Pendiente generar</span>
+                  <% } else if (f.vacacion.Estado === 'PENDIENTE') { %>
                     <span class="badge bg-warning text-dark">Pendiente</span>
-                  <% } else if (v.Estado === 'EN_CURSO') { %>
+                  <% } else if (f.vacacion.Estado === 'EN_CURSO') { %>
                     <span class="badge bg-info">En Curso</span>
-                  <% } else if (v.Estado === 'TOMADAS') { %>
+                  <% } else if (f.vacacion.Estado === 'TOMADAS') { %>
                     <span class="badge bg-success">Tomadas</span>
                   <% } else { %>
                     <span class="badge bg-danger">Vencidas</span>
                   <% } %>
                 </td>
-                <td class="text-end">
-                  <% if (v.Estado === 'EN_CURSO') { %>
-                    <form action="/vacaciones/<%= v.ID_Vacacion %>/aprobar" method="POST" class="d-inline">
-                      <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar">
-                        <i class="bi bi-check-lg"></i>
-                      </button>
-                    </form>
-                  <% } %>
-                </td>
               </tr>
+
+              <% if (f.elegible) { %>
+                <tr class="collapse" id="detalle-<%= f.ID_Empleado %>">
+                  <td colspan="7" class="bg-body-tertiary">
+                    <div class="row g-4 py-2">
+                      <!-- Histórico de periodos -->
+                      <div class="col-lg-7">
+                        <h6 class="mb-2">Histórico de periodos</h6>
+                        <% if (f.periodos.length === 0) { %>
+                          <p class="small text-body-secondary mb-0">
+                            Sin periodos registrados en <%= anioActual %>.
+                          </p>
+                        <% } else { %>
+                          <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Desde</th>
+                                  <th>Hasta</th>
+                                  <th class="text-center">Días</th>
+                                  <th>Estado</th>
+                                  <th class="text-end">Acción</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <% f.periodos.forEach(p => { %>
+                                  <% const cancelado = p.Estado === 'CANCELADO'; %>
+                                  <tr class="<%= cancelado ? 'text-body-secondary' : '' %>"
+                                      style="<%= cancelado ? 'text-decoration:line-through;' : '' %>">
+                                    <td><%= fmt(p.Fecha_Inicio) %></td>
+                                    <td><%= fmt(p.Fecha_Fin) %></td>
+                                    <td class="text-center"><%= p.Dias %></td>
+                                    <td>
+                                      <% if (cancelado) { %>
+                                        <span class="badge bg-secondary">Cancelado</span>
+                                      <% } else { %>
+                                        <span class="badge bg-success">Aprobado</span>
+                                      <% } %>
+                                    </td>
+                                    <td class="text-end">
+                                      <a href="/vacaciones/periodos/<%= p.ID_Periodo_Vac %>/editar"
+                                         class="btn btn-sm btn-outline-secondary"
+                                         style="text-decoration:none">Editar</a>
+                                    </td>
+                                  </tr>
+                                  <% if (p.Observaciones) { %>
+                                    <tr class="<%= cancelado ? 'text-body-secondary' : '' %>">
+                                      <td colspan="5" class="small pt-0 border-0"><%= p.Observaciones %></td>
+                                    </tr>
+                                  <% } %>
+                                <% }) %>
+                              </tbody>
+                            </table>
+                          </div>
+                        <% } %>
+                      </div>
+
+                      <!-- Registrar nuevo periodo -->
+                      <div class="col-lg-5">
+                        <h6 class="mb-2">Registrar periodo</h6>
+                        <form action="/vacaciones" method="POST" class="row g-2">
+                          <input type="hidden" name="ID_Empleado" value="<%= f.ID_Empleado %>">
+                          <div class="col-6">
+                            <label class="form-label small mb-1">Desde</label>
+                            <input type="date" class="form-control form-control-sm" name="Fecha_Inicio" required>
+                          </div>
+                          <div class="col-6">
+                            <label class="form-label small mb-1">Hasta</label>
+                            <input type="date" class="form-control form-control-sm" name="Fecha_Fin" required>
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label small mb-1">Observaciones</label>
+                            <input type="text" class="form-control form-control-sm" name="Observaciones"
+                                   placeholder="Opcional">
+                          </div>
+                          <div class="col-12">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                              <i class="bi bi-check-lg me-1"></i>Registrar
+                            </button>
+                            <div class="form-text">
+                              Quedan <strong><%= f.diasPendientes %></strong> día(s) pendientes.
+                              Se aceptan fechas pasadas para capturar periodos ya gozados.
+                            </div>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
             <% }) %>
           <% } %>
         </tbody>

@@ -58,62 +58,101 @@ async function calcularFactorJornada(empleado) {
   return horasContratadas / horasJornadaCompleta;
 }
 
-// Listar vacaciones
+// Días hábiles (L-V) entre dos fechas @db.Date, ambas inclusive. Sábado y
+// domingo no cuentan: coincide con el descanso que ya respeta asistencia
+// (asistenciaService.js: esDiaDescanso/esDomingo).
+function contarDiasHabiles(inicio, fin) {
+  let dias = 0;
+  const cursor = new Date(inicio);
+  while (cursor <= fin) {
+    const diaSemana = cursor.getUTCDay(); // @db.Date -> medianoche UTC
+    if (diaSemana !== 0 && diaSemana !== 6) dias++;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dias;
+}
+
+/**
+ * Arma la fila que consume la vista: antigüedad, días que le tocan por LFT
+ * ajustados por jornada, y los contadores/periodos del año en curso.
+ * @param {object} emp        empleado con `vacaciones` (año actual) incluidas
+ * @param {number} hoy        timestamp de referencia (mismo para todas las filas)
+ * @param {number} horasJornadaCompleta  config HORAS_JORNADA_COMPLETA
+ */
+function construirFilaEmpleado(emp, hoy, horasJornadaCompleta) {
+  const diferenciaMs = hoy - new Date(emp.Fecha_Ingreso);
+  const MS_ANIO = 365.25 * 24 * 60 * 60 * 1000;
+  const anos = Math.floor(diferenciaMs / MS_ANIO);
+  const meses = Math.floor((diferenciaMs % MS_ANIO) / (30.44 * 24 * 60 * 60 * 1000));
+
+  const diasBase = calcularDiasVacaciones(anos);
+  const horasContratadas = emp.Horas_Semanales_Contratadas || horasJornadaCompleta;
+  const factorJornada = horasContratadas >= horasJornadaCompleta ? 1 : horasContratadas / horasJornadaCompleta;
+  const diasProporcionales = Math.round(diasBase * factorJornada);
+
+  const vacacion = emp.vacaciones[0] || null;
+  // Los cancelados se listan tachados para dejar rastro de la corrección.
+  const periodos = vacacion?.periodos || [];
+
+  return {
+    ...emp,
+    antiguedad: { anos, meses },
+    diasCorrespondientes: diasProporcionales,
+    diasTomados: vacacion ? vacacion.Dias_Tomados : 0,
+    diasPendientes: vacacion ? vacacion.Dias_Pendientes : diasProporcionales,
+    elegible: anos >= 1,
+    vacacion,
+    periodos
+  };
+}
+
+// Listar empleados con su derecho a vacaciones y el histórico de periodos.
+// Fusiona lo que antes eran dos pantallas (registros + elegibilidad).
 export const index = async (req, res) => {
   try {
     // Los periodos que ya terminaron se cierran solos: no hay que volver a
     // confirmarlos a mano.
     await cerrarVacacionesVencidas();
 
-    const { anio, estado, empleado } = req.query;
+    const { q } = req.query;
+    // `buscar` distingue la primera carga (checkbox marcado por defecto) de un
+    // submit con el checkbox desmarcado, donde el param no viaja.
+    const soloElegibles = req.query.buscar ? req.query.soloElegibles === '1' : true;
 
-    let where = {};
+    const anioActual = new Date().getFullYear();
+    const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', 48);
 
-    if (anio) {
-      where.Anio = parseInt(anio);
+    const where = { ID_Estatus: 1 };
+    if (q?.trim()) {
+      const texto = q.trim();
+      where.OR = [
+        { Nombre: { contains: texto, mode: 'insensitive' } },
+        { Apellido_Paterno: { contains: texto, mode: 'insensitive' } },
+        { Apellido_Materno: { contains: texto, mode: 'insensitive' } }
+      ];
     }
-
-    if (estado) {
-      where.Estado = estado;
-    }
-
-    if (empleado) {
-      where.ID_Empleado = parseInt(empleado);
-    }
-
-    const vacaciones = await prisma.vacaciones.findMany({
-      where,
-      include: {
-        empleado: {
-          select: {
-            ID_Empleado: true,
-            Nombre: true,
-            Apellido_Paterno: true,
-            Apellido_Materno: true,
-            Fecha_Ingreso: true
-          }
-        },
-        periodos: {
-          // Se incluyen los cancelados: la vista los muestra tachados para
-          // dejar rastro de la corrección (no cuentan al saldo ni a asistencia).
-          orderBy: { Fecha_Inicio: 'asc' }
-        }
-      },
-      orderBy: [{ Anio: 'desc' }, { empleado: { Nombre: 'asc' } }],
-      take: 100
-    });
 
     const empleados = await prisma.empleados.findMany({
-      where: { ID_Estatus: 1 },
-      select: {
-        ID_Empleado: true,
-        Nombre: true,
-        Apellido_Paterno: true
+      where,
+      include: {
+        puesto: true,
+        area: true,
+        vacaciones: {
+          where: { Anio: anioActual },
+          include: { periodos: { orderBy: { Fecha_Inicio: 'desc' } } }
+        }
       },
-      orderBy: { Nombre: 'asc' }
+      orderBy: [{ Nombre: 'asc' }, { Apellido_Paterno: 'asc' }]
     });
 
-    // Estadísticas
+    const hoy = Date.now();
+    let filas = empleados.map(emp => construirFilaEmpleado(emp, hoy, horasJornadaCompleta));
+
+    const totalNoElegibles = filas.filter(f => !f.elegible).length;
+    if (soloElegibles) {
+      filas = filas.filter(f => f.elegible);
+    }
+
     const stats = {
       pendientes: await prisma.vacaciones.count({ where: { Estado: 'PENDIENTE' } }),
       enCurso: await prisma.vacaciones.count({ where: { Estado: 'EN_CURSO' } }),
@@ -122,10 +161,11 @@ export const index = async (req, res) => {
 
     res.render('vacaciones/index', {
       title: 'Vacaciones',
-      vacaciones,
-      empleados,
+      filas,
       stats,
-      filtros: { anio, estado, empleado }
+      anioActual,
+      totalNoElegibles,
+      filtros: { q: q || '', soloElegibles }
     });
   } catch (error) {
     console.error('Error al obtener vacaciones:', error);
@@ -196,17 +236,35 @@ export const generarVacaciones = async (req, res) => {
   }
 };
 
+// Empleados elegibles (>=1 año de antigüedad) con sus días pendientes del año
+// en curso, para el selector de crear.ejs y su preview de saldo en vivo.
+async function empleadosElegiblesParaCrear() {
+  const anioActual = new Date().getFullYear();
+  const hoy = Date.now();
+  const todos = await prisma.empleados.findMany({
+    where: { ID_Estatus: 1 },
+    include: { vacaciones: { where: { Anio: anioActual } } },
+    orderBy: { Nombre: 'asc' }
+  });
+
+  return todos
+    .map(emp => {
+      const anos = Math.floor((hoy - new Date(emp.Fecha_Ingreso)) / (365.25 * 24 * 60 * 60 * 1000));
+      const vacacion = emp.vacaciones[0] || null;
+      return { ...emp, elegible: anos >= 1, diasPendientes: vacacion?.Dias_Pendientes ?? null };
+    })
+    .filter(emp => emp.elegible);
+}
+
 // Formulario para registrar vacaciones de un empleado
 export const crear = async (req, res) => {
   try {
-    const empleados = await prisma.empleados.findMany({
-      where: { ID_Estatus: 1 },
-      orderBy: { Nombre: 'asc' }
-    });
+    const empleados = await empleadosElegiblesParaCrear();
 
     res.render('vacaciones/crear', {
       title: 'Registrar Vacaciones',
-      empleados
+      empleados,
+      valores: { ID_Empleado: '', Fecha_Inicio: '', Fecha_Fin: '', Observaciones: '' }
     });
   } catch (error) {
     console.error('Error:', error);
@@ -221,17 +279,30 @@ export const crear = async (req, res) => {
 // retroactivamente periodos ya gozados. Vacaciones (anual) solo acumula
 // contadores; sus Fecha_Inicio/Fin quedan como legacy del último periodo.
 export const store = async (req, res) => {
-  try {
-    const { ID_Empleado, Fecha_Inicio, Fecha_Fin, Observaciones } = req.body;
+  const { ID_Empleado, Fecha_Inicio, Fecha_Fin, Observaciones } = req.body;
+  const valores = { ID_Empleado, Fecha_Inicio, Fecha_Fin, Observaciones };
 
+  // En vez de flash + redirect: re-renderiza crear.ejs con lo que el usuario
+  // ya había escrito, para no obligarlo a capturar todo de nuevo tras un
+  // error de negocio (traslape, saldo insuficiente, etc).
+  const errorConValores = async (mensaje) => {
+    const empleados = await empleadosElegiblesParaCrear();
+    return res.render('vacaciones/crear', {
+      title: 'Registrar Vacaciones',
+      empleados,
+      valores,
+      errorFormulario: mensaje
+    });
+  };
+
+  try {
     const empleado = await prisma.empleados.findUnique({
       where: { ID_Empleado: parseInt(ID_Empleado) },
       include: { tipo_horario: true }
     });
 
     if (!empleado) {
-      req.flash('error', 'Empleado no encontrado');
-      return res.redirect('/vacaciones/crear');
+      return errorConValores('Empleado no encontrado');
     }
 
     // Calcular antigüedad
@@ -240,18 +311,19 @@ export const store = async (req, res) => {
     const anosAntiguedad = Math.floor((hoy - fechaIngreso) / (365.25 * 24 * 60 * 60 * 1000));
 
     if (anosAntiguedad < 1) {
-      req.flash('error', 'El empleado no cumple 1 año de antigüedad');
-      return res.redirect('/vacaciones/crear');
+      return errorConValores('El empleado no cumple 1 año de antigüedad');
     }
 
     // Fechas del periodo ('YYYY-MM-DD' -> medianoche UTC, correcto para @db.Date)
     const inicio = new Date(Fecha_Inicio);
     const fin = new Date(Fecha_Fin);
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin < inicio) {
-      req.flash('error', 'Rango de fechas inválido');
-      return res.redirect('/vacaciones/crear');
+      return errorConValores('Rango de fechas inválido');
     }
-    const diasSolicitados = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+    const diasSolicitados = contarDiasHabiles(inicio, fin);
+    if (diasSolicitados === 0) {
+      return errorConValores('El rango no incluye ningún día hábil (L-V)');
+    }
 
     // No permitir traslape con otro periodo aprobado del mismo empleado
     const traslape = await prisma.vacaciones_Periodos.findFirst({
@@ -263,8 +335,7 @@ export const store = async (req, res) => {
       }
     });
     if (traslape) {
-      req.flash('error', 'El rango se traslapa con un periodo de vacaciones ya registrado');
-      return res.redirect('/vacaciones/crear');
+      return errorConValores('El rango se traslapa con un periodo de vacaciones ya registrado');
     }
 
     const diasBase = calcularDiasVacaciones(anosAntiguedad);
@@ -288,8 +359,7 @@ export const store = async (req, res) => {
     if (vacacionExistente) {
       // Verificar días disponibles
       if (diasSolicitados > vacacionExistente.Dias_Pendientes) {
-        req.flash('error', `Solo tiene ${vacacionExistente.Dias_Pendientes} días pendientes`);
-        return res.redirect('/vacaciones/crear');
+        return errorConValores(`Solo tiene ${vacacionExistente.Dias_Pendientes} día(s) hábil(es) pendientes`);
       }
 
       // Actualizar vacaciones existentes
@@ -426,7 +496,11 @@ export const actualizarPeriodo = async (req, res) => {
       req.flash('error', 'Rango de fechas inválido');
       return res.redirect(volver);
     }
-    const diasNuevos = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+    const diasNuevos = contarDiasHabiles(inicio, fin);
+    if (diasNuevos === 0) {
+      req.flash('error', 'El rango no incluye ningún día hábil (L-V)');
+      return res.redirect(volver);
+    }
     const diasViejos = periodo.Dias;
 
     // Traslape con OTRO periodo aprobado del mismo empleado (no consigo mismo).
@@ -576,63 +650,3 @@ export const aprobar = async (req, res) => {
   }
 };
 
-// Ver elegibilidad de empleados
-export const elegibilidad = async (req, res) => {
-  try {
-    const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', 48);
-
-    const empleados = await prisma.empleados.findMany({
-      where: { ID_Estatus: 1 },
-      include: {
-        puesto: true,
-        area: true,
-        tipo_horario: true,
-        vacaciones: {
-          where: { Anio: new Date().getFullYear() }
-        }
-      },
-      orderBy: { Fecha_Ingreso: 'asc' }
-    });
-
-    const hoy = new Date();
-
-    const empleadosConAntiguedad = empleados.map(emp => {
-      const fechaIngreso = new Date(emp.Fecha_Ingreso);
-      const diferenciaMs = hoy - fechaIngreso;
-      const anosCompletos = Math.floor(diferenciaMs / (365.25 * 24 * 60 * 60 * 1000));
-      const mesesRestantes = Math.floor((diferenciaMs % (365.25 * 24 * 60 * 60 * 1000)) / (30.44 * 24 * 60 * 60 * 1000));
-
-      const diasBase = calcularDiasVacaciones(anosCompletos);
-      const horasContratadas = emp.Horas_Semanales_Contratadas || horasJornadaCompleta;
-      const factorJornada = horasContratadas >= horasJornadaCompleta ? 1 : horasContratadas / horasJornadaCompleta;
-      const diasProporcionales = Math.round(diasBase * factorJornada);
-
-      const vacacionActual = emp.vacaciones[0];
-
-      return {
-        ...emp,
-        antiguedad: {
-          anos: anosCompletos,
-          meses: mesesRestantes
-        },
-        diasBase,
-        diasProporcionales,
-        factorJornada: Math.round(factorJornada * 100),
-        diasCorrespondientes: diasProporcionales,
-        diasPendientes: vacacionActual ? vacacionActual.Dias_Pendientes : diasProporcionales,
-        elegible: anosCompletos >= 1,
-        tieneRegistro: !!vacacionActual
-      };
-    });
-
-    res.render('vacaciones/elegibilidad', {
-      title: 'Elegibilidad de Vacaciones',
-      empleados: empleadosConAntiguedad,
-      anioActual: new Date().getFullYear()
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    req.flash('error', 'Error al cargar la elegibilidad');
-    res.redirect('/vacaciones');
-  }
-};

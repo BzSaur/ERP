@@ -88,7 +88,7 @@ const ymdUTC = d => { const x = new Date(d); return x.getUTCFullYear() * 10000 +
 
 /**
  * Periodos de ausencia justificada que se traslapan con el rango:
- * vacaciones (EN_CURSO/TOMADAS con fechas) e incidencias APROBADAS.
+ * periodos de vacaciones APROBADOS e incidencias APROBADAS.
  * El empleado NO está deshabilitado ni sale del checador: solo se etiquetan
  * esos días en las vistas de asistencia para no contarlos como falta.
  *
@@ -104,8 +104,11 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
   const hasta = new Date(new Date(fechaFin).getTime() + 24 * 3600 * 1000);
   const porEmpleado = empleadoId ? { ID_Empleado: empleadoId } : {};
 
-  const [periodos, vacacionesLegacy, incidencias] = await Promise.all([
-    // Fuente principal: histórico de periodos (una fila por solicitud/goce).
+  const [periodos, incidencias] = await Promise.all([
+    // Única fuente de vacaciones: el histórico de periodos (una fila por goce).
+    // NO se leen los rangos legacy de Vacaciones (solo guardan el último
+    // periodo y no se limpian al cancelar, así que marcarían días cancelados
+    // como vacaciones en asistencia y en el Excel).
     prisma.vacaciones_Periodos.findMany({
       where: {
         ...porEmpleado,
@@ -114,17 +117,6 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
         Fecha_Fin: { gte: desde }
       },
       select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true, CreatedAt: true }
-    }),
-    // Legacy: Vacaciones anual solo guarda el último rango; se mantiene en la
-    // unión por si existen registros previos al backfill de periodos.
-    prisma.vacaciones.findMany({
-      where: {
-        ...porEmpleado,
-        Estado: { in: ['EN_CURSO', 'TOMADAS'] },
-        Fecha_Inicio: { lte: hasta },
-        Fecha_Fin: { gte: desde }
-      },
-      select: { ID_Empleado: true, Fecha_Inicio: true, Fecha_Fin: true }
     }),
     prisma.empleados_Incidencias.findMany({
       where: {
@@ -155,7 +147,6 @@ export async function obtenerAusenciasJustificadas(fechaInicio, fechaFin, emplea
   };
   // Las vacaciones siempre son con goce de sueldo.
   for (const p of periodos) agregar(p.ID_Empleado, p.Fecha_Inicio, p.Fecha_Fin, 'Vacaciones', p.CreatedAt, true);
-  for (const v of vacacionesLegacy) agregar(v.ID_Empleado, v.Fecha_Inicio, v.Fecha_Fin, 'Vacaciones', null, true);
   for (const i of incidencias) {
     // El goce capturado en la incidencia manda; si no viene, el del tipo.
     const conGoce = typeof i.Con_Goce_Sueldo === 'boolean'
