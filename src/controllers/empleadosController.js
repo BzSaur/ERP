@@ -107,9 +107,17 @@ const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
 // GET /empleados - Listar todos los empleados
 export const index = async (req, res, next) => {
   try {
-    const { buscar, area, estatus, id, fecha_nacimiento, fecha_ingreso, telefono, page = 1 } = req.query;
+    const { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono, page = 1 } = req.query;
     const perPage = 10;
     const skip = (page - 1) * perPage;
+
+    // Orden: clic en columna (No. Empleado / Nombre) en la vista. Arranca
+    // ascendente; reclic en la misma columna alterna a descendente.
+    const sort = req.query.sort === 'nombre' ? 'nombre' : 'id';
+    const dir = req.query.dir === 'desc' ? 'desc' : 'asc';
+    const orderBy = sort === 'nombre'
+      ? [{ Nombre: dir }, { Apellido_Paterno: dir }]
+      : [{ ID_Empleado: dir }];
 
     // Construir filtros
     const where = {};
@@ -149,9 +157,18 @@ export const index = async (req, res, next) => {
       return { gte: inicio, lt: fin };
     };
 
-    if (fecha_nacimiento) {
-      const r = rangoDia(fecha_nacimiento);
-      if (r) where.Fecha_Nacimiento = r;
+    // Filtro por MES de nacimiento (cualquier año/día): Prisma no tiene EXTRACT
+    // en `where`, así que se resuelve aparte con SQL crudo (solo IDs) y se
+    // combina con el resto de filtros vía AND (no pisa el filtro por `id`).
+    if (mes_nacimiento) {
+      const mes = parseInt(mes_nacimiento);
+      if (mes >= 1 && mes <= 12) {
+        const filas = await prisma.$queryRaw`
+          SELECT "ID_Empleado" FROM "Empleados"
+          WHERE EXTRACT(MONTH FROM "Fecha_Nacimiento") = ${mes}
+        `;
+        and.push({ ID_Empleado: { in: filas.map(f => f.ID_Empleado) } });
+      }
     }
 
     if (fecha_ingreso) {
@@ -183,7 +200,7 @@ export const index = async (req, res, next) => {
           tipo_horario: true,
           nacionalidad: true
         },
-        orderBy: { CreatedAt: 'desc' },
+        orderBy,
         skip,
         take: perPage
       }),
@@ -203,7 +220,7 @@ export const index = async (req, res, next) => {
       empleados,
       areas,
       estatuses,
-      filtros: { buscar, area, estatus, id, fecha_nacimiento, fecha_ingreso, telefono },
+      filtros: { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono, sort, dir },
       pagination: {
         page: parseInt(page),
         totalPages,
