@@ -14,6 +14,7 @@
 import prisma from '../config/database.js';
 import { getConfig } from '../services/nominaService.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
+import { esFestivo } from '../services/diasFestivosService.js';
 
 // Tabla de días de vacaciones según LFT México 2024
 const DIAS_VACACIONES_LFT = {
@@ -58,15 +59,15 @@ async function calcularFactorJornada(empleado) {
   return horasContratadas / horasJornadaCompleta;
 }
 
-// Días hábiles (L-V) entre dos fechas @db.Date, ambas inclusive. Sábado y
-// domingo no cuentan: coincide con el descanso que ya respeta asistencia
-// (asistenciaService.js: esDiaDescanso/esDomingo).
-function contarDiasHabiles(inicio, fin) {
+// Días hábiles (L-V) entre dos fechas @db.Date, ambas inclusive. Sábado,
+// domingo y festivos LFT no cuentan: un festivo dentro de un periodo de
+// vacaciones no es un día de vacaciones (Art. 74 LFT).
+export function contarDiasHabiles(inicio, fin) {
   let dias = 0;
   const cursor = new Date(inicio);
   while (cursor <= fin) {
     const diaSemana = cursor.getUTCDay(); // @db.Date -> medianoche UTC
-    if (diaSemana !== 0 && diaSemana !== 6) dias++;
+    if (diaSemana !== 0 && diaSemana !== 6 && !esFestivo(cursor)) dias++;
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return dias;

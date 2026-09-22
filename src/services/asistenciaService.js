@@ -12,6 +12,7 @@ import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
 import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB } from '../utils/tiempo.js';
+import { esFestivo } from './diasFestivosService.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -171,8 +172,18 @@ export function ausenciaEnFecha(mapa, empleadoId, fecha) {
  * Igual que ausenciaEnFecha pero devuelve el periodo completo
  * ({etiqueta, creadaEn, ...}), necesario para resolver la precedencia contra
  * una actividad delegada el mismo día.
+ *
+ * Un festivo LFT (Art. 74) siempre gana sobre vacaciones/incidencias en la
+ * misma fecha: ese día no es vacación aunque caiga dentro de un periodo
+ * aprobado (contarDiasHabiles en vacacionesController.js ya no lo cuenta
+ * contra el saldo). Se resuelve explícito aquí, sin depender del orden de
+ * inserción en el mapa.
  */
 export function periodoAusenciaEnFecha(mapa, empleadoId, fecha) {
+  if (esFestivo(fecha)) {
+    const ymd = ymdUTC(fecha);
+    return { desde: ymd, hasta: ymd, etiqueta: 'Festivo', creadaEn: null, conGoce: true };
+  }
   const periodos = mapa?.get(empleadoId);
   if (!periodos) return null;
   const ymd = ymdUTC(fecha);
