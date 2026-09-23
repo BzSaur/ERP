@@ -404,7 +404,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <span class="fw-bold d-block" style="color:#b02a37; font-size:.7rem" title="<%= c.ausencia %> — sin goce de sueldo"><%= c.ausencia.length > 12 ? c.ausencia.slice(0,11) + '…' : c.ausencia %></span>
                       <span style="color:#b02a37; font-size:.64rem">sin goce</span>
                     <% } else { %>
-                      <span class="text-primary fw-bold d-block"><%= c.ausencia === 'Vacaciones' ? 'Vac' : 'Perm' %></span>
+                      <% const etiquetaCorta = c.ausencia === 'Vacaciones' ? 'Vac' : c.ausencia === 'Festivo' ? 'Fest' : 'Perm'; %>
+                      <span class="text-primary fw-bold d-block"><%= etiquetaCorta %></span>
                       <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
                     <% } %>
                   <% } else if (!c.presente && c.actividad) { %>
