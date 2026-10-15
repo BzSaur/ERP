@@ -94,6 +94,9 @@ router.get('/checada-manual', isAdminOrRH, asistenciaController.formChecadaManua
 // Registrar checada manual (POST)
 router.post('/checada-manual', isAdminOrRH, asistenciaController.registrarChecadaManual);
 
+// Captura manual de entrada/salida de un día desde la tabla de horas (JSON)
+router.post('/checada-manual-dia', isAdminOrRH, asistenciaController.guardarChecadaManualDia);
+
 // Marcar faltas (solo RH/Admin)
 router.post('/api/marcar-faltas', isAdminOrRH, asistenciaController.apiMarcarFaltas);
 

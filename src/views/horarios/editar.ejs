@@ -26,27 +26,10 @@
                  value="<%= horario.Nombre_Horario %>">
         </div>
         
-        <div class="col-6 col-md-3">
-          <label for="Dias_Semana" class="form-label">Días por Semana *</label>
-          <input type="number" class="form-control" id="Dias_Semana"
-                 name="Dias_Semana" min="1" max="7" required
-                 value="<%= horario.Dias_Semana %>">
-        </div>
-
-        <div class="col-6 col-md-3">
-          <label for="Horas_Jornada" class="form-label">Horas por Jornada (día) *</label>
-          <input type="number" step="0.5" class="form-control" id="Horas_Jornada"
-                 name="Horas_Jornada" min="1" max="24" required
-                 value="<%= horario.Horas_Jornada %>"
-                 oninput="calcSemana()">
-        </div>
-
-        <div class="col-6 col-md-3">
-          <label for="Horas_Semana" class="form-label">Horas por Semana</label>
-          <input type="number" class="form-control bg-light" id="Horas_Semana"
-                 name="Horas_Semana" min="1" max="168" readonly
-                 value="<%= horario.Horas_Semana || (horario.Horas_Jornada * horario.Dias_Semana) %>">
-          <small class="text-body-secondary">Se calcula: jornada × días</small>
+        <div class="col-md-6">
+          <label class="form-label">Jornada</label>
+          <input type="text" class="form-control bg-light" value="45 horas por semana (5 días x 9 horas)" readonly>
+          <small class="text-body-secondary">Todos los tipos de horario comparten la misma jornada.</small>
         </div>
 
         <div class="col-md-12">
@@ -68,11 +51,3 @@
   </div>
 </div>
 
-<script>
-function calcSemana() {
-  const j = parseFloat(document.getElementById('Horas_Jornada').value) || 0;
-  const d = parseInt(document.getElementById('Dias_Semana').value) || 0;
-  document.getElementById('Horas_Semana').value = Math.round(j * d * 100) / 100;
-}
-document.getElementById('Dias_Semana').addEventListener('input', calcSemana);
-</script>

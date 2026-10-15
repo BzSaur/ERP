@@ -5,6 +5,11 @@ const urlExcelBase = typeof excelUrl !== 'undefined' && excelUrl ? excelUrl : '/
 const delegando = typeof esSupervisorParaDelegar !== 'undefined' && esSupervisorParaDelegar;
 const idEncSel = typeof idEncargadoPreseleccionado !== 'undefined' ? idEncargadoPreseleccionado : null;
 const faltaElegirEncargado = delegando && !idEncSel;
+const esEncargadoView = typeof panelEditable !== 'undefined' && panelEditable;
+// Checada manual: RH/Admin directo sobre la celda; el encargado desde el panel lateral de su equipo.
+const rhManual = !esEncargadoView && hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador');
+const puedeManual = esEncargadoView || rhManual;
+const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asistencia/checada-manual' : '/asistencia/checada-manual-dia';
 %>
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
@@ -74,13 +79,6 @@ const faltaElegirEncargado = delegando && !idEncSel;
       <input type="text" id="rango" class="form-control form-control-sm" placeholder="Selecciona rango...">
       <input type="hidden" name="fechaInicio" id="fechaInicio" value="<%= fechaInicio %>">
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
-    </div>
-    <div class="d-flex align-items-center gap-2">
-      <div class="form-check form-switch mb-0">
-        <input class="form-check-input" type="checkbox" id="chkRedondear" name="redondear" value="1"
-               <%= (typeof redondear !== 'undefined' && redondear) ? 'checked' : '' %>>
-        <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
-      </div>
     </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
     <a id="btnExcel" href="<%= urlExcelBase %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %><%= idEncSel ? '&encargado=' + idEncSel : '' %>"
@@ -205,11 +203,11 @@ const faltaElegirEncargado = delegando && !idEncSel;
     <div class="d-flex gap-2">
       <a href="/encargado" class="btn btn-sm btn-outline-primary">Ver actividades</a>
       <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaActividadesCampo">
-        Ver / ocultar
+        Ver / ocultar detalle
       </button>
     </div>
   </div>
-  <div class="collapse show" id="listaActividadesCampo">
+  <div class="collapse" id="listaActividadesCampo">
     <div class="list-group list-group-flush">
       <%
         // Las asignaciones puntuales son las que requieren atención; las
@@ -362,7 +360,12 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    // a recuperar horas sí checó: esa celda se pinta como
                    // cualquier otra, si no el sábado trabajado desaparece.
                    const descansoVacio = c.esDomingo && !c.presente && !c.ausencia && !c.actividad;
+                   // Solo el domingo no es laborable: el sábado vacío sí admite asignar actividad.
+                   const esDomingoReal = new Date(fechaCelda + 'T00:00:00').getDay() === 0;
+                   // Hoy y días por venir sin nada: no son falta, se muestra el día de la semana.
+                   const diaFuturo = !!c.futuro && !c.presente;
                    if (descansoVacio) { cls='cel-dom'; }
+                   else if (diaFuturo) { cls='cel-dom'; tip='Aún no pasa'; }
                    else if (!c.presente && c.ausencia) {
                      cls = c.sinGoce ? 'cel-singoce' : 'cel-vacacion';
                      tip = c.ausencia + (c.sinGoce
@@ -371,34 +374,41 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    }
                    else if (!c.presente && c.actividad) {
                      cls='cel-actividad'; bgStyle=tinteActividad;
-                     tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · 9h jornada cumplida';
+                     tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + (c.horas||0).toFixed(1) + 'h';
                    }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + (c.horas||0).toFixed(1) + 'h (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
-                   else if (c.incompleta) { cls='cel-parcial'; tip='Incompleta · estimada a 18:00'; }
+                   else if (c.incompleta) { cls='cel-parcial'; tip='Sin salida · 0 h (solo suma la actividad, si hay)'; }
                    else if (c.presente) {
                      cls = c.jornadaCompleta ? 'cel-completa' : '';
-                     tip=(c.planta||'') + (c.ausencia ? ' · trabajó en periodo de ' + c.ausencia.toLowerCase() : '');
+                     tip=(c.planta||'')
+                       + (c.entradaReal && c.entradaReal !== c.entrada ? ' · entrada real ' + c.entradaReal : '')
+                       + (c.salidaReal && c.salidaReal !== c.salida ? ' · salida real ' + c.salidaReal : '')
+                       + (c.ausencia ? ' · trabajó en periodo de ' + c.ausencia.toLowerCase() : '');
                      if (c.actividad) {
                        cls += ' cel-actividad'; bgStyle=tinteActividad;
                        tip += ' · Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '');
                      }
                    }
               %>
-                <td class="text-center <%= cls %> cel-dia<%= (typeof panelEditable !== 'undefined' && panelEditable && !descansoVacio) ? ' cel-editable' : '' %>"
+                <td class="text-center <%= cls %> cel-dia<%= (typeof panelEditable !== 'undefined' && panelEditable && !esDomingoReal) ? ' cel-editable' : '' %><%= (rhManual && !c.futuro) ? ' cel-manual' : '' %>"
                     style="<%= bgStyle %>"
                     title="<%= tip %>"
                     data-emp="<%= f.ID_Empleado %>"
                     data-fecha="<%= fechaCelda %>"
                     data-ent="<%= c.entrada || '' %>"
                     data-sal="<%= c.salida || '' %>"
+                    data-ent-real="<%= c.entradaReal || '' %>"
+                    data-sal-real="<%= c.salidaReal || '' %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
                     data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
                   <% if (descansoVacio) { %>
                     <span class="text-body-secondary small"><%= new Date(fechaCelda + 'T00:00:00').getDay() === 6 ? 'Sáb' : 'Dom' %></span>
+                  <% } else if (diaFuturo) { %>
+                    <span class="text-body-secondary small"><%= c.nombreDia %></span>
                   <% } else if (!c.presente && c.ausencia) { %>
                     <% if (c.sinGoce) { %>
                       <span class="fw-bold d-block" style="color:#b02a37; font-size:.7rem" title="<%= c.ausencia %> — sin goce de sueldo"><%= c.ausencia.length > 12 ? c.ausencia.slice(0,11) + '…' : c.ausencia %></span>
@@ -429,6 +439,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <% }); %>
                       <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                       <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
+                      <div class="act-hora mt-1 pt-1 border-top" title="Horas que cuenta la actividad ese día"><%= (c.horas||0).toFixed(1) %>h</div>
                     </div>
                   <% } else if (!c.presente && c.vacio) { %>
                     <span class="text-danger fw-bold">Falta</span>
@@ -537,100 +548,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     });
   });
 
-  // ---- Redondeo de horas ----
-  // Ambos extremos van a la hora MAS CERCANA (>=30 min sube, <30 baja).
-  // Las reglas anteriores estaban sesgadas en la misma direccion — la entrada
-  // subia desde el minuto 16 y la salida bajaba hasta el 55 — asi que el error
-  // se acumulaba SIEMPRE en contra del trabajador: sobre 10 jornadas reales
-  // restaba 5.68 h (08:16-18:30 = 9.23 h reales se mostraban como 8.00).
-  // Al mas cercano la desviacion se reparte y queda en +/- 0.5 h por dia.
-  function aLaHoraMasCercana(hhmm) {
-    if (!hhmm) return hhmm;
-    const [h, m] = hhmm.split(':').map(Number);
-    return String(m >= 30 ? h + 1 : h).padStart(2,'0') + ':00';
-  }
-  const redondearEntrada = aLaHoraMasCercana;
-  const redondearSalida = aLaHoraMasCercana;
-  function minutosEntre(ent, sal) {
-    const [he, me] = ent.split(':').map(Number);
-    const [hs, ms] = sal.split(':').map(Number);
-    const COMIDA_INI = 14*60, COMIDA_FIN = 15*60;
-    const CIERRE = 18*60;
-    const entMin = he*60+me, salMin = hs*60+ms;
-    if (salMin <= entMin) return 0;
-    let netos = salMin - entMin;
-    // descuento comida si jornada cruza 14-15
-    if (entMin < COMIDA_FIN && salMin > COMIDA_INI) {
-      netos -= Math.min(salMin, COMIDA_FIN) - Math.max(entMin, COMIDA_INI);
-    }
-    return Math.max(0, netos);
-  }
-
-  const chk = document.getElementById('chkRedondear');
-  const LIMITE_SEMANAL = 45; // tope de horas normales; excedente = extra
-  function aplicarRedondeo() {
-    const activo = chk.checked;
-    // Recalcular celda por celda y totalizar por fila para reflejar el redondeo
-    // en Total / Normal / Extra (split semanal de 45h).
-    getRows().forEach(tr => {
-      let totalFila = 0;
-      tr.querySelectorAll('.cel-dia').forEach(td => {
-        if (td.dataset.dom === '1' || td.dataset.vacio === '1') return;
-        const horasRaw = parseFloat(td.dataset.horas) || 0;
-
-        // Dias cubiertos por actividad o ausencia (vacaciones, permiso con
-        // goce): no hay checada, pero SI aportan sus 9h. Se suman tal cual —
-        // no hay entrada/salida que redondear. Sin esto el total se derrumbaba
-        // al activar el redondeo, porque solo se contaban las celdas con
-        // checada real.
-        if (td.dataset.presente !== '1') {
-          totalFila += horasRaw;
-          return;
-        }
-
-        const entRaw = td.dataset.ent;
-        const salRaw = td.dataset.sal;
-        const celEs = td.querySelector('.cel-es');
-        if (!celEs) { totalFila += horasRaw; return; }
-
-        let entMostrar, salMostrar, horasMostrar;
-        if (activo && entRaw && salRaw) {
-          entMostrar = redondearEntrada(entRaw);
-          salMostrar = redondearSalida(salRaw);
-          const mins = minutosEntre(entMostrar, salMostrar);
-          // Jornada tan corta que el redondeo la colapsa (09:16-09:50 caeria a
-          // 0 h): se conservan las horas reales en vez de borrar el registro.
-          horasMostrar = mins > 0
-            ? Math.round((mins / 60) * 10) / 10
-            : Math.round(horasRaw * 10) / 10;
-        } else {
-          entMostrar = entRaw || '--:--';
-          salMostrar = salRaw || '--:--';
-          horasMostrar = Math.round(horasRaw * 10) / 10;
-        }
-        celEs.querySelector('.ent').textContent = entMostrar;
-        celEs.querySelector('.sal').textContent = salMostrar;
-        celEs.querySelector('.hrs').textContent = horasMostrar.toFixed(1) + 'h';
-        totalFila += horasMostrar;
-      });
-
-      totalFila = Math.round(totalFila * 100) / 100;
-      const extra = Math.max(0, Math.round((totalFila - LIMITE_SEMANAL) * 100) / 100);
-      const normal = Math.round((totalFila - extra) * 100) / 100;
-      const tdNorm = tr.querySelector('.col-normal');
-      const tdExtra = tr.querySelector('.col-extra');
-      const tdTotal = tr.querySelector('.col-total');
-      if (tdNorm) tdNorm.textContent = normal > 0 ? normal.toFixed(1) : '-';
-      if (tdExtra) tdExtra.textContent = extra > 0 ? extra.toFixed(1) : '-';
-      if (tdTotal) tdTotal.textContent = totalFila > 0 ? totalFila.toFixed(1) : '0';
-      tr.dataset.total = totalFila; // mantener orden por total coherente
-    });
-  }
-  chk.addEventListener('change', aplicarRedondeo);
-  // Aplicar estado inicial si viene con ?redondear=1
-  if (chk.checked) aplicarRedondeo();
-
-  // El botón Excel actualiza su href con fechas + orden + redondeo vivos
+  // El botón Excel actualiza su href con fechas + orden vivos
   const btnExcel = document.getElementById('btnExcel');
   function actualizarLinkExcel(){
     if (!btnExcel) return;
@@ -639,11 +557,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     let url = `${URL_EXCEL_BASE}?fechaInicio=${fi}&fechaFin=${ff}`;
     if (ID_ENCARGADO_SEL) url += `&encargado=${ID_ENCARGADO_SEL}`;
     if (sortState.key) url += `&sort=${sortState.key}&dir=${sortState.asc ? 'asc' : 'desc'}`;
-    if (document.getElementById('chkRedondear').checked) url += '&redondear=1';
     btnExcel.href = url;
   }
   if (btnExcel) btnExcel.addEventListener('click', actualizarLinkExcel);
-  chk.addEventListener('change', actualizarLinkExcel);
 
   // --- Revisiones <2h: descartar (solo UI/sesión) + confirmar antes de descargar ---
   const panel = document.getElementById('panelRevisiones');
@@ -681,6 +597,93 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
 })();
 </script>
+
+<% if (puedeManual) { %>
+<style>
+  .cel-manual { cursor:pointer; }
+  .cel-manual:hover { outline:2px solid #0d6efd; outline-offset:-2px; }
+</style>
+<div class="modal fade" id="modalManual" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="manualTitulo">Checada manual</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-body-secondary mb-2" id="manualSub"></p>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small mb-1" for="manualEnt">Entrada</label>
+            <input type="time" class="form-control form-control-sm" id="manualEnt">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="manualSal">Salida</label>
+            <input type="time" class="form-control form-control-sm" id="manualSal">
+          </div>
+        </div>
+        <small class="text-body-secondary d-block mt-2" style="font-size:.72rem">
+          Sustituye la checada del reloj en la tabla y en el Excel. Con ambas vacías se vuelve a lo que marcó el reloj.
+        </small>
+        <div class="small text-danger mt-2 d-none" id="manualError"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-primary" id="manualGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const modalEl = document.getElementById('modalManual');
+  if (!modalEl) return;
+  const modal = new bootstrap.Modal(modalEl);
+  const $ = id => document.getElementById(id);
+  const URL_MANUAL = <%- JSON.stringify(urlManual) %>;
+  const ENC_DELEGADO = <%- JSON.stringify(delegando ? idEncSel : null) %>;
+  let ctx = null;
+
+  function abrir(td) {
+    ctx = { emp: td.dataset.emp, fecha: td.dataset.fecha };
+    const nombre = td.closest('tr') ? td.closest('tr').querySelector('.col-emp').textContent.trim() : '';
+    $('manualTitulo').textContent = 'Checada manual';
+    $('manualSub').textContent = nombre + ' · ' + new Date(ctx.fecha + 'T12:00:00')
+      .toLocaleDateString('es-MX', { weekday:'long', day:'2-digit', month:'long' });
+    $('manualEnt').value = td.dataset.entReal || '';
+    $('manualSal').value = td.dataset.salReal || '';
+    $('manualError').classList.add('d-none');
+    modal.show();
+  }
+
+  // RH/Admin: clic directo en la celda.
+  document.querySelectorAll('td.cel-manual').forEach(td => td.addEventListener('click', () => abrir(td)));
+
+  // Encargado: la celda abre el panel lateral; el botón del panel abre este modal.
+  let ultimaCelda = null;
+  document.querySelectorAll('td.cel-editable').forEach(td => td.addEventListener('click', () => { ultimaCelda = td; }));
+  document.addEventListener('click', function(ev){
+    if (!ev.target.closest('#panelBtnManual') || !ultimaCelda) return;
+    const oc = document.getElementById('panelDia');
+    const inst = oc && bootstrap.Offcanvas.getInstance(oc);
+    if (inst) inst.hide(); // evita pelear el foco con el modal
+    abrir(ultimaCelda);
+  });
+
+  $('manualGuardar').addEventListener('click', function(){
+    const body = { ID_Empleado: parseInt(ctx.emp), fecha: ctx.fecha, entrada: $('manualEnt').value, salida: $('manualSal').value };
+    if (ENC_DELEGADO) body.encargado = ENC_DELEGADO;
+    fetch(URL_MANUAL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) { $('manualError').textContent = res.error || 'No se pudo guardar'; $('manualError').classList.remove('d-none'); return; }
+        window.location.reload();
+      })
+      .catch(() => { $('manualError').textContent = 'Error de conexión'; $('manualError').classList.remove('d-none'); });
+  });
+})();
+</script>
+<% } %>
 <% } %>
 
 <% if (typeof panelEditable !== 'undefined' && panelEditable) { %>
@@ -707,7 +710,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
     <div id="panelContenido" class="d-none">
       <div class="card mb-3">
-        <div class="card-header py-2"><strong class="small">Checadas reales</strong></div>
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <strong class="small">Checadas reales</strong>
+          <button type="button" class="btn btn-sm btn-outline-primary py-0" id="panelBtnManual">Checada manual</button>
+        </div>
         <div class="card-body py-2" id="panelChecadas"></div>
       </div>
 
@@ -780,6 +786,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             </button>
             <button type="button" class="btn btn-sm btn-outline-danger d-none" id="panelQuitar">
               <i class="bi bi-trash me-1"></i>Quitar
+            </button>
+            <button type="button" class="btn btn-sm btn-danger d-none" id="panelDetenerRegla"
+                    title="Deja de aplicar la recurrencia todas las semanas, desde hoy">
+              Detener regla
             </button>
           </div>
           <div class="small text-danger mt-2 d-none" id="panelError"></div>
@@ -888,8 +898,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           // Agregar otra solo tiene sentido si ya hay algo ese día.
           $('panelAgregar').classList.toggle('d-none', !act);
           $('panelQuitar').title = ctx.esRecurrente
-            ? 'Detiene la regla completa (deja de aplicar todas las semanas)'
+            ? 'Quita solo este día; la regla sigue aplicando las demás semanas'
             : 'Quita la actividad de este día';
+          // Detener la regla completa (todas las semanas): solo si el día lo cubre una recurrencia.
+          $('panelDetenerRegla').classList.toggle('d-none', !(ctx.esRecurrente && ctx.idRecurrencia));
           $('panelGuardar').innerHTML = act
             ? '<i class="bi bi-check-lg me-1"></i>Actualizar'
             : '<i class="bi bi-check-lg me-1"></i>Asignar';
@@ -1075,12 +1087,24 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       .catch(function(){ mostrarError('Error de conexión'); });
   });
 
+  // Día cubierto por recurrencia: el backend solo salta ese día con modo RECURRENTE
+  // (con PUNTUAL no hay nada que quitar y respondía "Completa nombre, tipo y empresa").
   $('panelQuitar').addEventListener('click', function(){
     enviarToggle({
       ID_Empleado: parseInt(ctx.emp),
       fecha: ctx.fecha,
-      modo: $('panelRecurrente').checked ? 'RECURRENTE' : 'PUNTUAL'
+      modo: (ctx.esRecurrente || $('panelRecurrente').checked) ? 'RECURRENTE' : 'PUNTUAL'
     }, function(){ window.location.reload(); });
+  });
+
+  // Detener la regla completa (misma acción que "Detener" en la pantalla de la regla).
+  $('panelDetenerRegla').addEventListener('click', function(){
+    if (!ctx.idRecurrencia) return;
+    if (!window.confirm('Se detiene la recurrencia: deja de aplicar todas las semanas desde hoy. ¿Continuar?')) return;
+    mostrarError('');
+    fetch('/encargado/recurrencias/' + ctx.idRecurrencia + '/detener', { method: 'POST' })
+      .then(function(r){ if (!r.ok) throw new Error(); window.location.reload(); })
+      .catch(function(){ mostrarError('No se pudo detener la recurrencia'); });
   });
 })();
 </script>

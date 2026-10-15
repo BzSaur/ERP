@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contarDiasHabiles } from './vacacionesController.js';
+import { contarDiasHabiles, factorJornada } from './vacacionesController.js';
 
 const d = s => new Date(s + 'T00:00:00Z');
 
@@ -22,4 +22,16 @@ test('contarDiasHabiles: festivo entre semana resta exactamente 1', () => {
   // 28 dic 2026 lunes, 29 mar, 30 mié, 31 jue, 1 ene 2027 viernes (festivo).
   // L-V completo = 5 días hábiles - 1 festivo (viernes) = 4.
   assert.equal(contarDiasHabiles(d('2026-12-28'), d('2027-01-01')), 4);
+});
+
+test('factorJornada: tiempo completo o sin dato = 1', () => {
+  assert.equal(factorJornada(45, 45), 1);
+  assert.equal(factorJornada(48, 45), 1);
+  assert.equal(factorJornada(null, 45), 1);
+});
+
+test('factorJornada: menos de jornada completa = la mitad', () => {
+  assert.equal(factorJornada(20, 45), 0.5);
+  assert.equal(factorJornada(44, 45), 0.5);
+  assert.equal(Math.round(12 * factorJornada(20, 45)), 6);
 });

@@ -317,7 +317,7 @@ const configuracionNomina = [
   // Proporcionalidad y jornada
   {
     Clave: 'HORAS_JORNADA_COMPLETA',
-    Valor: '48',
+    Valor: '45',
     Descripcion: 'Horas semanales de jornada completa (base para proporcionalidad)',
     Tipo_Dato: 'INT'
   },

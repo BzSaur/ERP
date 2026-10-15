@@ -2,6 +2,8 @@ import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import logger, { logAccess } from '../config/logger.js';
 import { encolarAltaEmpleado, encolarBajaEmpleado } from '../services/checadorComandosService.js';
+import { whereVigente, whereBaja } from '../utils/empleados.js';
+import { horaLocalDevice } from '../utils/tiempo.js';
 
 // ============================================================
 // CONTROLADOR DE EMPLEADOS
@@ -104,6 +106,113 @@ const buscarDuplicadoP2002 = async (error, body, idExcluir = null) => {
   return `DB rechaza por duplicado en ${labelCampo} ("${valorIngresado}", bytes: ${hex}) pero no se localiza el registro. Posibles causas: caracteres invisibles en valor existente, o registro creado fuera del sistema. Contactar admin con este mensaje.`;
 };
 
+// Validación de alta/edición. RFC y NSS son obligatorios para mexicanos
+// (Codigo_ISO2 'MX'); datos de emergencia: los tres juntos (obligatorios en alta,
+// todo-o-nada en edición). Formato solo se revisa si el valor cambió, para no
+// bloquear la edición de registros viejos con datos mal capturados.
+const RFC_RE = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/;
+const NSS_RE = /^\d{11}$/;
+
+const validarEmpleado = async (b, { alta, previo = null, esBaja = false }) => {
+  const errores = [];
+  const nac = b.ID_Nacionalidad
+    ? await prisma.cat_Nacionalidades.findUnique({
+        where: { ID_Nacionalidad: parseInt(b.ID_Nacionalidad) },
+        select: { Codigo_ISO2: true }
+      })
+    : null;
+
+  if (nac?.Codigo_ISO2 === 'MX' && !esBaja) {
+    if (!b.RFC) errores.push('El RFC es obligatorio para empleados mexicanos');
+    if (!b.NSS) errores.push('El NSS es obligatorio para empleados mexicanos');
+  }
+  if (b.RFC && (alta || b.RFC !== previo?.RFC) && !RFC_RE.test(b.RFC)) {
+    errores.push('RFC con formato inválido (12 o 13 caracteres, ej. XAXX010101000)');
+  }
+  if (b.NSS && (alta || b.NSS !== previo?.NSS) && !NSS_RE.test(b.NSS)) {
+    errores.push('NSS con formato inválido (11 dígitos)');
+  }
+
+  const emergencia = [b.Nombre_Emergencia, b.Parentesco_Emergencia, b.Telefono_Emergencia]
+    .filter(v => v && String(v).trim()).length;
+  if (!esBaja && emergencia < 3 && (alta || emergencia > 0)) {
+    errores.push('Datos de emergencia incompletos: nombre, parentesco y teléfono son obligatorios');
+  }
+  return errores;
+};
+
+// Arma el where del listado a partir del query string. Lo comparten el listado
+// y la exportación CSV para que ambos devuelvan exactamente el mismo conjunto.
+// Por defecto solo vigentes (todo menos BAJA); ?vista=inactivos muestra las bajas.
+const construirFiltros = async (query) => {
+  const { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono } = query;
+  const vista = query.vista === 'inactivos' ? 'inactivos' : 'vigentes';
+
+  const where = {};
+  const and = [vista === 'inactivos' ? whereBaja : whereVigente];
+
+  if (buscar) {
+    and.push({
+      OR: [
+        { Nombre: { contains: buscar, mode: 'insensitive' } },
+        { Apellido_Paterno: { contains: buscar, mode: 'insensitive' } },
+        { Apellido_Materno: { contains: buscar, mode: 'insensitive' } },
+        { Documento_Identidad: { contains: buscar, mode: 'insensitive' } },
+        { RFC: { contains: buscar, mode: 'insensitive' } }
+      ]
+    });
+  }
+
+  if (area) where.ID_Area = parseInt(area);
+
+  if (estatus) where.ID_Estatus = parseInt(estatus);
+
+  if (id) {
+    const idNum = parseInt(id);
+    if (!isNaN(idNum)) where.ID_Empleado = idNum;
+  }
+
+  // Filtro por día completo (rango [día, día+1))
+  const rangoDia = (valor) => {
+    const inicio = new Date(`${valor}T00:00:00`);
+    if (isNaN(inicio.getTime())) return null;
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + 1);
+    return { gte: inicio, lt: fin };
+  };
+
+  // Filtro por MES de nacimiento (cualquier año/día): Prisma no tiene EXTRACT
+  // en `where`, así que se resuelve aparte con SQL crudo (solo IDs) y se
+  // combina con el resto de filtros vía AND (no pisa el filtro por `id`).
+  if (mes_nacimiento) {
+    const mes = parseInt(mes_nacimiento);
+    if (mes >= 1 && mes <= 12) {
+      const filas = await prisma.$queryRaw`
+        SELECT "ID_Empleado" FROM "Empleados"
+        WHERE EXTRACT(MONTH FROM "Fecha_Nacimiento") = ${mes}
+      `;
+      and.push({ ID_Empleado: { in: filas.map(f => f.ID_Empleado) } });
+    }
+  }
+
+  if (fecha_ingreso) {
+    const r = rangoDia(fecha_ingreso);
+    if (r) where.Fecha_Ingreso = r;
+  }
+
+  if (telefono) {
+    and.push({
+      OR: [
+        { Telefono_Celular: { contains: telefono, mode: 'insensitive' } },
+        { Telefono_Emergencia: { contains: telefono, mode: 'insensitive' } }
+      ]
+    });
+  }
+
+  where.AND = and;
+  return { where, vista };
+};
+
 // GET /empleados - Listar todos los empleados
 export const index = async (req, res, next) => {
   try {
@@ -119,75 +228,7 @@ export const index = async (req, res, next) => {
       ? [{ Nombre: dir }, { Apellido_Paterno: dir }]
       : [{ ID_Empleado: dir }];
 
-    // Construir filtros
-    const where = {};
-    const and = [];
-
-    if (buscar) {
-      and.push({
-        OR: [
-          { Nombre: { contains: buscar, mode: 'insensitive' } },
-          { Apellido_Paterno: { contains: buscar, mode: 'insensitive' } },
-          { Apellido_Materno: { contains: buscar, mode: 'insensitive' } },
-          { Documento_Identidad: { contains: buscar, mode: 'insensitive' } },
-          { RFC: { contains: buscar, mode: 'insensitive' } }
-        ]
-      });
-    }
-
-    if (area) {
-      where.ID_Area = parseInt(area);
-    }
-
-    if (estatus) {
-      where.ID_Estatus = parseInt(estatus);
-    }
-
-    if (id) {
-      const idNum = parseInt(id);
-      if (!isNaN(idNum)) where.ID_Empleado = idNum;
-    }
-
-    // Filtro por día completo (rango [día, día+1))
-    const rangoDia = (valor) => {
-      const inicio = new Date(`${valor}T00:00:00`);
-      if (isNaN(inicio.getTime())) return null;
-      const fin = new Date(inicio);
-      fin.setDate(fin.getDate() + 1);
-      return { gte: inicio, lt: fin };
-    };
-
-    // Filtro por MES de nacimiento (cualquier año/día): Prisma no tiene EXTRACT
-    // en `where`, así que se resuelve aparte con SQL crudo (solo IDs) y se
-    // combina con el resto de filtros vía AND (no pisa el filtro por `id`).
-    if (mes_nacimiento) {
-      const mes = parseInt(mes_nacimiento);
-      if (mes >= 1 && mes <= 12) {
-        const filas = await prisma.$queryRaw`
-          SELECT "ID_Empleado" FROM "Empleados"
-          WHERE EXTRACT(MONTH FROM "Fecha_Nacimiento") = ${mes}
-        `;
-        and.push({ ID_Empleado: { in: filas.map(f => f.ID_Empleado) } });
-      }
-    }
-
-    if (fecha_ingreso) {
-      const r = rangoDia(fecha_ingreso);
-      if (r) where.Fecha_Ingreso = r;
-    }
-
-    if (telefono) {
-      and.push({
-        OR: [
-          { Telefono_Celular: { contains: telefono, mode: 'insensitive' } },
-          { Telefono_Emergencia: { contains: telefono, mode: 'insensitive' } }
-        ]
-      });
-    }
-
-    if (and.length) {
-      where.AND = and;
-    }
+    const { where, vista } = await construirFiltros(req.query);
 
     // Obtener empleados con relaciones
     const [empleados, total] = await Promise.all([
@@ -210,23 +251,93 @@ export const index = async (req, res, next) => {
     // Obtener catálogos para filtros
     const [areas, estatuses] = await Promise.all([
       prisma.cat_Areas.findMany({ orderBy: { Nombre_Area: 'asc' } }),
-      prisma.cat_Estatus_Empleado.findMany({ orderBy: { Nombre_Estatus: 'asc' } })
+      prisma.cat_Estatus_Empleado.findMany({
+        where: vista === 'inactivos' ? { Nombre_Estatus: 'BAJA' } : { Nombre_Estatus: { not: 'BAJA' } },
+        orderBy: { Nombre_Estatus: 'asc' }
+      })
     ]);
 
     const totalPages = Math.ceil(total / perPage);
 
     res.render('empleados/index', {
-      title: 'Empleados',
+      title: vista === 'inactivos' ? 'Empleados inactivos' : 'Empleados',
       empleados,
       areas,
-      estatuses,
-      filtros: { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono, sort, dir },
+      estatusList: estatuses,
+      filtros: { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono, sort, dir, vista },
       pagination: {
         page: parseInt(page),
         totalPages,
         total
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /empleados/exportar - CSV completo con los mismos filtros del listado
+export const exportarCSV = async (req, res, next) => {
+  try {
+    const { where, vista } = await construirFiltros(req.query);
+    const empleados = await prisma.empleados.findMany({
+      where,
+      include: { area: true, puesto: true, estatus: true, tipo_horario: true, nacionalidad: true },
+      orderBy: { ID_Empleado: 'asc' }
+    });
+
+    const fecha = (d) => (d ? new Date(d).toISOString().slice(0, 10) : ''); // @db.Date llega 00:00Z
+    const columnas = [
+      ['No. Empleado', e => e.ID_Empleado],
+      ['Nombre', e => e.Nombre],
+      ['Apellido paterno', e => e.Apellido_Paterno],
+      ['Apellido materno', e => e.Apellido_Materno],
+      ['Fecha de nacimiento', e => fecha(e.Fecha_Nacimiento)],
+      ['Nacionalidad', e => e.nacionalidad?.Nombre_Nacionalidad],
+      ['Tipo de documento', e => e.Tipo_Documento],
+      ['Documento de identidad', e => e.Documento_Identidad],
+      ['RFC', e => e.RFC],
+      ['NSS', e => e.NSS],
+      ['Email personal', e => e.Email_Personal],
+      ['Email corporativo', e => e.Email_Corporativo],
+      ['Teléfono celular', e => e.Telefono_Celular],
+      ['Contacto de emergencia', e => e.Nombre_Emergencia],
+      ['Parentesco', e => e.Parentesco_Emergencia],
+      ['Teléfono de emergencia', e => e.Telefono_Emergencia],
+      ['Calle', e => e.Calle],
+      ['Núm. exterior', e => e.Numero_Exterior],
+      ['Núm. interior', e => e.Numero_Interior],
+      ['Colonia', e => e.Colonia],
+      ['Ciudad', e => e.Ciudad],
+      ['Entidad federativa', e => e.Entidad_Federativa],
+      ['Código postal', e => e.Codigo_Postal],
+      ['Área', e => e.area?.Nombre_Area],
+      ['Puesto', e => e.puesto?.Nombre_Puesto],
+      ['Horario', e => e.tipo_horario?.Nombre_Horario],
+      ['Horas semanales contratadas', e => e.Horas_Semanales_Contratadas],
+      ['Salario mensual', e => e.Salario_Mensual],
+      ['Salario diario', e => e.Salario_Diario],
+      ['Salario por hora', e => e.Salario_Hora],
+      ['Estatus', e => e.estatus?.Nombre_Estatus],
+      ['Fecha de ingreso', e => fecha(e.Fecha_Ingreso)],
+      ['Fecha de baja', e => fecha(e.Fecha_Baja)]
+    ];
+
+    // Escapa comillas y neutraliza fórmulas (=, +, -, @) para que Excel no las ejecute.
+    const celda = (v) => {
+      if (v === null || v === undefined) return '';
+      let t = String(v);
+      if ('=+-@'.includes(t[0]) || t.charCodeAt(0) === 9 || t.charCodeAt(0) === 13) t = "'" + t;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+
+    const filas = [columnas.map(([titulo]) => celda(titulo)).join(',')];
+    for (const e of empleados) filas.push(columnas.map(([, f]) => celda(f(e))).join(','));
+
+    const nombre = `empleados_${vista}_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=${nombre}`);
+    res.send('\uFEFF' + filas.join('\r\n')); // BOM para que Excel lea UTF-8
   } catch (error) {
     next(error);
   }
@@ -328,6 +439,12 @@ export const store = async (req, res, next) => {
       return res.redirect('back');
     }
 
+    const erroresValidacion = await validarEmpleado(req.body, { alta: true });
+    if (erroresValidacion.length > 0) {
+      req.flash('error', erroresValidacion.join(' | '));
+      return res.redirect('back');
+    }
+
     // Calcular salarios si se proporciona el mensual
     let salarioMensual = Salario_Mensual ? parseFloat(Salario_Mensual) : null;
     let salarioDiario = Salario_Diario ? parseFloat(Salario_Diario) : null;
@@ -388,7 +505,7 @@ export const store = async (req, res, next) => {
         Salario_Mensual: salarioMensual,
         Salario_Diario: salarioDiario,
         Salario_Hora: salarioHora,
-        Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : 48,
+        Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : 45,
         ID_Estatus: parseInt(ID_Estatus) || 1,
         Fecha_Ingreso: new Date(Fecha_Ingreso),
         CreatedBy: req.user?.Email_Office365 || 'Sistema'
@@ -640,6 +757,18 @@ export const update = async (req, res, next) => {
       }
     });
 
+    const nuevoEstatus = await prisma.cat_Estatus_Empleado.findUnique({
+      where: { ID_Estatus: parseInt(ID_Estatus) },
+      select: { Nombre_Estatus: true }
+    });
+    const esBaja = nuevoEstatus?.Nombre_Estatus === 'BAJA';
+
+    const erroresValidacion = await validarEmpleado(req.body, { alta: false, previo: empleadoPrevio, esBaja });
+    if (erroresValidacion.length > 0) {
+      req.flash('error', erroresValidacion.join(' | '));
+      return res.redirect('back');
+    }
+
     await prisma.empleados.update({
       where: { ID_Empleado: idNum },
       data: {
@@ -682,7 +811,8 @@ export const update = async (req, res, next) => {
         Horas_Semanales_Contratadas: Horas_Semanales_Contratadas ? parseInt(Horas_Semanales_Contratadas) : null,
         ID_Estatus: parseInt(ID_Estatus),
         Fecha_Ingreso: new Date(Fecha_Ingreso),
-        Fecha_Baja: Fecha_Baja ? new Date(Fecha_Baja) : null,
+        // Baja sin fecha capturada: hoy (hora local), para que salga en el reporte de altas/bajas
+        Fecha_Baja: Fecha_Baja ? new Date(Fecha_Baja) : (esBaja ? new Date(horaLocalDevice().fecha) : null),
         UpdatedBy: req.user?.Email_Office365 || 'Sistema'
       }
     });
@@ -850,6 +980,7 @@ export const destroy = async (req, res, next) => {
 
 export default {
   index,
+  exportarCSV,
   crear,
   store,
   show,

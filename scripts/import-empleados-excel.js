@@ -478,7 +478,7 @@ async function importRows(rows, columnMap, options) {
         Salario_Mensual: salarios.mensual,
         Salario_Diario: salarios.diario,
         Salario_Hora: salarios.hora,
-        Horas_Semanales_Contratadas: horario.Horas_Semana || 48,
+        Horas_Semanales_Contratadas: horario.Horas_Semana || 45,
         ID_Estatus: maps.estatusActivo.ID_Estatus,
         Fecha_Ingreso: fechaIngreso,
         UpdatedBy: 'IMPORT_EXCEL'

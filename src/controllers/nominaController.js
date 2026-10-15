@@ -270,25 +270,11 @@ export const calcularNomina = async (req, res) => {
         ausenciaEnFecha(ausencias, empleado.ID_Empleado, d) && !ymdPresente.has(ymdDia(d))
       ).length;
       
-      // Calcular horas adicionales (todos los tipos que generan pago extra)
-      const horasExtra = empleado.horas_adicionales
-        .filter(h => h.Tipo_Hora === 'EXTRA')
+      // Horas adicionales ya aprobadas: sin importar el tipo capturado, todas pagan x2.
+      // (Ya no hay captura nueva; se respetan los registros existentes. Sin tramo x3.)
+      const totalHorasDobles = empleado.horas_adicionales
         .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
-      const horasDobles = empleado.horas_adicionales
-        .filter(h => h.Tipo_Hora === 'DOBLE')
-        .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
-      const horasTriples = empleado.horas_adicionales
-        .filter(h => h.Tipo_Hora === 'TRIPLE')
-        .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
-      
-      // Horas presenciales y en línea también cuentan como extra dobles
-      const horasPresencialRemoto = empleado.horas_adicionales
-        .filter(h => h.Tipo_Hora === 'PRESENCIAL' || h.Tipo_Hora === 'EN_LINEA')
-        .reduce((sum, h) => sum + Number(h.Cantidad_Horas), 0);
-      
-      // Total horas dobles = DOBLE + PRESENCIAL + EN_LINEA + EXTRA (todas pagan doble)
-      const totalHorasDobles = horasDobles + horasPresencialRemoto + horasExtra;
-      const totalHorasTriples = horasTriples;
+      const totalHorasTriples = 0;
       
       // Salarios base (LFT) — fuente de verdad: Salario_Mensual > puesto.Salario_Base_Referencia
       const salarioMensual = Number(empleado.Salario_Mensual) 
@@ -367,7 +353,7 @@ export const calcularNomina = async (req, res) => {
       const ajusteRedondeo = redondear(sueldoRedondeado - sueldoNeto);
       
       // Total horas extra para registro (EXTRA + PRESENCIAL + EN_LINEA)
-      const totalHorasExtraRegistro = horasExtra + horasPresencialRemoto;
+      const totalHorasExtraRegistro = 0; // ponytail: sin captura de extras; se usa Horas_Dobles
 
       // ¿Recálculo? Si la nómina del periodo ya existía, NO volver a abonar el
       // préstamo (cada recálculo descontaba otra pago del saldo).

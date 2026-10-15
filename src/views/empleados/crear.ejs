@@ -60,7 +60,7 @@
               <select class="form-select" name="ID_Nacionalidad" required>
                 <option value="">Seleccionar...</option>
                 <% nacionalidades.forEach(function(n) { %>
-                  <option value="<%= n.ID_Nacionalidad %>"><%= n.Nombre_Nacionalidad %></option>
+                  <option value="<%= n.ID_Nacionalidad %>" data-iso="<%= n.Codigo_ISO2 || '' %>"><%= n.Nombre_Nacionalidad %></option>
                 <% }); %>
               </select>
             </div>
@@ -95,12 +95,12 @@
               <input type="text" class="form-control" name="Documento_Identidad" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label">RFC</label>
-              <input type="text" class="form-control" name="RFC" maxlength="13" placeholder="XXXX000000XXX">
+              <label class="form-label">RFC <span class="text-danger d-none" data-req-star>*</span></label>
+              <input type="text" class="form-control" name="RFC" maxlength="13" pattern="[A-Za-zÑñ&amp;]{3,4}[0-9]{6}[A-Za-z0-9]{3}" title="RFC de 12 o 13 caracteres" placeholder="XXXX000000XXX">
             </div>
             <div class="col-md-6">
-              <label class="form-label">NSS (Número Seguro Social)</label>
-              <input type="text" class="form-control" name="NSS" maxlength="20">
+              <label class="form-label">NSS (Número Seguro Social) <span class="text-danger d-none" data-req-star>*</span></label>
+              <input type="text" class="form-control" name="NSS" maxlength="11" pattern="[0-9]{11}" title="NSS de 11 dígitos">
             </div>
           </div>
         </div>
@@ -147,11 +147,11 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-12">
-              <label class="form-label">Nombre Completo</label>
+              <label class="form-label">Nombre Completo <span class="text-danger d-none" data-req-star>*</span></label>
               <input type="text" class="form-control" name="Nombre_Emergencia" placeholder="Nombre del contacto de emergencia">
             </div>
             <div class="col-md-6">
-              <label class="form-label">Parentesco</label>
+              <label class="form-label">Parentesco <span class="text-danger d-none" data-req-star>*</span></label>
               <select class="form-select" name="Parentesco_Emergencia">
                 <option value="">Seleccionar...</option>
                 <option value="Esposo/Esposa">Esposo/Esposa</option>
@@ -166,7 +166,7 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Teléfono de Emergencia</label>
+              <label class="form-label">Teléfono de Emergencia <span class="text-danger d-none" data-req-star>*</span></label>
               <input type="tel" class="form-control" name="Telefono_Emergencia" placeholder="10 dígitos">
             </div>
           </div>
@@ -349,7 +349,7 @@
             </div>
             <div class="col-md-6">
               <label class="form-label">Horas Semanales</label>
-              <input type="number" class="form-control" name="Horas_Semanales_Contratadas" value="48">
+              <input type="number" class="form-control" name="Horas_Semanales_Contratadas" value="45">
             </div>
           </div>
         </div>
@@ -438,4 +438,38 @@
     document.getElementById('salarioDiario').value = '';
     document.getElementById('salarioHora').value = '';
   }
+</script>
+
+<script>
+// RFC/NSS obligatorios si la nacionalidad es Mexicana (ISO MX); emergencia obligatoria
+// (en alta siempre; en edición todo-o-nada).
+(function () {
+  var nac = document.querySelector('select[name="ID_Nacionalidad"]');
+  var rfc = document.querySelector('input[name="RFC"]');
+  var nss = document.querySelector('input[name="NSS"]');
+  var emer = ['Nombre_Emergencia', 'Parentesco_Emergencia', 'Telefono_Emergencia'].map(function (n) {
+    return document.querySelector('[name="' + n + '"]');
+  });
+  var siempreEmergencia = true;
+
+  function esMx() {
+    var o = nac && nac.options[nac.selectedIndex];
+    return !!o && o.getAttribute('data-iso') === 'MX';
+  }
+  function marcar(input, req) {
+    input.required = req;
+    var lbl = input.closest('.col-md-6, .col-12');
+    var star = lbl && lbl.querySelector('[data-req-star]');
+    if (star) star.classList.toggle('d-none', !req);
+  }
+  function actualizar() {
+    marcar(rfc, esMx());
+    marcar(nss, esMx());
+    var alguno = emer.some(function (e) { return e.value.trim() !== ''; });
+    emer.forEach(function (e) { marcar(e, siempreEmergencia || alguno); });
+  }
+  nac.addEventListener('change', actualizar);
+  emer.forEach(function (e) { e.addEventListener('input', actualizar); e.addEventListener('change', actualizar); });
+  actualizar();
+})();
 </script>

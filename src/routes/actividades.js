@@ -26,6 +26,7 @@ router.post('/recurrencias/:id/detener', actividadesController.detenerRecurrenci
 router.get('/asistencia', isEncargado, asistenciaEncargadoController.horasEquipo);
 router.get('/asistencia/excel', isEncargado, asistenciaEncargadoController.horasEquipoExcel);
 router.get('/asistencia/dia', isEncargado, asistenciaEncargadoController.detalleDia);
+router.post('/asistencia/checada-manual', isEncargado, asistenciaEncargadoController.guardarChecadaManual);
 
 // Actividades. Crear es autoservicio del encargado (dueño = req.user.ID_Empleado);
 // ver/agregar/quitar asignación permiten además supervisión de ADMIN/RH/SUPER_ADMIN

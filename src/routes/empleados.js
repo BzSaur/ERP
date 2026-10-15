@@ -16,6 +16,9 @@ router.use(isAdminOrRH);
 // GET /empleados - Listar todos los empleados
 router.get('/', empleadosController.index);
 
+// GET /empleados/exportar - CSV con los filtros del listado
+router.get('/exportar', empleadosController.exportarCSV);
+
 // GET /empleados/crear - Mostrar formulario de creación (ADMIN, RH)
 router.get('/crear', canManageEmployees, empleadosController.crear);
 

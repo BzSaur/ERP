@@ -18,7 +18,7 @@
     <form action="/puestos" method="GET" class="row g-3">
       <div class="col-md-4">
         <label class="form-label">Filtrar por Área</label>
-        <select class="form-select" name="area" onchange="this.form.submit()">
+        <select class="form-select" name="area" data-autosubmit>
           <option value="">Todas las áreas</option>
           <% areas.forEach(function(a) { %>
             <option value="<%= a.ID_Area %>" <%= filtros.area == a.ID_Area ? 'selected' : '' %>><%= a.Nombre_Area %></option>
@@ -41,7 +41,7 @@
             <th>Descripción</th>
             <th class="text-end">Salario Base Ref.</th>
             <th class="text-end">Salario Hora Ref.</th>
-            <th class="text-center">Empleados</th>
+            <th class="text-center">Empleados vigentes</th>
             <th class="text-end">Acciones</th>
           </tr>
         </thead>
@@ -64,7 +64,7 @@
                 <%= puesto.Salario_Hora_Referencia ? '$' + parseFloat(puesto.Salario_Hora_Referencia).toFixed(2) : '-' %>
               </td>
               <td class="text-center">
-                <span class="badge bg-info"><%= puesto._count.empleados %></span>
+                <span class="badge bg-info"><%= puesto.empleados.length %></span>
               </td>
               <td class="text-end">
                 <% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador', 'SUPER_ADMIN')) { %>
@@ -73,7 +73,7 @@
                 </a>
                 <% if (puesto._count.empleados === 0) { %>
                 <form action="/puestos/<%= puesto.ID_Puesto %>/eliminar" method="POST" class="d-inline"
-                      onsubmit="return confirm('¿Eliminar este puesto?')">
+                      data-confirm="¿Eliminar este puesto?">
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                     <i class="bi bi-trash"></i>
                   </button>

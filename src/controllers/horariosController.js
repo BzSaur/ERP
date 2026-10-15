@@ -2,6 +2,7 @@
  * Controlador de Horarios
  */
 
+import { JORNADA } from '../config/jornada.js';
 import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 
@@ -33,7 +34,7 @@ export const crear = async (req, res) => {
 // Guardar nuevo horario
 export const store = async (req, res) => {
   try {
-    const { Nombre_Horario, Descripcion, Horas_Semana, Horas_Jornada, Dias_Semana } = req.body;
+    const { Nombre_Horario, Descripcion } = req.body;
 
     // Verificar si ya existe
     const existente = await prisma.cat_Tipo_Horario.findUnique({
@@ -45,9 +46,10 @@ export const store = async (req, res) => {
       return res.redirect('/horarios/crear');
     }
 
-    const diasSemana = Dias_Semana ? parseInt(Dias_Semana) : 6;
-    const horasJornada = Horas_Jornada ? parseInt(Horas_Jornada) : 8;
-    const horasSemana = Horas_Semana ? parseInt(Horas_Semana) : horasJornada * diasSemana;
+    // Jornada homogénea: todos los horarios son 45 h (5 x 9), no se captura.
+    const diasSemana = JORNADA.DIAS_SEMANA;
+    const horasJornada = JORNADA.HORAS_DIA;
+    const horasSemana = JORNADA.HORAS_SEMANA;
 
     const horario = await prisma.cat_Tipo_Horario.create({
       data: {
@@ -113,7 +115,7 @@ export const editar = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { Nombre_Horario, Descripcion, Horas_Semana, Horas_Jornada, Dias_Semana } = req.body;
+    const { Nombre_Horario, Descripcion } = req.body;
     const idNum = parseInt(id);
 
     // Obtener datos previos para comparar horas
@@ -121,10 +123,10 @@ export const update = async (req, res) => {
       where: { ID_Tipo_Horario: idNum }
     });
 
-    const diasSemana = Dias_Semana ? parseInt(Dias_Semana) : horarioPrevio.Dias_Semana;
-    const horasJornada = Horas_Jornada ? parseInt(Horas_Jornada) : horarioPrevio.Horas_Jornada;
-    // Horas_Semana se deriva de jornada × días (fuente del cálculo de asistencia/nómina)
-    const horasSemana = Horas_Semana ? parseInt(Horas_Semana) : horasJornada * diasSemana;
+    // Jornada homogénea: siempre 45 h (5 x 9); solo cambian nombre y descripción.
+    const diasSemana = JORNADA.DIAS_SEMANA;
+    const horasJornada = JORNADA.HORAS_DIA;
+    const horasSemana = JORNADA.HORAS_SEMANA;
 
     const horario = await prisma.cat_Tipo_Horario.update({
       where: { ID_Tipo_Horario: idNum },

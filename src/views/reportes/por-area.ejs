@@ -9,14 +9,14 @@
     </nav>
     <h4 class="mb-0">Reporte de Empleados por Área</h4>
   </div>
-  <button class="btn btn-outline-primary" onclick="window.print()">
+  <button type="button" class="btn btn-outline-primary" data-print>
     <i class="bi bi-printer me-2"></i>Imprimir
   </button>
 </div>
 
 <!-- Resumen -->
 <div class="row g-4 mb-4">
-  <% areas.forEach(function(area) { %>
+  <% areas.filter(function(a) { return a.totalEmpleados > 0; }).forEach(function(area) { %>
   <div class="col-md-6 col-lg-4">
     <div class="card">
       <div class="card-header">
@@ -27,23 +27,12 @@
       </div>
       <div class="card-body">
         <div class="d-flex justify-content-between mb-2">
-          <span class="text-body-secondary">Total:</span>
+          <span class="text-body-secondary">Empleados vigentes:</span>
           <strong><%= area.totalEmpleados %></strong>
         </div>
-        <div class="d-flex justify-content-between mb-2">
-          <span class="text-success">Activos:</span>
-          <span class="badge bg-success"><%= area.empleadosActivos %></span>
-        </div>
         <div class="d-flex justify-content-between">
-          <span class="text-secondary">Inactivos:</span>
-          <span class="badge bg-secondary"><%= area.empleadosInactivos %></span>
-        </div>
-        <hr>
-        <% const porcentaje = area.totalEmpleados > 0 ? Math.round(area.empleadosActivos / area.totalEmpleados * 100) : 0; %>
-        <div class="progress" style="height: 20px;">
-          <div class="progress-bar bg-success" role="progressbar" style="width: <%= porcentaje %>%">
-            <%= porcentaje %>%
-          </div>
+          <span class="text-body-secondary">Vacaciones / incapacidad / susp.:</span>
+          <span class="badge bg-secondary"><%= area.empleadosEnAusencia %></span>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { logAccess } from '../config/logger.js';
+import { whereVigente } from '../utils/empleados.js';
 
 // ============================================================
 // CONTROLADOR DE PUESTOS
@@ -21,9 +22,12 @@ export const index = async (req, res, next) => {
         where,
         include: {
           area: true,
+          // Total (incluye bajas): decide si se puede borrar por la FK
           _count: {
             select: { empleados: true }
-          }
+          },
+          // Solo vigentes: es lo que se muestra
+          empleados: { where: whereVigente, select: { ID_Empleado: true } }
         },
         orderBy: { Nombre_Puesto: 'asc' }
       }),

@@ -59,7 +59,7 @@
               <label class="form-label">Nacionalidad <span class="text-danger">*</span></label>
               <select class="form-select" name="ID_Nacionalidad" required>
                 <% nacionalidades.forEach(function(n) { %>
-                  <option value="<%= n.ID_Nacionalidad %>" <%= n.ID_Nacionalidad === empleado.ID_Nacionalidad ? 'selected' : '' %>><%= n.Nombre_Nacionalidad %></option>
+                  <option value="<%= n.ID_Nacionalidad %>" data-iso="<%= n.Codigo_ISO2 || '' %>" <%= n.ID_Nacionalidad === empleado.ID_Nacionalidad ? 'selected' : '' %>><%= n.Nombre_Nacionalidad %></option>
                 <% }); %>
               </select>
             </div>
@@ -93,7 +93,7 @@
               <input type="text" class="form-control" name="Documento_Identidad" value="<%= empleado.Documento_Identidad %>" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label">RFC</label>
+              <label class="form-label">RFC <span class="text-danger d-none" data-req-star>*</span></label>
               <input type="text" class="form-control" name="RFC" maxlength="13" value="<%= empleado.RFC || '' %>">
             </div>
             <div class="col-md-6">
@@ -145,11 +145,11 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-12">
-              <label class="form-label">Nombre Completo</label>
+              <label class="form-label">Nombre Completo <span class="text-danger d-none" data-req-star>*</span></label>
               <input type="text" class="form-control" name="Nombre_Emergencia" value="<%= empleado.Nombre_Emergencia || '' %>" placeholder="Nombre del contacto de emergencia">
             </div>
             <div class="col-md-6">
-              <label class="form-label">Parentesco</label>
+              <label class="form-label">Parentesco <span class="text-danger d-none" data-req-star>*</span></label>
               <select class="form-select" name="Parentesco_Emergencia">
                 <option value="">Seleccionar...</option>
                 <option value="Esposo/Esposa" <%= empleado.Parentesco_Emergencia === 'Esposo/Esposa' ? 'selected' : '' %>>Esposo/Esposa</option>
@@ -164,7 +164,7 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Teléfono de Emergencia</label>
+              <label class="form-label">Teléfono de Emergencia <span class="text-danger d-none" data-req-star>*</span></label>
               <input type="tel" class="form-control" name="Telefono_Emergencia" value="<%= empleado.Telefono_Emergencia || '' %>" placeholder="10 dígitos">
             </div>
           </div>
@@ -382,3 +382,44 @@
   </div>
 </form>
 
+<script>
+// RFC/NSS obligatorios si la nacionalidad es Mexicana (ISO MX); emergencia obligatoria
+// (en alta siempre; en edición todo-o-nada).
+(function () {
+  var nac = document.querySelector('select[name="ID_Nacionalidad"]');
+  var rfc = document.querySelector('input[name="RFC"]');
+  var nss = document.querySelector('input[name="NSS"]');
+  var emer = ['Nombre_Emergencia', 'Parentesco_Emergencia', 'Telefono_Emergencia'].map(function (n) {
+    return document.querySelector('[name="' + n + '"]');
+  });
+  var siempreEmergencia = false;
+
+  function esMx() {
+    var o = nac && nac.options[nac.selectedIndex];
+    return !!o && o.getAttribute('data-iso') === 'MX';
+  }
+  function marcar(input, req) {
+    input.required = req;
+    var lbl = input.closest('.col-md-6, .col-12');
+    var star = lbl && lbl.querySelector('[data-req-star]');
+    if (star) star.classList.toggle('d-none', !req);
+  }
+  var est = document.querySelector('select[name="ID_Estatus"]');
+  // Al dar de baja no se exige información que quizá ya no se pueda conseguir.
+  function esBaja() {
+    var o = est && est.options[est.selectedIndex];
+    return !!o && o.textContent.trim().toUpperCase() === 'BAJA';
+  }
+  function actualizar() {
+    var baja = esBaja();
+    marcar(rfc, esMx() && !baja);
+    marcar(nss, esMx() && !baja);
+    var alguno = emer.some(function (e) { return e.value.trim() !== ''; });
+    emer.forEach(function (e) { marcar(e, !baja && (siempreEmergencia || alguno)); });
+  }
+  if (est) est.addEventListener('change', actualizar);
+  nac.addEventListener('change', actualizar);
+  emer.forEach(function (e) { e.addEventListener('input', actualizar); e.addEventListener('change', actualizar); });
+  actualizar();
+})();
+</script>

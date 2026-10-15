@@ -15,6 +15,7 @@ import configuracionRoutes from './configuracion.js';
 import auditoriaRoutes from './auditoria.js';
 import { isAuthenticated } from '../middleware/auth.js';
 import prisma from '../config/database.js';
+import { whereVigente, whereBaja } from '../utils/empleados.js';
 import * as gruposService from '../services/gruposService.js';
 import { resolverActividadesPorRango, obtenerAusenciasJustificadas, ausenciaEnFecha } from '../services/asistenciaService.js';
 
@@ -157,18 +158,34 @@ router.get('/', isAuthenticated, async (req, res, next) => {
       });
     }
 
+    // Solo empleados vigentes (todo menos BAJA); las bajas viven en su propia vista.
+    const hace30 = new Date();
+    hace30.setDate(hace30.getDate() - 30);
+    hace30.setHours(0, 0, 0, 0);
+
     const [
       totalEmpleados,
-      empleadosActivos,
-      totalAreas,
-      totalPuestos,
+      areasConteo,
+      estatusConteo,
+      altas30,
+      bajas30,
       ultimosEmpleados
     ] = await Promise.all([
-      prisma.empleados.count(),
-      prisma.empleados.count({ where: { ID_Estatus: 1 } }),
-      prisma.cat_Areas.count(),
-      prisma.cat_Puestos.count(),
+      prisma.empleados.count({ where: whereVigente }),
+      prisma.cat_Areas.findMany({
+        select: {
+          Nombre_Area: true,
+          _count: { select: { empleados: { where: whereVigente } } }
+        }
+      }),
+      prisma.cat_Estatus_Empleado.findMany({
+        where: { Nombre_Estatus: { not: 'BAJA' } },
+        select: { Nombre_Estatus: true, _count: { select: { empleados: true } } }
+      }),
+      prisma.empleados.count({ where: { Fecha_Ingreso: { gte: hace30 } } }),
+      prisma.empleados.count({ where: { ...whereBaja, Fecha_Baja: { gte: hace30 } } }),
       prisma.empleados.findMany({
+        where: whereVigente,
         take: 5,
         orderBy: { CreatedAt: 'desc' },
         include: {
@@ -179,15 +196,29 @@ router.get('/', isAuthenticated, async (req, res, next) => {
       })
     ]);
 
+    const porArea = areasConteo
+      .map(a => ({ nombre: a.Nombre_Area, total: a._count.empleados }))
+      .filter(a => a.total > 0)
+      .sort((a, b) => b.total - a.total);
+    const porEstatus = estatusConteo
+      .map(e => ({ nombre: e.Nombre_Estatus, total: e._count.empleados }))
+      .filter(e => e.total > 0);
+    // Los que no están trabajando hoy aunque sigan en plantilla.
+    const enAusencia = porEstatus
+      .filter(e => e.nombre !== 'ACTIVO')
+      .reduce((s, e) => s + e.total, 0);
+
     res.render('home', {
       title: 'Dashboard',
       estadisticas: {
         totalEmpleados,
-        empleadosActivos,
-        empleadosInactivos: totalEmpleados - empleadosActivos,
-        totalAreas,
-        totalPuestos
+        enAusencia,
+        altas30,
+        bajas30,
+        totalAreas: porArea.length
       },
+      porArea,
+      porEstatus,
       ultimosEmpleados
     });
   } catch (error) {
@@ -207,7 +238,7 @@ router.get('/perfil', isAuthenticated, (req, res) => {
 router.use('/', catalogosRoutes);         // /areas, /puestos, /horarios, /nacionalidades
 router.use('/empleados', empleadosRoutes);
 router.use('/usuarios', usuariosRoutes);
-router.use('/', nominaModuleRoutes);       // /nomina, /vacaciones, /aguinaldo, /finiquito, /horas-adicionales
+router.use('/', nominaModuleRoutes);       // /nomina, /vacaciones, /aguinaldo, /finiquito
 router.use('/asistencia', asistenciaRoutes);
 router.use('/encargado', actividadesRoutes);
 router.use('/admin', adminRoutes);

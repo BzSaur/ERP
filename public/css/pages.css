@@ -487,6 +487,15 @@ body.login-page {
   body {
     background: white !important;
   }
+
+  /* Reportes: conservar colores de encabezados y no cortar tablas a la mitad */
+  .card-header, .table-light th, .badge, .progress-bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .card, tr {
+    break-inside: avoid;
+  }
 }
 
 /* ---- Profile avatar ---- */

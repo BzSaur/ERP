@@ -7,6 +7,7 @@ import prisma from '../config/database.js';
 import * as asistenciaService from '../services/asistenciaService.js';
 import * as nominaService from '../services/nominaService.js';
 import { generarExcelHoras } from '../services/excelHorasService.js';
+import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 
 // ============================================================
 // VISTAS (EJS)
@@ -132,7 +133,7 @@ export const reporteEmpleado = async (req, res, next) => {
  */
 export const horasTodos = async (req, res, next) => {
   try {
-    const { fechaInicio, fechaFin, redondear } = req.query;
+    const { fechaInicio, fechaFin } = req.query;
     const semana = nominaService.getSemanaActual();
     // 'YYYY-MM-DD' se parsea con hora local (T00:00:00) para no desplazarse -1 día por UTC.
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
@@ -146,7 +147,6 @@ export const horasTodos = async (req, res, next) => {
       datos,
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: fin.toISOString().split('T')[0],
-      redondear: redondear === '1',
       user: req.user
     });
   } catch (error) {
@@ -160,13 +160,13 @@ export const horasTodos = async (req, res, next) => {
  */
 export const descargarHorasExcel = async (req, res, next) => {
   try {
-    const { fechaInicio, fechaFin, sort, dir, redondear } = req.query;
+    const { fechaInicio, fechaFin, sort, dir } = req.query;
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
-    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, redondear: redondear === '1', filtro });
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, filtro });
 
     const f1 = inicio.toISOString().slice(0, 10);
     const f2 = fin.toISOString().slice(0, 10);
@@ -220,27 +220,32 @@ export const desgloseHoras = async (req, res, next) => {
  */
 export const reporteUbicacion = async (req, res, next) => {
   try {
-    const { planta, fechaInicio, fechaFin } = req.query;
+    const { planta, area, fechaInicio, fechaFin } = req.query;
     const plantaId = planta ? parseInt(planta) : null;
+    const areaId = area ? parseInt(area) : null;
 
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
-    const [reporte, plantasCat] = await Promise.all([
+    const [reporte, plantasCat, areasCat] = await Promise.all([
       asistenciaService.obtenerReportePorUbicacion({
         fechaInicio: inicio,
         fechaFin: fin,
         plantaId,
+        areaId,
         filtro
       }),
       prisma.cat_Plantas.findMany({
         where: { Activo: true },
         orderBy: { ID_Planta: 'asc' },
         select: { ID_Planta: true, Nombre: true }
-      })
+      }),
+      prisma.cat_Areas.findMany({ orderBy: { Nombre_Area: 'asc' }, select: { ID_Area: true, Nombre_Area: true } })
     ]);
+    // Selector de áreas: con filtro de consultor, solo las que tiene asignadas (si restringe por área).
+    const areas = filtro && filtro.areaIds.size > 0 ? areasCat.filter(a => filtro.areaIds.has(a.ID_Area)) : areasCat;
     // Selector de plantas: con filtro, solo las plantas que el consultor puede ver.
     const plantas = filtro
       ? plantasCat.filter(p => filtro.plantaIds.has(p.ID_Planta) || reporte.plantas.some(rp => rp.id === p.ID_Planta))
@@ -250,7 +255,9 @@ export const reporteUbicacion = async (req, res, next) => {
       title: 'Reporte por Ubicación',
       reporte,
       plantas,
+      areas,
       plantaSeleccionada: plantaId,
+      areaSeleccionada: areaId,
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: fin.toISOString().split('T')[0],
       user: req.user
@@ -349,6 +356,28 @@ export const registrarChecadaManual = async (req, res, next) => {
   } catch (error) {
     req.flash('error', error.message);
     res.redirect('/asistencia/checada-manual');
+  }
+};
+
+/**
+ * Captura manual de entrada/salida de un día desde la tabla de horas (ADMIN/RH).
+ * POST /asistencia/checada-manual-dia  { ID_Empleado, fecha, entrada, salida }
+ */
+export const guardarChecadaManualDia = async (req, res) => {
+  try {
+    const { ID_Empleado, fecha, entrada = '', salida = '' } = req.body;
+    await asistenciaService.registrarChecadaManualDia({
+      empleadoId: parseInt(ID_Empleado), fecha, entrada, salida,
+      usuario: req.user?.Email_Office365 || 'Sistema'
+    });
+    await registrarCambio({
+      usuario: req.user, accion: 'UPDATE', tabla: 'Empleados_Asistencia', idRegistro: String(ID_Empleado),
+      descripcion: `Checada manual ${fecha}: entrada ${entrada || '-'} / salida ${salida || '-'}`,
+      datosNuevos: { ID_Empleado, fecha, entrada, salida }, ip: obtenerIP(req)
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
   }
 };
 
@@ -508,7 +537,7 @@ export const apiBonoPuntualidad = async (req, res) => {
  */
 export const apiReportePorUbicacion = async (req, res) => {
   try {
-    const { planta, fechaInicio, fechaFin } = req.query;
+    const { planta, area, fechaInicio, fechaFin } = req.query;
 
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
@@ -519,6 +548,7 @@ export const apiReportePorUbicacion = async (req, res) => {
       fechaInicio: inicio,
       fechaFin: fin,
       plantaId: planta ? parseInt(planta) : null,
+      areaId: area ? parseInt(area) : null,
       filtro
     });
     

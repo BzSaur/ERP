@@ -43,3 +43,4 @@ empleados-ejemplo.csv
 
 # Respaldos locales de BD (contienen datos reales, nunca al repo)
 backups/
+graphify-out/

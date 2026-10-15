@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -274,7 +274,25 @@ async function resolverEmpleado(pin, cache) {
  * - Multi_Planta = entrada y salida en plantas distintas
  * - horas con la lógica existente (calcularHorasDia)
  */
-async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, empleado) {
+// Checadas MANUALES (capturadas por RH/encargado) sustituyen a las del reloj:
+// una ENTRADA manual reemplaza la primera del reloj, una SALIDA manual la última.
+// Las intermedias del reloj se conservan. Si hay varias manuales del mismo tipo
+// gana la más reciente (mayor ID_Checada).
+function aplicarManuales(deviceDedup, manuales) {
+  const ultimo = (tipo) => manuales
+    .filter(c => c.Tipo_Checada === tipo)
+    .sort((a, b) => b.ID_Checada - a.ID_Checada)[0];
+  const mEnt = ultimo('ENTRADA');
+  const mSal = ultimo('SALIDA');
+  const mid = [...deviceDedup];
+  if (mEnt && mid.length) mid.shift();
+  if (mSal && mid.length && (mEnt || mid.length >= 2)) mid.pop();
+  return [mEnt, ...mid, mSal]
+    .filter(Boolean)
+    .sort((a, b) => a.Fecha_Hora - b.Fecha_Hora);
+}
+
+export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, empleado) {
   const finDia = new Date(fechaDia);
   finDia.setHours(23, 59, 59, 999);
 
@@ -289,7 +307,7 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
 
   if (checadas.length === 0) return;
 
-  const { toleranciaMin, aplicaCobertura } = reglaToleranciaPorFecha(fechaDia);
+  const { toleranciaMin, aplicaCobertura, restrictivo } = reglaToleranciaPorFecha(fechaDia);
   let coberturaEspecial = false;
   if (aplicaCobertura) {
     const empInfo = await tx.empleados.findUnique({
@@ -299,14 +317,19 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
     coberturaEspecial = esAreaCoberturaEspecial({ area: empInfo?.area?.Nombre_Area, puesto: empInfo?.puesto?.Nombre_Puesto });
   }
 
-  // Colapsar dobles checadas (<1h, conserva la primera) ANTES de elegir
+  // Colapsar dobles checadas (<20 min, conserva la primera) ANTES de elegir
   // entrada/salida y calcular horas. Evita que un doble marcaje (ej. 07:35 y
-  // 07:36) quede como entrada+salida de 1 min.
-  const enriquecidas = checadas.map(c => ({
+  // 07:36) quede como entrada+salida de 1 min. Solo aplica a las del reloj:
+  // las manuales no se deduplican.
+  const delReloj = checadas.filter(c => c.Origen_Sincronizacion !== 'MANUAL');
+  const manuales = checadas.filter(c => c.Origen_Sincronizacion === 'MANUAL');
+  const enriquecidas = delReloj.map(c => ({
     totalMinutos: c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes(),
     c
   }));
-  const conservadas = dedupChecadas(enriquecidas, 60).map(x => x.c);
+  const relojDedup = dedupChecadas(enriquecidas, VENTANA_DEDUP_MIN).map(x => x.c);
+  const conservadas = manuales.length ? aplicarManuales(relojDedup, manuales) : relojDedup;
+  if (conservadas.length === 0) return;
 
   const primera = conservadas[0];
   const ultima = conservadas[conservadas.length - 1];
@@ -321,7 +344,7 @@ async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, emplead
   const esSabado = fechaDia.getDay() === 6;
   // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
   // ventanaDedupMin 0 porque ya deduplicamos arriba.
-  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin });
+  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo });
 
   // Ubicaciones (String legacy) y plantas
   const ubicEntrada = primera.checador?.Ubicacion_Codigo || primera.checador?.planta?.Nombre || primera.Ubicacion;

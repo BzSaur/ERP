@@ -79,7 +79,7 @@ export async function enviarReporteAsistenciaSemanal(fecha = new Date()) {
     throw new Error('No hay destinatarios: configura REPORTES_ASISTENCIA_EMAILS o usuarios activos con rol RH, ADMIN o SUPERADMIN');
   }
 
-  const buffer = await generarExcelHoras(inicio, fin, { redondear: false, excluirDomingos: true });
+  const buffer = await generarExcelHoras(inicio, fin, { excluirDomingos: true });
   const f1 = inicio.toISOString().slice(0, 10);
   const f2 = fin.toISOString().slice(0, 10);
 

@@ -13,55 +13,94 @@
 </div>
 
 <!-- Dashboard Stats -->
+<%
+  // Cada tarjeta lleva a su vista; CONSULTA no tiene acceso a esos módulos, ahí queda sin enlace.
+  const puedeNavegar = hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador');
+  const abrirTarjeta = (href) => puedeNavegar ? `<a href="${href}" class="text-decoration-none d-block h-100">` : '<div class="h-100">';
+  const cerrarTarjeta = puedeNavegar ? '</a>' : '</div>';
+%>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3">
+    <%- abrirTarjeta('/empleados') %>
     <div class="card stat-card bg-primary h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
-          <div class="stat-label">Total Empleados</div>
+          <div class="stat-label">Empleados vigentes</div>
           <div class="stat-value"><%= estadisticas.totalEmpleados %></div>
         </div>
         <i class="bi bi-people-fill stat-icon"></i>
       </div>
     </div>
+    <%- cerrarTarjeta %>
   </div>
 
   <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-success h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Activos</div>
-          <div class="stat-value"><%= estadisticas.empleadosActivos %></div>
-        </div>
-        <i class="bi bi-person-check-fill stat-icon"></i>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-6 col-lg-3">
-    <div class="card stat-card bg-info h-100">
-      <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-          <div class="stat-label">Áreas</div>
-          <div class="stat-value"><%= estadisticas.totalAreas %></div>
-        </div>
-        <i class="bi bi-diagram-3-fill stat-icon"></i>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-6 col-lg-3">
+    <%- abrirTarjeta('/reportes/por-estatus') %>
     <div class="card stat-card bg-warning h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
-          <div class="stat-label">Puestos</div>
-          <div class="stat-value"><%= estadisticas.totalPuestos %></div>
+          <div class="stat-label">Vacaciones / incapacidad / susp.</div>
+          <div class="stat-value"><%= estadisticas.enAusencia %></div>
         </div>
-        <i class="bi bi-briefcase-fill stat-icon"></i>
+        <i class="bi bi-person-dash-fill stat-icon"></i>
       </div>
     </div>
+    <%- cerrarTarjeta %>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <%- abrirTarjeta('/reportes/altas-bajas') %>
+    <div class="card stat-card bg-success h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Altas (últimos 30 días)</div>
+          <div class="stat-value"><%= estadisticas.altas30 %></div>
+        </div>
+        <i class="bi bi-person-plus-fill stat-icon"></i>
+      </div>
+    </div>
+    <%- cerrarTarjeta %>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <%- abrirTarjeta('/empleados?vista=inactivos') %>
+    <div class="card stat-card bg-danger h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="stat-label">Bajas (últimos 30 días)</div>
+          <div class="stat-value"><%= estadisticas.bajas30 %></div>
+        </div>
+        <i class="bi bi-person-x-fill stat-icon"></i>
+      </div>
+    </div>
+    <%- cerrarTarjeta %>
   </div>
 </div>
+
+<% if (hasRole('ADMIN', 'Administrador', 'RH', 'Recursos Humanos', 'RECURSOS_HUMANOS', 'SuperAdministrador')) { %>
+<!-- Plantilla por área (solo vigentes) -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">Plantilla vigente por área</h5>
+  </div>
+  <div class="card-body">
+    <% if (porArea && porArea.length) { %>
+      <% const maxArea = porArea[0].total; %>
+      <% porArea.forEach(function(a) { %>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="small" style="width:160px; flex:none"><%= a.nombre %></div>
+          <div class="progress flex-grow-1" style="height:14px">
+            <div class="progress-bar" style="width: <%= Math.round(a.total / maxArea * 100) %>%"></div>
+          </div>
+          <div class="fw-semibold small text-end" style="width:36px"><%= a.total %></div>
+        </div>
+      <% }); %>
+    <% } else { %>
+      <span class="text-body-secondary">Sin empleados vigentes</span>
+    <% } %>
+  </div>
+</div>
+<% } %>
 
 <!-- Quick Actions & Recent Employees -->
 <div class="row g-3">
@@ -78,9 +117,6 @@
       <div class="card-body d-grid gap-2">
         <a href="/empleados/crear" class="btn btn-outline-primary">
           <i class="bi bi-person-plus"></i> Nuevo Empleado
-        </a>
-        <a href="/horas-adicionales/crear" class="btn btn-outline-info">
-          <i class="bi bi-clock-history"></i> Registrar Horas
         </a>
         <a href="/areas/crear" class="btn btn-outline-success">
           <i class="bi bi-folder-plus"></i> Nueva Área

@@ -41,10 +41,11 @@ async function main() {
   // ============================================================
   await prisma.cat_Tipo_Horario.createMany({
     data: [
-      { Nombre_Horario: 'COMPLETO', Descripcion: 'Tiempo completo', Horas_Semana: 40 },
-      { Nombre_Horario: 'MEDIO_TIEMPO', Descripcion: 'Medio tiempo', Horas_Semana: 20 },
-      { Nombre_Horario: 'HORAS', Descripcion: 'Por horas', Horas_Semana: null },
-      { Nombre_Horario: 'MIXTO', Descripcion: 'Horario mixto', Horas_Semana: 48 }
+      // Jornada homogénea: todos 45 h/semana (5 x 9)
+      { Nombre_Horario: 'COMPLETO', Descripcion: 'Tiempo completo', Horas_Semana: 45, Dias_Semana: 5, Horas_Jornada: 9 },
+      { Nombre_Horario: 'MEDIO_TIEMPO', Descripcion: 'Medio tiempo', Horas_Semana: 45, Dias_Semana: 5, Horas_Jornada: 9 },
+      { Nombre_Horario: 'HORAS', Descripcion: 'Por horas', Horas_Semana: 45, Dias_Semana: 5, Horas_Jornada: 9 },
+      { Nombre_Horario: 'MIXTO', Descripcion: 'Horario mixto', Horas_Semana: 45, Dias_Semana: 5, Horas_Jornada: 9 }
     ],
     skipDuplicates: true
   });

@@ -46,7 +46,7 @@ export const horasEquipo = async (req, res, next) => {
     const esDelegante = esSuperAdminDelegante(req.user);
     let miId = resolverEncargadoEfectivo(req);
 
-    const { fechaInicio, fechaFin, redondear } = req.query;
+    const { fechaInicio, fechaFin } = req.query;
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
@@ -64,7 +64,6 @@ export const horasEquipo = async (req, res, next) => {
             datos: DATOS_VACIOS(inicio, fin),
             fechaInicio: inicio.toISOString().split('T')[0],
             fechaFin: fin.toISOString().split('T')[0],
-            redondear: redondear === '1',
             excelUrl: '/encargado/asistencia/excel',
             panelEditable: false,
             esSupervisorParaDelegar: true,
@@ -91,7 +90,6 @@ export const horasEquipo = async (req, res, next) => {
       datos,
       fechaInicio: inicio.toISOString().split('T')[0],
       fechaFin: fin.toISOString().split('T')[0],
-      redondear: redondear === '1',
       excelUrl: '/encargado/asistencia/excel',
       // Habilita el panel lateral de edición al hacer clic en una celda.
       panelEditable: true,
@@ -115,7 +113,7 @@ export const horasEquipoExcel = async (req, res, next) => {
       return res.redirect('/encargado/asistencia');
     }
 
-    const { fechaInicio, fechaFin, sort, dir, redondear } = req.query;
+    const { fechaInicio, fechaFin, sort, dir } = req.query;
     const semana = nominaService.getSemanaActual();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
@@ -124,7 +122,7 @@ export const horasEquipoExcel = async (req, res, next) => {
     const idsPermitidos = equipo.map(e => e.ID_Empleado);
 
     const buffer = await generarExcelHoras(inicio, fin, {
-      sort, dir, redondear: redondear === '1',
+      sort, dir,
       filtro: { idsPermitidos: idsPermitidos.length ? idsPermitidos : [-1] }
     });
 
@@ -217,4 +215,31 @@ export const detalleDia = async (req, res, next) => {
   }
 };
 
-export default { horasEquipo, horasEquipoExcel, detalleDia };
+// POST /encargado/asistencia/checada-manual  { ID_Empleado, fecha, entrada, salida }
+// Misma captura manual que RH, pero solo para empleados del equipo vigente del encargado.
+export const guardarChecadaManual = async (req, res) => {
+  try {
+    const miId = resolverEncargadoEfectivo({ ...req, query: { ...req.query, ...req.body } });
+    if (!miId) return res.status(400).json({ ok: false, error: 'Selecciona un encargado responsable' });
+
+    const idEmpleado = parseInt(req.body.ID_Empleado);
+    const fechaStr = (req.body.fecha || '').trim();
+    if (!Number.isInteger(idEmpleado) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
+      return res.status(400).json({ ok: false, error: 'Empleado o fecha inválidos' });
+    }
+    if (!(await empleadoEnEquipoDeEncargado(idEmpleado, miId, new Date(`${fechaStr}T00:00:00`)))) {
+      return res.status(403).json({ ok: false, error: 'Ese empleado no pertenece a tu equipo vigente esa fecha' });
+    }
+
+    await asistenciaService.registrarChecadaManualDia({
+      empleadoId: idEmpleado, fecha: fechaStr,
+      entrada: req.body.entrada || '', salida: req.body.salida || '',
+      usuario: req.user?.Email_Office365 || 'Sistema'
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+};
+
+export default { horasEquipo, horasEquipoExcel, detalleDia, guardarChecadaManual };

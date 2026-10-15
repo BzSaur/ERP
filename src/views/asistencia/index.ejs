@@ -27,11 +27,11 @@
                 <div class="d-flex gap-2 align-items-center">
                     <a href="/encargado" class="btn btn-sm btn-outline-primary">Ver todas</a>
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaActividadesHoy">
-                        Ver / ocultar
+                        Ver / ocultar detalle
                     </button>
                 </div>
             </div>
-            <div class="collapse show" id="listaActividadesHoy">
+            <div class="collapse" id="listaActividadesHoy">
                 <div class="list-group list-group-flush">
                     <% actividadesHoy.forEach(function(act) { %>
                         <div class="list-group-item">
@@ -58,7 +58,7 @@
         <!-- Tarjetas de resumen -->
         <div class="row mb-4">
             <div class="col-md-3 col-sm-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
+                <a href="/asistencia/dia" class="text-decoration-none text-reset d-block h-100"></a><div class="card border-0 shadow-sm h-100 hover-shadow">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
@@ -82,7 +82,7 @@
 
             <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
             <div class="col-md-3 col-sm-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
+                <a href="/asistencia/dia" class="text-decoration-none text-reset d-block h-100"></a><div class="card border-0 shadow-sm h-100 hover-shadow">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
@@ -104,7 +104,7 @@
             <% } %>
 
             <div class="col-md-3 col-sm-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
+                <a href="/asistencia/horas" class="text-decoration-none text-reset d-block h-100"></a><div class="card border-0 shadow-sm h-100 hover-shadow">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>

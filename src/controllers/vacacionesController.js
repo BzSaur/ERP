@@ -3,18 +3,18 @@
  * Cálculo de días de vacaciones según LFT México
  *
  * PROPORCIONALIDAD POR JORNADA:
- * El derecho a vacaciones es proporcional a la jornada.
- * Si la jornada completa es 48h/semana y el empleado trabaja 24h/semana,
- * le corresponde el 50% de los días de vacaciones.
+ * Quien trabaja jornada completa (HORAS_JORNADA_COMPLETA = 45 h/semana) recibe
+ * los días de la LFT. Quien no es de tiempo completo recibe la mitad
+ * (criterio de la empresa), sin importar cuántas horas tenga contratadas.
  *
- * Factor de jornada = Horas_Semanales_Contratadas / HORAS_JORNADA_COMPLETA
- * Días proporcionales = Días_LFT × Factor_Jornada
+ * Días proporcionales = Días_LFT × factorJornada (1 o 0.5)
  */
 
 import prisma from '../config/database.js';
 import { getConfig } from '../services/nominaService.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { esFestivo } from '../services/diasFestivosService.js';
+import { JORNADA } from '../config/jornada.js';
 
 // Tabla de días de vacaciones según LFT México 2024
 const DIAS_VACACIONES_LFT = {
@@ -47,16 +47,14 @@ function calcularDiasVacaciones(anosAntiguedad) {
  * Calcula el factor de jornada para proporcionalidad
  * Factor = horas contratadas / horas jornada completa
  */
+export function factorJornada(horasContratadas, horasJornadaCompleta) {
+  const contratadas = horasContratadas || horasJornadaCompleta; // sin dato = tiempo completo
+  return contratadas >= horasJornadaCompleta ? 1 : 0.5;
+}
+
 async function calcularFactorJornada(empleado) {
-  const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', 48);
-  const horasContratadas = empleado.Horas_Semanales_Contratadas || horasJornadaCompleta;
-
-  // Si trabaja jornada completa o más, factor = 1
-  if (horasContratadas >= horasJornadaCompleta) {
-    return 1;
-  }
-
-  return horasContratadas / horasJornadaCompleta;
+  const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', JORNADA.HORAS_SEMANA);
+  return factorJornada(empleado.Horas_Semanales_Contratadas, horasJornadaCompleta);
 }
 
 // Días hábiles (L-V) entre dos fechas @db.Date, ambas inclusive. Sábado,
@@ -87,9 +85,7 @@ function construirFilaEmpleado(emp, hoy, horasJornadaCompleta) {
   const meses = Math.floor((diferenciaMs % MS_ANIO) / (30.44 * 24 * 60 * 60 * 1000));
 
   const diasBase = calcularDiasVacaciones(anos);
-  const horasContratadas = emp.Horas_Semanales_Contratadas || horasJornadaCompleta;
-  const factorJornada = horasContratadas >= horasJornadaCompleta ? 1 : horasContratadas / horasJornadaCompleta;
-  const diasProporcionales = Math.round(diasBase * factorJornada);
+  const diasProporcionales = Math.round(diasBase * factorJornada(emp.Horas_Semanales_Contratadas, horasJornadaCompleta));
 
   const vacacion = emp.vacaciones[0] || null;
   // Los cancelados se listan tachados para dejar rastro de la corrección.
@@ -121,7 +117,7 @@ export const index = async (req, res) => {
     const soloElegibles = req.query.buscar ? req.query.soloElegibles === '1' : true;
 
     const anioActual = new Date().getFullYear();
-    const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', 48);
+    const horasJornadaCompleta = await getConfig('HORAS_JORNADA_COMPLETA', JORNADA.HORAS_SEMANA);
 
     const where = { ID_Estatus: 1 };
     if (q?.trim()) {

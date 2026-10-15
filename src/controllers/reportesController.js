@@ -1,5 +1,6 @@
 import prisma from '../config/database.js';
 import { getFiltroVisibilidad } from '../services/asistenciaService.js';
+import { whereVigente } from '../utils/empleados.js';
 
 // ============================================================
 // CONTROLADOR DE REPORTES
@@ -41,28 +42,16 @@ async function areasVisiblesParaUsuario(user) {
 // GET /reportes - Dashboard de reportes
 export const index = async (req, res, next) => {
   try {
-    // Estadísticas generales
-    const [
-      totalEmpleados,
-      empleadosActivos,
-      totalAreas,
-      totalPuestos
-    ] = await Promise.all([
-      prisma.empleados.count(),
-      prisma.empleados.count({ where: { ID_Estatus: 1 } }),
+    // Solo empleados vigentes (todo menos BAJA)
+    const [totalEmpleados, totalAreas, totalPuestos] = await Promise.all([
+      prisma.empleados.count({ where: whereVigente }),
       prisma.cat_Areas.count(),
       prisma.cat_Puestos.count()
     ]);
 
     res.render('reportes/index', {
       title: 'Reportes',
-      estadisticas: {
-        totalEmpleados,
-        empleadosActivos,
-        empleadosInactivos: totalEmpleados - empleadosActivos,
-        totalAreas,
-        totalPuestos
-      }
+      estadisticas: { totalEmpleados, totalAreas, totalPuestos }
     });
   } catch (error) {
     next(error);
@@ -76,13 +65,11 @@ export const porArea = async (req, res, next) => {
     let areas = await prisma.cat_Areas.findMany({
       include: {
         empleados: {
+          where: whereVigente,
           include: {
             puesto: true,
             estatus: true
           }
-        },
-        _count: {
-          select: { empleados: true }
         }
       },
       orderBy: { Nombre_Area: 'asc' }
@@ -93,9 +80,9 @@ export const porArea = async (req, res, next) => {
     // Calcular totales por área
     const reporteAreas = areas.map(area => ({
       ...area,
-      totalEmpleados: area._count.empleados,
-      empleadosActivos: area.empleados.filter(e => e.ID_Estatus === 1).length,
-      empleadosInactivos: area.empleados.filter(e => e.ID_Estatus !== 1).length
+      totalEmpleados: area.empleados.length,
+      // Vigentes que hoy no están trabajando (vacaciones, incapacidad, suspensión)
+      empleadosEnAusencia: area.empleados.filter(e => e.estatus?.Nombre_Estatus !== 'ACTIVO').length
     }));
 
     res.render('reportes/por-area', {
@@ -113,14 +100,11 @@ export const porHorario = async (req, res, next) => {
     const tiposHorario = await prisma.cat_Tipo_Horario.findMany({
       include: {
         empleados: {
-          where: { ID_Estatus: 1 },
+          where: whereVigente,
           include: {
             area: true,
             puesto: true
           }
-        },
-        _count: {
-          select: { empleados: true }
         }
       },
       orderBy: { Nombre_Horario: 'asc' }
@@ -139,6 +123,7 @@ export const porHorario = async (req, res, next) => {
 export const porEstatus = async (req, res, next) => {
   try {
     const estatuses = await prisma.cat_Estatus_Empleado.findMany({
+      where: { Nombre_Estatus: { not: 'BAJA' } },
       include: {
         empleados: {
           include: {
@@ -165,44 +150,57 @@ export const porEstatus = async (req, res, next) => {
 // GET /reportes/altas-bajas - Reporte de altas y bajas
 export const altasBajas = async (req, res, next) => {
   try {
-    const { year = new Date().getFullYear() } = req.query;
-    const yearInt = parseInt(year);
+    const anioActual = new Date().getFullYear();
+    const yearInt = parseInt(req.query.year, 10) || anioActual;
+    const inicio = new Date(`${yearInt}-01-01T00:00:00Z`);
+    const fin = new Date(`${yearInt + 1}-01-01T00:00:00Z`); // exclusivo
+    const rango = { gte: inicio, lt: fin };
 
-    // Empleados que ingresaron este año
-    const altas = await prisma.empleados.findMany({
-      where: {
-        Fecha_Ingreso: {
-          gte: new Date(`${yearInt}-01-01`),
-          lte: new Date(`${yearInt}-12-31`)
+    const [altas, bajas, primero, plantillaInicio] = await Promise.all([
+      prisma.empleados.findMany({
+        where: { Fecha_Ingreso: rango },
+        include: { area: true, puesto: true },
+        orderBy: { Fecha_Ingreso: 'desc' }
+      }),
+      prisma.empleados.findMany({
+        where: { Fecha_Baja: rango },
+        include: { area: true, puesto: true },
+        orderBy: { Fecha_Baja: 'desc' }
+      }),
+      prisma.empleados.aggregate({ _min: { Fecha_Ingreso: true } }),
+      // Plantilla al 1-ene: ingresó antes y (sigue vigente o se fue después)
+      prisma.empleados.count({
+        where: {
+          Fecha_Ingreso: { lt: inicio },
+          OR: [whereVigente, { Fecha_Baja: { gte: inicio } }]
         }
-      },
-      include: {
-        area: true,
-        puesto: true
-      },
-      orderBy: { Fecha_Ingreso: 'desc' }
-    });
+      })
+    ]);
 
-    // Empleados que fueron dados de baja este año
-    const bajas = await prisma.empleados.findMany({
-      where: {
-        Fecha_Baja: {
-          gte: new Date(`${yearInt}-01-01`),
-          lte: new Date(`${yearInt}-12-31`)
-        }
-      },
-      include: {
-        area: true,
-        puesto: true
-      },
-      orderBy: { Fecha_Baja: 'desc' }
-    });
+    // Años disponibles: del primer ingreso al año actual (mínimo el año consultado)
+    const anioMin = Math.min(primero._min.Fecha_Ingreso?.getUTCFullYear() ?? anioActual, yearInt);
+    const years = [];
+    for (let y = Math.max(anioActual, yearInt); y >= anioMin; y--) years.push(y);
+
+    // Movimiento por mes
+    const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i, altas: 0, bajas: 0 }));
+    altas.forEach(e => { meses[new Date(e.Fecha_Ingreso).getUTCMonth()].altas++; });
+    bajas.forEach(e => { meses[new Date(e.Fecha_Baja).getUTCMonth()].bajas++; });
+
+    const plantillaFin = plantillaInicio + altas.length - bajas.length;
+    const promedio = (plantillaInicio + plantillaFin) / 2;
+    const rotacion = promedio > 0 ? Math.round((bajas.length / promedio) * 1000) / 10 : 0;
 
     res.render('reportes/altas-bajas', {
       title: 'Reporte de Altas y Bajas',
       year: yearInt,
+      years,
       altas,
-      bajas
+      bajas,
+      meses,
+      plantillaInicio,
+      plantillaFin,
+      rotacion
     });
   } catch (error) {
     next(error);

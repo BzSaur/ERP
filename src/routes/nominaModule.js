@@ -1,6 +1,6 @@
 /**
  * Módulo de Nómina y Prestaciones
- * Agrupa: Nómina, Vacaciones, Aguinaldo, Finiquito, Horas Adicionales
+ * Agrupa: Nómina, Vacaciones, Aguinaldo, Finiquito
  */
 
 import { Router } from 'express';
@@ -12,7 +12,6 @@ import * as vacacionesController from '../controllers/vacacionesController.js';
 import * as incidenciasController from '../controllers/incidenciasController.js';
 import * as aguinaldoController from '../controllers/aguinaldoController.js';
 import * as finiquitoController from '../controllers/finiquitoController.js';
-import * as horasAdicionalesController from '../controllers/horasAdicionalesController.js';
 
 const router = Router();
 
@@ -21,7 +20,7 @@ const router = Router();
 // gate de rol se limita a los prefijos de este módulo. Un router.use(isAdminOrRH)
 // sin path interceptaría TODO request (incluido /asistencia) y rompería CONSULTA.
 router.use(isAuthenticated);
-router.use(['/nomina', '/vacaciones', '/incidencias', '/aguinaldo', '/finiquito', '/horas-adicionales'], isAdminOrRH);
+router.use(['/nomina', '/vacaciones', '/incidencias', '/aguinaldo', '/finiquito'], isAdminOrRH);
 
 // ============================================================
 // PERÍODOS Y NÓMINA
@@ -141,30 +140,5 @@ router.post('/finiquito/:id/pagar', finiquitoController.pagar);
 
 // Eliminar
 router.delete('/finiquito/:id', finiquitoController.eliminar);
-
-// ============================================================
-// HORAS ADICIONALES
-// ============================================================
-
-// Listar horas adicionales
-router.get('/horas-adicionales', horasAdicionalesController.index);
-
-// Formulario crear
-router.get('/horas-adicionales/crear', horasAdicionalesController.crear);
-
-// Guardar nuevas horas
-router.post('/horas-adicionales', horasAdicionalesController.store);
-
-// Formulario editar
-router.get('/horas-adicionales/:id/editar', horasAdicionalesController.editar);
-
-// Actualizar horas
-router.put('/horas-adicionales/:id', horasAdicionalesController.update);
-
-// Aprobar horas
-router.post('/horas-adicionales/:id/aprobar', horasAdicionalesController.aprobar);
-
-// Eliminar horas
-router.delete('/horas-adicionales/:id', horasAdicionalesController.eliminar);
 
 export default router;

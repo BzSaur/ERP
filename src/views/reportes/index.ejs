@@ -7,11 +7,11 @@
 <!-- Estadísticas Generales -->
 <div class="row g-4 mb-4">
   <div class="col-sm-6 col-xl-3">
-    <div class="card stat-card bg-primary">
+    <a href="/empleados" class="text-decoration-none d-block h-100"><div class="card stat-card bg-primary">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <h6 class="stat-label">Total Empleados</h6>
+            <h6 class="stat-label">Empleados vigentes</h6>
             <h2 class="stat-value"><%= estadisticas.totalEmpleados %></h2>
           </div>
           <div class="stat-icon">
@@ -19,43 +19,11 @@
           </div>
         </div>
       </div>
-    </div>
+    </div></a>
   </div>
   
   <div class="col-sm-6 col-xl-3">
-    <div class="card stat-card bg-success">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <h6 class="stat-label">Activos</h6>
-            <h2 class="stat-value"><%= estadisticas.empleadosActivos %></h2>
-          </div>
-          <div class="stat-icon">
-            <i class="bi bi-person-check-fill"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="col-sm-6 col-xl-3">
-    <div class="card stat-card bg-danger">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <h6 class="stat-label">Inactivos</h6>
-            <h2 class="stat-value"><%= estadisticas.empleadosInactivos %></h2>
-          </div>
-          <div class="stat-icon">
-            <i class="bi bi-person-x-fill"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="col-sm-6 col-xl-3">
-    <div class="card stat-card bg-info">
+    <a href="/areas" class="text-decoration-none d-block h-100"><div class="card stat-card bg-info">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
@@ -67,7 +35,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </div></a>
   </div>
 </div>
 

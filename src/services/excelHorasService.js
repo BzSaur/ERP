@@ -12,30 +12,12 @@
 
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
-import { esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso } from './asistenciaService.js';
+import { reglaToleranciaPorFecha } from './checadorImportService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaPagoDesde, salidaPagoDesde } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
 const HORAS_FIJAS_ACTIVIDAD = 9;
-
-/**
- * Entrada a MOSTRAR (Date). El redondeo a HH:00 NO se aplica aquí (lo hace, aparte, el
- * selector "Redondear horas"). Misma lógica que asistenciaService.entradaPagoDesde.
- */
-function entradaPagoDesdeXls(horaEntradaReal, empleado) {
-  if (!horaEntradaReal) return null;
-  const d = new Date(horaEntradaReal);
-  const { aplicaCobertura } = reglaToleranciaPorFecha(d);
-  if (!aplicaCobertura) return d;
-  const cobertura = esAreaCoberturaEspecial({ area: empleado?.area?.Nombre_Area, puesto: empleado?.puesto?.Nombre_Puesto });
-  if (!cobertura) return d;
-  const realMin = d.getHours() * 60 + d.getMinutes();
-  const showMin = entradaCobertura(realMin).mostrarMin;
-  const out = new Date(d);
-  out.setHours(Math.floor(showMin / 60), showMin % 60, 0, 0);
-  return out;
-}
 
 const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -62,46 +44,18 @@ function rangoDias(inicio, fin, excluirDomingos = false) {
   return dias;
 }
 
+// Límite semanal fijo de horas normales; el excedente es extra.
+const LIMITE_SEMANAL_HORAS = 45;
 /**
  * Genera el buffer XLSX de la matriz de horas.
+ * Las horas ya vienen redondeadas con la regla vigente (Horas_Trabajadas); entrada y
+ * salida se muestran con el mismo redondeo que se paga (entradaPagoDesde/salidaPagoDesde).
  * @param {Date} fechaInicio
  * @param {Date} fechaFin
  * @returns {Buffer}
  */
-/**
- * Redondeo a la hora MAS CERCANA (>=30 min sube, <30 baja), igual en entrada y
- * salida. Debe coincidir con `aLaHoraMasCercana` de horas-todos.ejs: si el
- * Excel redondeara distinto, no cuadraria con la tabla que RH acaba de ver.
- *
- * Las reglas anteriores (entrada subia desde el minuto 16, salida bajaba hasta
- * el 55) sesgaban el resultado siempre en la misma direccion y restaban 5.68 h
- * sobre 10 jornadas reales.
- */
-function redondearHoraExcel(hhmm) {
-  if (!hhmm) return hhmm;
-  const [h, m] = hhmm.split(':').map(Number);
-  return String(m >= 30 ? h + 1 : h).padStart(2, '0') + ':00';
-}
-const redondearEntradaExcel = redondearHoraExcel;
-const redondearSalidaExcel = redondearHoraExcel;
-
-// Límite semanal fijo de horas normales; el excedente es extra.
-const LIMITE_SEMANAL_HORAS = 45;
-function horasEntreRedondeadas(ent, sal) {
-  const [he, me] = ent.split(':').map(Number);
-  const [hs, ms] = sal.split(':').map(Number);
-  const COMIDA_INI = 14 * 60, COMIDA_FIN = 15 * 60;
-  const entMin = he * 60 + me, salMin = hs * 60 + ms;
-  if (salMin <= entMin) return 0;
-  let netos = salMin - entMin;
-  if (entMin < COMIDA_FIN && salMin > COMIDA_INI) {
-    netos -= Math.min(salMin, COMIDA_FIN) - Math.max(entMin, COMIDA_INI);
-  }
-  return Math.round(Math.max(0, netos) / 60 * 100) / 100;
-}
-
 export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
-  const { sort = null, dir = 'asc', redondear = false, filtro = null, excluirDomingos = false } = opciones;
+  const { sort = null, dir = 'asc', filtro = null, excluirDomingos = false } = opciones;
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
   const dias = rangoDias(inicio, fin, excluirDomingos);
@@ -270,24 +224,15 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const ultCheca = a.historial_checadas[a.historial_checadas.length - 1];
       const plantaSal = a.Ubicacion_Salida || ultCheca?.checador?.planta?.Nombre || '';
 
-      const entradaPago = entradaPagoDesdeXls(a.Hora_Entrada, e);
+      // Entrada/salida con el redondeo vigente (el mismo con que se pagan las horas).
+      const entradaPago = entradaPagoDesde(a.Hora_Entrada, e);
+      const salidaPago = salidaPagoDesde(a.Hora_Salida);
       const entRaw = entradaPago ? fmtHora(entradaPago) : null;
-      const salRaw = a.Hora_Salida ? fmtHora(a.Hora_Salida) : null;
+      const salRaw = salidaPago ? fmtHora(salidaPago) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
-      let salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
+      const salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
       // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
       let horas = Number(a.Horas_Trabajadas) || 0;
-
-      if (redondear && entRaw && salRaw) {
-        const entR = redondearEntradaExcel(entRaw);
-        const salR = redondearSalidaExcel(salRaw);
-        entMostrar = `${entR}${plantaEnt ? ' (' + plantaEnt + ')' : ''}`;
-        salMostrar = `${salR}${plantaSal ? ' (' + plantaSal + ')' : ''}`;
-        const hr = horasEntreRedondeadas(entR, salR);
-        // Jornada tan corta que el redondeo la colapsa: se conservan las horas
-        // reales en vez de escribir 0 (mismo criterio que la vista HTML).
-        horas = hr > 0 ? hr : horas;
-      }
 
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la
       // actividad (capturado, o 8am→primera entrada) y las horas reales —
@@ -306,7 +251,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         ? actividadRawChecada
         : null;
       if (actividadConChecada) {
-        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida);
+        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida, false,
+          reglaToleranciaPorFecha(d).restrictivo);
 
         // El reporte también justifica el trabajo delegado: la actividad se
         // anota junto a la checada, no solo sus horas. Antes se perdía.

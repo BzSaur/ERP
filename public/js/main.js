@@ -100,6 +100,16 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ============================================================
+  // HANDLERS GENERICOS (la CSP bloquea onclick/onchange inline)
+  // ============================================================
+  document.querySelectorAll('[data-print]').forEach(function(el) {
+    el.addEventListener('click', function() { window.print(); });
+  });
+  document.querySelectorAll('[data-autosubmit]').forEach(function(el) {
+    el.addEventListener('change', function() { if (el.form) el.form.submit(); });
+  });
+
+  // ============================================================
   // AUTO-HIDE ALERTS
   // ============================================================
   document.querySelectorAll('.alert-dismissible').forEach(function(alert) {
