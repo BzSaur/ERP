@@ -1476,7 +1476,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
       const tieneChecada = !!(c.entrada || c.salida);
-      const requiereRevision = c.presente && !c.enCurso && tieneChecada && c.horas < UMBRAL_REVISION_HORAS;
+      const requiereRevision = c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS;
       if (requiereRevision) {
         revisiones.push({
           fecha: key,

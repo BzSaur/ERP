@@ -576,10 +576,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
         const entR = td.dataset.entReal, salR = td.dataset.salReal;
         if (td.dataset.presente !== '1' || !celEs) { totalFila += horasPago; return; }
         let ent = td.dataset.ent, sal = td.dataset.sal, horas = horasPago;
-        if (!redondeado && entR && salR) {
-          ent = entR; sal = salR;
-          const m = minutosEntre(entR, salR);
-          if (m > 0) horas = m / 60;
+        if (!redondeado) {
+          // Entrada/salida reales aunque falte la otra; las horas solo con el par completo.
+          if (entR) ent = entR;
+          if (salR) sal = salR;
+          if (entR && salR) {
+            const m = minutosEntre(entR, salR);
+            if (m > 0) horas = m / 60;
+          }
         }
         celEs.querySelector('.ent').textContent = ent || '--:--';
         celEs.querySelector('.sal').textContent = sal || '--:--';

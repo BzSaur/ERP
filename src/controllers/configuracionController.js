@@ -5,6 +5,7 @@
 import prisma from '../config/database.js';
 import { getAllConfig, updateConfig, getConfig } from '../services/nominaService.js';
 import { simularChecada } from '../services/admsService.js';
+import { whereVigente } from '../utils/empleados.js';
 import { reprogramarCronReporteAsistencia, enviarReporteAsistenciaSemanal } from '../services/reporteAsistenciaCronService.js';
 
 // Panel de configuración
@@ -12,7 +13,7 @@ export const index = async (req, res) => {
   try {
     // Obtener estadísticas generales
     const stats = {
-      totalEmpleados: await prisma.empleados.count(),
+      totalEmpleados: await prisma.empleados.count({ where: whereVigente }),
       totalUsuarios: await prisma.app_Usuarios.count(),
       totalAreas: await prisma.cat_Areas.count(),
       totalPuestos: await prisma.cat_Puestos.count(),
