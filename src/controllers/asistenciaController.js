@@ -134,7 +134,7 @@ export const reporteEmpleado = async (req, res, next) => {
 export const horasTodos = async (req, res, next) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
-    const semana = nominaService.getSemanaActual();
+    const semana = nominaService.getSemanaViernesJueves();
     // 'YYYY-MM-DD' se parsea con hora local (T00:00:00) para no desplazarse -1 día por UTC.
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
@@ -160,13 +160,13 @@ export const horasTodos = async (req, res, next) => {
  */
 export const descargarHorasExcel = async (req, res, next) => {
   try {
-    const { fechaInicio, fechaFin, sort, dir } = req.query;
-    const semana = nominaService.getSemanaActual();
+    const { fechaInicio, fechaFin, sort, dir, redondear } = req.query;
+    const semana = nominaService.getSemanaViernesJueves();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
-    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, filtro });
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, filtro, redondear: redondear === '1' });
 
     const f1 = inicio.toISOString().slice(0, 10);
     const f2 = fin.toISOString().slice(0, 10);

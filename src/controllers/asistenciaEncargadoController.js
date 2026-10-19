@@ -47,7 +47,7 @@ export const horasEquipo = async (req, res, next) => {
     let miId = resolverEncargadoEfectivo(req);
 
     const { fechaInicio, fechaFin } = req.query;
-    const semana = nominaService.getSemanaActual();
+    const semana = nominaService.getSemanaViernesJueves();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
@@ -114,7 +114,7 @@ export const horasEquipoExcel = async (req, res, next) => {
     }
 
     const { fechaInicio, fechaFin, sort, dir } = req.query;
-    const semana = nominaService.getSemanaActual();
+    const semana = nominaService.getSemanaViernesJueves();
     const inicio = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : semana.lunes;
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
@@ -122,7 +122,7 @@ export const horasEquipoExcel = async (req, res, next) => {
     const idsPermitidos = equipo.map(e => e.ID_Empleado);
 
     const buffer = await generarExcelHoras(inicio, fin, {
-      sort, dir,
+      sort, dir, redondear: req.query.redondear === '1',
       filtro: { idsPermitidos: idsPermitidos.length ? idsPermitidos : [-1] }
     });
 

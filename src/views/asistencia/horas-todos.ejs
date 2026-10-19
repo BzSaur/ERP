@@ -80,6 +80,10 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
       <input type="hidden" name="fechaInicio" id="fechaInicio" value="<%= fechaInicio %>">
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
     </div>
+    <div class="form-check form-switch mb-1">
+      <input class="form-check-input" type="checkbox" id="chkRedondear">
+      <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
+    </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
     <a id="btnExcel" href="<%= urlExcelBase %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %><%= idEncSel ? '&encargado=' + idEncSel : '' %>"
        class="btn btn-sm btn-success">
@@ -106,6 +110,7 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
         const f = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
         fpInicio.value = f(dates[0]);
         fpFin.value = f(dates[1]);
+        document.getElementById('formFiltro').submit(); // filtra al elegir el rango
       }
     }
   });
@@ -548,6 +553,53 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     });
   });
 
+  // ---- Redondeo de horas ----
+  // Activo (default) = lo que se paga (entrada/salida y horas del servidor).
+  // Apagado = checadas reales, horas netas con descuento de comida 14-15.
+  const LIMITE_SEMANAL = 45;
+  function minutosEntre(ent, sal) {
+    const [he, me] = ent.split(':').map(Number);
+    const [hs, ms] = sal.split(':').map(Number);
+    const e = he*60+me, s = hs*60+ms;
+    if (s <= e) return 0;
+    return s - e - Math.max(0, Math.min(s, 900) - Math.max(e, 840));
+  }
+  const chk = document.getElementById('chkRedondear');
+  function aplicarRedondeo() {
+    const redondeado = chk.checked;
+    getRows().forEach(tr => {
+      let totalFila = 0;
+      tr.querySelectorAll('.cel-dia').forEach(td => {
+        if (td.dataset.dom === '1' || td.dataset.vacio === '1') return;
+        const horasPago = parseFloat(td.dataset.horas) || 0;
+        const celEs = td.querySelector('.cel-es');
+        const entR = td.dataset.entReal, salR = td.dataset.salReal;
+        if (td.dataset.presente !== '1' || !celEs) { totalFila += horasPago; return; }
+        let ent = td.dataset.ent, sal = td.dataset.sal, horas = horasPago;
+        if (!redondeado && entR && salR) {
+          ent = entR; sal = salR;
+          const m = minutosEntre(entR, salR);
+          if (m > 0) horas = m / 60;
+        }
+        celEs.querySelector('.ent').textContent = ent || '--:--';
+        celEs.querySelector('.sal').textContent = sal || '--:--';
+        const hrs = celEs.querySelector('.hrs');
+        // conserva el icono (revisión / en curso): solo cambia el nodo de texto final
+        hrs.lastChild.textContent = ' ' + (Math.round(horas * 10) / 10).toFixed(1) + 'h';
+        totalFila += horas;
+      });
+      totalFila = Math.round(totalFila * 100) / 100;
+      const extra = Math.max(0, Math.round((totalFila - LIMITE_SEMANAL) * 100) / 100);
+      const normal = Math.round((totalFila - extra) * 100) / 100;
+      const set = (c, v) => { const el = tr.querySelector(c); if (el) el.textContent = v > 0 ? v.toFixed(1) : '-'; };
+      set('.col-normal', normal); set('.col-extra', extra);
+      const tdT = tr.querySelector('.col-total'); if (tdT) tdT.textContent = totalFila > 0 ? totalFila.toFixed(1) : '0';
+      tr.dataset.total = totalFila;
+    });
+  }
+  chk.addEventListener('change', () => { aplicarRedondeo(); actualizarLinkExcel(); });
+  aplicarRedondeo(); // arranca sin redondeo
+
   // El botón Excel actualiza su href con fechas + orden vivos
   const btnExcel = document.getElementById('btnExcel');
   function actualizarLinkExcel(){
@@ -557,6 +609,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     let url = `${URL_EXCEL_BASE}?fechaInicio=${fi}&fechaFin=${ff}`;
     if (ID_ENCARGADO_SEL) url += `&encargado=${ID_ENCARGADO_SEL}`;
     if (sortState.key) url += `&sort=${sortState.key}&dir=${sortState.asc ? 'asc' : 'desc'}`;
+    if (chk.checked) url += '&redondear=1';
     btnExcel.href = url;
   }
   if (btnExcel) btnExcel.addEventListener('click', actualizarLinkExcel);

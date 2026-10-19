@@ -814,7 +814,7 @@ export async function obtenerResumenAsistencia({
 
       // Horas trabajadas: usar el campo ya calculado (import XLSX / ADMS usan
       // calcularHorasDia: comida condicional, no -1h fija). Fuente única de verdad.
-      resumen.horasTrabajadas += Number(asistencia.Horas_Trabajadas) || 0;
+      resumen.horasTrabajadas += asistencia.Hora_Salida ? (Number(asistencia.Horas_Trabajadas) || 0) : 0;
       
       // Contar por ubicación
       if (asistencia.Ubicacion_Entrada) {
@@ -904,11 +904,18 @@ const JORNADA_INICIO_MIN = 8 * 60, JORNADA_FIN_MIN = 18 * 60;
 
 // Horas netas de un tramo [desdeMin, hastaMin] descontando la comida si lo
 // cruza. Mismo criterio de overlap que calcularHorasPorPares.
-function horasNetasTramo(desdeMin, hastaMin) {
+export function horasNetasTramo(desdeMin, hastaMin) {
   if (!Number.isFinite(desdeMin) || !Number.isFinite(hastaMin) || hastaMin <= desdeMin) return 0;
   let netos = hastaMin - desdeMin;
   netos -= Math.max(0, Math.min(hastaMin, COMIDA_FIN_MIN) - Math.max(desdeMin, COMIDA_INI_MIN));
   return Math.round((Math.max(0, netos) / 60) * 100) / 100;
+}
+
+// Hoy la jornada aún no termina: actividad/ausencia sin checada no suman más
+// de lo transcurrido desde las 8:00 (con descuento de comida). Otros días, igual.
+export function topeHorasHoy(horas, fecha) {
+  if (!horas || !esDiaEnCurso(fecha)) return horas;
+  return Math.min(horas, horasNetasTramo(JORNADA_INICIO_MIN, minutosDelDiaAhora()));
 }
 
 export function horasActividadHastaEntrada(horaEntrada) {
@@ -1076,7 +1083,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: el
     // tramo de la actividad (capturado, o 8am→primera entrada) más las horas
     // reales ya calculadas por admsService.
-    const horas = (Number(a.Horas_Trabajadas) || 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
+    const horas = (a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
     const retardoDia = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
@@ -1332,7 +1339,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
 
     // Jornada real: horas consolidadas. Sin salida NO se estima nada (0 h);
     // solo si hay entrada y salida pero faltan horas consolidadas se calcula del par.
-    let horasReales = Number(a.Horas_Trabajadas) || 0;
+    // Sin Hora_Salida ignora lo guardado en BD (jornadas viejas quedaron estimadas a 18:00).
+    let horasReales = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0;
     if (horasReales === 0 && a.Presente && a.Hora_Entrada && a.Hora_Salida) {
       const entR = new Date(a.Hora_Entrada);
       const salR = new Date(a.Hora_Salida);
@@ -1445,9 +1453,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           // Ausencia: 9h solo si es CON goce de sueldo (vacaciones, permiso
           // con goce, incapacidad RT…). Las sin goce (falta injustificada,
           // permiso sin goce, abandono) se etiquetan pero no pagan horas.
-          const horasDia = actividad
+          const horasDia = topeHorasHoy(actividad
             ? horasDeActividad(actividad, null, null, esDomingo)
-            : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
+            : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0), key);
           horasCubiertasSinSello += horasDia;
           if (horasDia > 0) diasCubiertosSinSello++;
           return {

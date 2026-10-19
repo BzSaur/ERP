@@ -2,7 +2,7 @@ import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import logger, { logAccess } from '../config/logger.js';
 import { encolarAltaEmpleado, encolarBajaEmpleado } from '../services/checadorComandosService.js';
-import { whereVigente, whereBaja } from '../utils/empleados.js';
+import { whereVigente } from '../utils/empleados.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
 
 // ============================================================
@@ -143,13 +143,13 @@ const validarEmpleado = async (b, { alta, previo = null, esBaja = false }) => {
 
 // Arma el where del listado a partir del query string. Lo comparten el listado
 // y la exportación CSV para que ambos devuelvan exactamente el mismo conjunto.
-// Por defecto solo vigentes (todo menos BAJA); ?vista=inactivos muestra las bajas.
+// Estatus vacío = vigentes (todo menos BAJA, incluye vacaciones); 'todos' o un ID concreto (BAJA incluida) no aplican el filtro base.
 const construirFiltros = async (query) => {
   const { buscar, area, estatus, id, mes_nacimiento, fecha_ingreso, telefono } = query;
-  const vista = query.vista === 'inactivos' ? 'inactivos' : 'vigentes';
+  const vista = estatus ? 'todos' : 'vigentes';
 
   const where = {};
-  const and = [vista === 'inactivos' ? whereBaja : whereVigente];
+  const and = vista === 'todos' ? [] : [whereVigente];
 
   if (buscar) {
     and.push({
@@ -165,7 +165,7 @@ const construirFiltros = async (query) => {
 
   if (area) where.ID_Area = parseInt(area);
 
-  if (estatus) where.ID_Estatus = parseInt(estatus);
+  if (parseInt(estatus)) where.ID_Estatus = parseInt(estatus);
 
   if (id) {
     const idNum = parseInt(id);
@@ -252,7 +252,6 @@ export const index = async (req, res, next) => {
     const [areas, estatuses] = await Promise.all([
       prisma.cat_Areas.findMany({ orderBy: { Nombre_Area: 'asc' } }),
       prisma.cat_Estatus_Empleado.findMany({
-        where: vista === 'inactivos' ? { Nombre_Estatus: 'BAJA' } : { Nombre_Estatus: { not: 'BAJA' } },
         orderBy: { Nombre_Estatus: 'asc' }
       })
     ]);
@@ -260,7 +259,7 @@ export const index = async (req, res, next) => {
     const totalPages = Math.ceil(total / perPage);
 
     res.render('empleados/index', {
-      title: vista === 'inactivos' ? 'Empleados inactivos' : 'Empleados',
+      title: 'Empleados',
       empleados,
       areas,
       estatusList: estatuses,

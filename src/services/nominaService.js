@@ -578,6 +578,21 @@ export function getSemanaActual() {
   return { lunes, sabado };
 }
 
+/**
+ * Semana de horas/asistencia: de viernes a jueves, la que contiene hoy.
+ * Devuelve { lunes, sabado } (mismos nombres que getSemanaActual) para ser intercambiable.
+ */
+export function getSemanaViernesJueves() {
+  const hoy = new Date();
+  const inicio = new Date(hoy);
+  inicio.setDate(hoy.getDate() - ((hoy.getDay() + 2) % 7)); // viernes más reciente (hoy incluido)
+  inicio.setHours(0, 0, 0, 0);
+  const fin = new Date(inicio);
+  fin.setDate(inicio.getDate() + 6);
+  fin.setHours(23, 59, 59, 999);
+  return { lunes: inicio, sabado: fin };
+}
+
 export default {
   getConfig,
   getConfigMultiple,
@@ -586,5 +601,6 @@ export default {
   calcularNominaSemanal,
   calcularFiniquitoEstimado,
   evaluarPuntualidad,
-  getSemanaActual
+  getSemanaActual,
+  getSemanaViernesJueves
 };

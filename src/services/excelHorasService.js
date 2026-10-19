@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaPagoDesde, salidaPagoDesde } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaPagoDesde, salidaPagoDesde, horasNetasTramo, topeHorasHoy } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -55,7 +55,7 @@ const LIMITE_SEMANAL_HORAS = 45;
  * @returns {Buffer}
  */
 export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
-  const { sort = null, dir = 'asc', filtro = null, excluirDomingos = false } = opciones;
+  const { sort = null, dir = 'asc', filtro = null, excluirDomingos = false, redondear = false } = opciones;
   const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0);
   const fin = new Date(fechaFin); fin.setHours(23, 59, 59, 999);
   const dias = rangoDias(inicio, fin, excluirDomingos);
@@ -180,7 +180,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
           // Sin checada: el tramo capturado manda; si no hay, jornada fija.
           // En día de descanso solo cuenta el tramo documentado (sábado no
           // obligatorio → no se regala jornada completa).
-          const horasAct = horasDeActividad(actividadRaw, null, null, esDescanso);
+          const horasAct = topeHorasHoy(horasDeActividad(actividadRaw, null, null, esDescanso), key);
           // Un día puede tener VARIAS actividades: el Excel las lista todas,
           // porque este reporte también justifica el trabajo realizado.
           const listaAct = actividadRaw.todas || [actividadRaw];
@@ -209,7 +209,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
           // Ausencia: paga jornada completa solo si es CON goce de sueldo.
           // Las sin goce (falta injustificada, permiso sin goce…) se etiquetan
           // pero no suman horas.
-          const horasAus = periodoAus.conGoce ? HORAS_FIJAS_ACTIVIDAD : 0;
+          const horasAus = topeHorasHoy(periodoAus.conGoce ? HORAS_FIJAS_ACTIVIDAD : 0, key);
           fila.push(
             periodoAus.etiqueta.toUpperCase() + (periodoAus.conGoce ? '' : ' (sin goce)'),
             '',
@@ -225,14 +225,20 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const plantaSal = a.Ubicacion_Salida || ultCheca?.checador?.planta?.Nombre || '';
 
       // Entrada/salida con el redondeo vigente (el mismo con que se pagan las horas).
-      const entradaPago = entradaPagoDesde(a.Hora_Entrada, e);
-      const salidaPago = salidaPagoDesde(a.Hora_Salida);
+      const entradaPago = redondear ? entradaPagoDesde(a.Hora_Entrada, e) : a.Hora_Entrada;
+      const salidaPago = redondear ? salidaPagoDesde(a.Hora_Salida) : a.Hora_Salida;
       const entRaw = entradaPago ? fmtHora(entradaPago) : null;
       const salRaw = salidaPago ? fmtHora(salidaPago) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
       const salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
       // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
-      let horas = Number(a.Horas_Trabajadas) || 0;
+      let horas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0; // sin salida = 0 h, aunque BD tenga estimado
+      // Sin redondeo: horas netas de la checada real (con descuento de comida).
+      if (!redondear && a.Hora_Entrada && a.Hora_Salida) {
+        const en = new Date(a.Hora_Entrada), sa = new Date(a.Hora_Salida);
+        const real = horasNetasTramo(en.getHours() * 60 + en.getMinutes(), sa.getHours() * 60 + sa.getMinutes());
+        if (real > 0) horas = real;
+      }
 
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la
       // actividad (capturado, o 8am→primera entrada) y las horas reales —
