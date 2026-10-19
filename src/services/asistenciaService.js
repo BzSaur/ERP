@@ -1385,6 +1385,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       salida: fmt(salida),
       entradaReal: fmt(a.Hora_Entrada ? new Date(a.Hora_Entrada) : null),
       salidaReal: fmt(a.Hora_Salida ? new Date(a.Hora_Salida) : null),
+      entradaRed: fmt(entradaRedondeadaVista(a.Hora_Entrada)),
+      salidaRed: fmt(salidaRedondeadaVista(a.Hora_Salida)),
+      tieneActividad: !!actividadDelDia,
       incompleta,
       enCurso,
       retardo: esRetardo,
@@ -1745,6 +1748,26 @@ export function salidaPagoDesde(horaSalidaReal) {
   if (!horaSalidaReal) return null;
   const d = new Date(horaSalidaReal);
   if (!reglaToleranciaPorFecha(d).restrictivo) return d;
+  const out = new Date(d);
+  out.setHours(Math.floor(redondearSalida(d.getHours() * 60 + d.getMinutes()) / 60), 0, 0, 0);
+  return out;
+}
+
+// Regla restrictiva aplicada a cualquier fecha (solo para el switch "Redondear horas" de la vista).
+const REGLA_REDONDEO_VISTA = reglaToleranciaPorFecha(new Date(2999, 0, 1));
+
+export function entradaRedondeadaVista(horaEntradaReal) {
+  if (!horaEntradaReal) return null;
+  const d = new Date(horaEntradaReal);
+  const min = redondearEntrada(d.getHours() * 60 + d.getMinutes(), REGLA_REDONDEO_VISTA.toleranciaMin);
+  const out = new Date(d);
+  out.setHours(Math.floor(min / 60), min % 60, 0, 0);
+  return out;
+}
+
+export function salidaRedondeadaVista(horaSalidaReal) {
+  if (!horaSalidaReal) return null;
+  const d = new Date(horaSalidaReal);
   const out = new Date(d);
   out.setHours(Math.floor(redondearSalida(d.getHours() * 60 + d.getMinutes()) / 60), 0, 0, 0);
   return out;

@@ -81,7 +81,7 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
     </div>
     <div class="form-check form-switch mb-1">
-      <input class="form-check-input" type="checkbox" id="chkRedondear">
+      <input class="form-check-input" type="checkbox" id="chkRedondear" name="redondear" value="1">
       <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
     </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
@@ -406,6 +406,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-sal="<%= c.salida || '' %>"
                     data-ent-real="<%= c.entradaReal || '' %>"
                     data-sal-real="<%= c.salidaReal || '' %>"
+                    data-ent-red="<%= c.entradaRed || '' %>"
+                    data-sal-red="<%= c.salidaRed || '' %>"
+                    data-act="<%= c.tieneActividad ? 1 : 0 %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
@@ -530,28 +533,35 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
   // --- Ordenar por columna ---
   let sortState = { key: null, asc: true };
+  // Orden y búsqueda sobreviven al refresco (filtrar fechas, redondeo) vía sessionStorage.
+  const VISTA_KEY = 'horasTodosVista';
+  const guardarVista = () => {
+    try { sessionStorage.setItem(VISTA_KEY, JSON.stringify({ key: sortState.key, asc: sortState.asc, q: inputBuscar.value })); } catch (e) {}
+  };
+  function aplicarOrden(th) {
+    const key = th.dataset.sort, type = th.dataset.type;
+    const rows = getRows();
+    rows.sort((a, b) => {
+      let va = a.dataset[key], vb = b.dataset[key];
+      if (type === 'num') { va = parseFloat(va)||0; vb = parseFloat(vb)||0; return sortState.asc ? va-vb : vb-va; }
+      return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    rows.forEach(r => tbody.appendChild(r));
+    // Flechas indicadoras
+    document.querySelectorAll('#tablaMatriz th.sortable .arrow').forEach(a => a.textContent = '');
+    th.querySelector('.arrow').textContent = sortState.asc ? '▲' : '▼';
+  }
   document.querySelectorAll('#tablaMatriz th.sortable').forEach(th => {
     th.addEventListener('click', function(){
       const key = this.dataset.sort;
-      const type = this.dataset.type;
       sortState.asc = (sortState.key === key) ? !sortState.asc : true;
       sortState.key = key;
-
-      const rows = getRows();
-      rows.sort((a, b) => {
-        let va = a.dataset[key], vb = b.dataset[key];
-        if (type === 'num') { va = parseFloat(va)||0; vb = parseFloat(vb)||0; return sortState.asc ? va-vb : vb-va; }
-        return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
-      });
-      rows.forEach(r => tbody.appendChild(r));
-
-      // Flechas indicadoras
-      document.querySelectorAll('#tablaMatriz th.sortable .arrow').forEach(a => a.textContent = '');
-      this.querySelector('.arrow').textContent = sortState.asc ? '▲' : '▼';
-
+      aplicarOrden(this);
+      guardarVista();
       actualizarLinkExcel();
     });
   });
+  inputBuscar.addEventListener('input', guardarVista);
 
   // ---- Redondeo de horas ----
   // Activo (default) = lo que se paga (entrada/salida y horas del servidor).
@@ -576,7 +586,17 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
         const entR = td.dataset.entReal, salR = td.dataset.salReal;
         if (td.dataset.presente !== '1' || !celEs) { totalFila += horasPago; return; }
         let ent = td.dataset.ent, sal = td.dataset.sal, horas = horasPago;
-        if (!redondeado) {
+        if (redondeado) {
+          // Regla restrictiva en cualquier fecha (entrada tol. 10, salida a hora completa).
+          const entP = td.dataset.entRed, salP = td.dataset.salRed;
+          if (entP) ent = entP;
+          if (salP) sal = salP;
+          // Con actividad delegada las horas del servidor incluyen su aporte: no se recalculan.
+          if (entP && salP && td.dataset.act !== '1') {
+            const m = minutosEntre(entP, salP);
+            if (m > 0) horas = m / 60;
+          }
+        } else {
           // Entrada/salida reales aunque falte la otra; las horas solo con el par completo.
           if (entR) ent = entR;
           if (salR) sal = salR;
@@ -602,7 +622,26 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     });
   }
   chk.addEventListener('change', () => { aplicarRedondeo(); actualizarLinkExcel(); });
-  aplicarRedondeo(); // arranca sin redondeo
+  // El estado sobrevive al filtrar / cambiar de encargado: viaja en la URL (?redondear=1).
+  chk.checked = new URLSearchParams(location.search).get('redondear') === '1';
+  const formEnc = document.getElementById('formEncargado');
+  if (formEnc) formEnc.addEventListener('submit', () => {
+    if (!chk.checked) return;
+    const h = document.createElement('input');
+    h.type = 'hidden'; h.name = 'redondear'; h.value = '1';
+    formEnc.appendChild(h);
+  });
+  aplicarRedondeo();
+
+  // Restaura orden y búsqueda de la visita anterior (el ?ids= del grupo manda sobre la búsqueda).
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VISTA_KEY) || 'null');
+    if (v) {
+      const th = v.key && document.querySelector('#tablaMatriz th.sortable[data-sort="' + v.key + '"]');
+      if (th) { sortState.key = v.key; sortState.asc = !!v.asc; aplicarOrden(th); }
+      if (v.q && !paramsIds) { inputBuscar.value = v.q; inputBuscar.dispatchEvent(new Event('input')); }
+    }
+  } catch (e) {}
 
   // El botón Excel actualiza su href con fechas + orden vivos
   const btnExcel = document.getElementById('btnExcel');

@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaPagoDesde, salidaPagoDesde, horasNetasTramo, topeHorasHoy } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasNetasTramo, topeHorasHoy } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -225,8 +225,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const plantaSal = a.Ubicacion_Salida || ultCheca?.checador?.planta?.Nombre || '';
 
       // Entrada/salida con el redondeo vigente (el mismo con que se pagan las horas).
-      const entradaPago = redondear ? entradaPagoDesde(a.Hora_Entrada, e) : a.Hora_Entrada;
-      const salidaPago = redondear ? salidaPagoDesde(a.Hora_Salida) : a.Hora_Salida;
+      const entradaPago = redondear ? entradaRedondeadaVista(a.Hora_Entrada) : a.Hora_Entrada;
+      const salidaPago = redondear ? salidaRedondeadaVista(a.Hora_Salida) : a.Hora_Salida;
       const entRaw = entradaPago ? fmtHora(entradaPago) : null;
       const salRaw = salidaPago ? fmtHora(salidaPago) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
@@ -234,8 +234,10 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
       let horas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0; // sin salida = 0 h, aunque BD tenga estimado
       // Sin redondeo: horas netas de la checada real (con descuento de comida).
-      if (!redondear && a.Hora_Entrada && a.Hora_Salida) {
-        const en = new Date(a.Hora_Entrada), sa = new Date(a.Hora_Salida);
+      // Con redondeo: horas del par redondeado (regla restrictiva en cualquier fecha).
+      if (a.Hora_Entrada && a.Hora_Salida) {
+        const en = redondear ? entradaPago : new Date(a.Hora_Entrada);
+        const sa = redondear ? salidaPago : new Date(a.Hora_Salida);
         const real = horasNetasTramo(en.getHours() * 60 + en.getMinutes(), sa.getHours() * 60 + sa.getMinutes());
         if (real > 0) horas = real;
       }
