@@ -1387,7 +1387,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       salidaReal: fmt(a.Hora_Salida ? new Date(a.Hora_Salida) : null),
       entradaRed: fmt(entradaRedondeadaVista(a.Hora_Entrada)),
       salidaRed: fmt(salidaRedondeadaVista(a.Hora_Salida)),
-      tieneActividad: !!actividadDelDia,
+      horasActividad: horasActividadDia,
       incompleta,
       enCurso,
       retardo: esRetardo,

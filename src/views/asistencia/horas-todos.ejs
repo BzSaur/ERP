@@ -408,7 +408,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-sal-real="<%= c.salidaReal || '' %>"
                     data-ent-red="<%= c.entradaRed || '' %>"
                     data-sal-red="<%= c.salidaRed || '' %>"
-                    data-act="<%= c.tieneActividad ? 1 : 0 %>"
+                    data-hact="<%= c.horasActividad || 0 %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
@@ -586,15 +586,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
         const entR = td.dataset.entReal, salR = td.dataset.salReal;
         if (td.dataset.presente !== '1' || !celEs) { totalFila += horasPago; return; }
         let ent = td.dataset.ent, sal = td.dataset.sal, horas = horasPago;
+        const hAct = parseFloat(td.dataset.hact) || 0; // aporte de actividad delegada del día
         if (redondeado) {
           // Regla restrictiva en cualquier fecha (entrada tol. 10, salida a hora completa).
           const entP = td.dataset.entRed, salP = td.dataset.salRed;
           if (entP) ent = entP;
           if (salP) sal = salP;
-          // Con actividad delegada las horas del servidor incluyen su aporte: no se recalculan.
-          if (entP && salP && td.dataset.act !== '1') {
+          if (entP && salP) {
             const m = minutosEntre(entP, salP);
-            if (m > 0) horas = m / 60;
+            if (m > 0) horas = m / 60 + hAct;
           }
         } else {
           // Entrada/salida reales aunque falte la otra; las horas solo con el par completo.
@@ -602,7 +602,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           if (salR) sal = salR;
           if (entR && salR) {
             const m = minutosEntre(entR, salR);
-            if (m > 0) horas = m / 60;
+            if (m > 0) horas = m / 60 + hAct;
           }
         }
         celEs.querySelector('.ent').textContent = ent || '--:--';
