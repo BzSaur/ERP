@@ -429,7 +429,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                   <% } else if (!c.presente && c.actividad) { %>
                     <%
                       const hhmmSA = (m) => Number.isFinite(m)
-                        ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
+                        ? String(Math.floor((m%1440)/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
                       // Un día puede tener varias actividades: se listan todas.
                       const actsSA = c.actividad.todas || [c.actividad];
                     %>
@@ -441,7 +441,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                             <%= av.nombre %><% if (av.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
                           </div>
                           <% if (sIni && sFin) { %>
-                            <div class="act-hora" title="Horario de la actividad"><%= sIni %>–<%= sFin %></div>
+                            <div class="act-hora" title="Horario de la actividad"><%= sIni %>–<%= sFin %><%= av.horaFin >= 1440 ? ' (+1)' : '' %></div>
                           <% } %>
                         </div>
                       <% }); %>
@@ -465,7 +465,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <% if (c.actividad) { %>
                         <%
                           const hhmmAct = (m) => Number.isFinite(m)
-                            ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
+                            ? String(Math.floor((m%1440)/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : null;
                           // Un día puede tener varias actividades: se listan todas.
                           const actsDia = c.actividad.todas || [c.actividad];
                         %>
@@ -477,7 +477,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                                 <%= av.nombre %><% if (av.esRecurrente) { %> <i class="bi bi-arrow-repeat"></i><% } %>
                               </div>
                               <% if (aIni && aFin) { %>
-                                <div class="act-hora" title="Horario de la actividad"><%= aIni %>–<%= aFin %></div>
+                                <div class="act-hora" title="Horario de la actividad"><%= aIni %>–<%= aFin %><%= av.horaFin >= 1440 ? ' (+1)' : '' %></div>
                               <% } %>
                             </div>
                           <% }); %>
@@ -1017,13 +1017,13 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           // (ej. una guardia de 19-21 sobre el home office recurrente).
           ctx.idAsignacion = act ? act.ID_Asignacion : null;
           const aHHMM = m => Number.isFinite(m)
-            ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+            ? String(Math.floor((m % 1440) / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
             : '';
-          // En recurrentes los campos arrancan vacíos: son para la nueva.
-          $('panelHoraIni').value = (act && !ctx.esRecurrente) ? aHHMM(act.horaInicio) : '';
-          $('panelHoraFin').value = (act && !ctx.esRecurrente) ? aHHMM(act.horaFin) : '';
+          // Recurrentes: muestran el horario de la regla de ese día.
+          $('panelHoraIni').value = act ? aHHMM(act.horaInicio) : '';
+          $('panelHoraFin').value = act ? aHHMM(act.horaFin) : '';
           $('panelHorasAyuda').textContent = ctx.esRecurrente
-            ? 'Necesario para agregar otra actividad a este día.'
+            ? 'Con "Repetir cada semana" encendido el horario aplica a todos estos días de la semana; apagado, "Agregar otra" suma un tramo solo a este día. Si fin es antes que inicio, termina al día siguiente.'
             : (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
               ? 'Solo cuenta este tramo; se suma a lo que marcó el checador.'
               : (d.asistencia
@@ -1082,11 +1082,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       ID_Empresa: empresa
     };
 
-    // Horario capturado en el mismo paso (solo aplica a puntuales).
-    if (!quiereRecurrente) {
+    // Horario capturado en el mismo paso (puntual o regla semanal).
+    {
       const hI = $('panelHoraIni').value, hF = $('panelHoraFin').value;
       if (!!hI !== !!hF) { mostrarError('Captura ambas horas, o deja las dos vacías'); return; }
-      if (hI && hF && hF <= hI) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+      if (hI && hF && hF === hI) { mostrarError('La hora de fin debe ser distinta a la de inicio'); return; }
       if (hI && hF) { body.Hora_Inicio = hI; body.Hora_Fin = hF; }
     }
 
@@ -1117,13 +1117,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     // Si había puntual, el backend la reemplaza al detectar datos distintos.
     // Solo el paso a recurrente sobre una recurrente existente necesita
     // detener la regla previa.
-    if (ctx.tieneActividad && ctx.esRecurrente && quiereRecurrente) {
-      enviarToggle({ ID_Empleado: body.ID_Empleado, fecha: body.fecha, modo: 'RECURRENTE' }, function(){
-        enviarToggle(body, function(){ window.location.reload(); });
-      });
-    } else {
-      enviarToggle(body, function(){ window.location.reload(); });
-    }
+    // El backend reemplaza la regla en una sola llamada (conserva la vigencia).
+    enviarToggle(body, function(){ window.location.reload(); });
   });
 
   // Sumar OTRA actividad al mismo día, sin quitar la que ya está.
@@ -1134,7 +1129,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     const hI = $('panelHoraIni').value, hF = $('panelHoraFin').value;
     if (!nombre || !tipo || !empresa) { mostrarError('Completa nombre, tipo y empresa'); return; }
     if (!hI || !hF) { mostrarError('Para agregar otra actividad al día, captura su horario'); return; }
-    if (hF <= hI) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+    if (hF === hI) { mostrarError('La hora de fin debe ser distinta a la de inicio'); return; }
 
     const body = {
       agregar: true,
@@ -1167,7 +1162,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     const ini = $('panelHoraIni').value;
     const fin = $('panelHoraFin').value;
     if (!!ini !== !!fin) { mostrarError('Captura ambas horas, o deja las dos vacías'); return; }
-    if (ini && fin && fin <= ini) { mostrarError('La hora de fin debe ser posterior a la de inicio'); return; }
+    if (ini && fin && fin === ini) { mostrarError('La hora de fin debe ser distinta a la de inicio'); return; }
 
     mostrarError('');
     fetch('/encargado/actividades/asignacion/' + ctx.idAsignacion + '/horas-json', {

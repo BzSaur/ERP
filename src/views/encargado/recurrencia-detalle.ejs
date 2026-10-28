@@ -84,6 +84,29 @@
               </small>
             </div>
 
+            <div class="col-12">
+              <label class="form-label d-block">Horario por día</label>
+              <div class="row g-2">
+                <% [1,2,3,4,5,6].forEach(function(dia) { %>
+                  <% const hd = horarioPorDia[dia] || { ini: '', fin: '' }; %>
+                  <div class="col-md-4 col-sm-6">
+                    <div class="border rounded p-2">
+                      <div class="small fw-semibold mb-1"><%= nombresDia[dia] %></div>
+                      <div class="d-flex gap-1 align-items-center">
+                        <input type="time" class="form-control form-control-sm" name="Hora_Inicio_<%= dia %>" value="<%= hd.ini %>">
+                        <span class="small">a</span>
+                        <input type="time" class="form-control form-control-sm" name="Hora_Fin_<%= dia %>" value="<%= hd.fin %>">
+                      </div>
+                    </div>
+                  </div>
+                <% }); %>
+              </div>
+              <small class="text-body-secondary">
+                Vacío = jornada completa (9h sin checada). Con horas, ese día solo cuenta el tramo y se suma a la checada.
+                Si "a" es antes que el inicio (ej. 22:00 a 02:00), el tramo termina al día siguiente. Solo aplica a los días marcados.
+              </small>
+            </div>
+
             <div class="col-md-4">
               <label class="form-label">Vigente desde <span class="text-danger">*</span></label>
               <input type="date" class="form-control" name="Fecha_Inicio" required value="<%= fechaInicio %>">

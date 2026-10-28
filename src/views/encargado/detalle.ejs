@@ -177,7 +177,7 @@
                     <% } %>
                     <%= d.fecha %>
                     <% if (d.tieneTramo) { %>
-                      <span class="ms-1" style="font-size:.9em; opacity:.85"><%= d.horaInicio %>–<%= d.horaFin %></span>
+                      <span class="ms-1" style="font-size:.9em; opacity:.85"><%= d.horaInicio %>–<%= d.horaFin %><%= d.terminaDiaSiguiente ? " (+1)" : "" %></span>
                     <% } %>
                     <% if (puedeEditar) { %>
                       <i class="bi bi-clock ms-1 btn-horas" style="cursor:pointer"
@@ -232,7 +232,8 @@
           <strong>Vacío</strong> = jornada completa: 9h si no hubo checada, o desde las 8:00 hasta que selló.<br>
           <strong>Con horas</strong> = cuenta solo ese tramo y <strong>se suma</strong> a lo que marcó el checador.
           Útil para home office por horas o trabajo fuera del horario normal.
-          Se descuenta la comida (14:00–15:00) si el tramo la cruza.
+          Se descuenta la comida (14:00–15:00) si el tramo la cruza.<br>
+          Si "Hasta" es antes que "Desde" (ej. 22:00 a 02:00), el tramo termina al día siguiente y cuenta en este día.
         </div>
       </div>
       <div class="modal-footer">

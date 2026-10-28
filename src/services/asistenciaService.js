@@ -375,9 +375,9 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
         tipo: regla.tipo_actividad.Nombre,
         color: regla.tipo_actividad.Color,
         creadaEn: regla.CreatedAt,
-        // Las reglas recurrentes no capturan tramo: siempre jornada implícita.
-        horaInicio: null,
-        horaFin: null,
+        // Tramo propio de la regla para este día de semana; null = jornada implícita.
+        horaInicio: regla.Hora_Inicio,
+        horaFin: regla.Hora_Fin,
         esRecurrente: true
       };
 
@@ -911,6 +911,19 @@ export function horasNetasTramo(desdeMin, hastaMin) {
   return Math.round((Math.max(0, netos) / 60) * 100) / 100;
 }
 
+// Minutos desde medianoche -> 'HH:MM'. Un fin de tramo > 1440 (termina al día
+// siguiente) se muestra con su hora del reloj: 1560 -> '02:00'.
+export function fmtMinutos(m) {
+  if (!Number.isFinite(m)) return '';
+  const r = ((m % 1440) + 1440) % 1440;
+  return String(Math.floor(r / 60)).padStart(2, '0') + ':' + String(r % 60).padStart(2, '0');
+}
+
+// Tramo legible: '16:00-17:00', o '22:00-02:00 (+1)' si cruza la medianoche.
+export function fmtTramo(ini, fin) {
+  return `${fmtMinutos(ini)}-${fmtMinutos(fin)}${fin >= 1440 ? ' (+1)' : ''}`;
+}
+
 // Hoy la jornada aún no termina: actividad/ausencia sin checada no suman más
 // de lo transcurrido desde las 8:00 (con descuento de comida). Otros días, igual.
 export function topeHorasHoy(horas, fecha) {
@@ -927,17 +940,30 @@ export function horasActividadHastaEntrada(horaEntrada) {
   return horasNetasTramo(INICIO_ACTIVIDAD, entMin);
 }
 
+// ¿La actividad del día explica que la entrada fuera tarde? Sí si alguna no
+// tiene tramo (cubre la jornada) o su tramo empieza antes de la checada. Un
+// tramo posterior (ej. guardia 22:00) no justifica llegar tarde en la mañana.
+export function actividadJustificaRetardo(actividad, horaEntrada) {
+  if (!actividad) return false;
+  const lista = actividad.todas && actividad.todas.length ? actividad.todas : [actividad];
+  const ent = horaEntrada ? new Date(horaEntrada) : null;
+  const entMin = ent ? ent.getHours() * 60 + ent.getMinutes() : null;
+  return lista.some(a => !Number.isFinite(a.horaInicio) || !Number.isFinite(a.horaFin)
+    || entMin == null || a.horaInicio <= entMin);
+}
+
 /**
  * Horas que aporta una actividad delegada un día concreto.
  *  - Con Hora_Inicio/Hora_Fin capturadas: cuenta SOLO ese tramo (con descuento
- *    de comida). Sirve para home office por horas o actividad fuera del
- *    horario normal; se suma a lo que haya marcado el checador.
+ *    de comida), haya o no checada; no hay piso de jornada. Sirve para home
+ *    office por horas o actividad fuera del horario normal; se suma a lo que
+ *    haya marcado el checador. Hora_Fin > 1440 = termina al día siguiente.
  *  - Sin horas y CON checada: tramo implícito 8:00 → primera entrada.
  *  - Sin horas y SIN checada: jornada fija completa (9h).
  * @param {Object|null} actividad  entrada resuelta (trae horaInicio/horaFin)
  * @param {Date|null} horaEntrada  primera checada real del día, si la hubo
  */
-export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinPiso = false, sinSalidaCuentaCero = false) {
+export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinSalidaCuentaCero = false) {
   if (!actividad) return 0;
 
   // Varias actividades el mismo día: se fusionan sus tramos para no contar
@@ -957,8 +983,8 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinP
     // (08:00–18:00) y las que sí lo tienen aportan lo que caiga FUERA de esa
     // ventana. Así un home office recurrente más una actividad nocturna de
     // 19-21 dan 9 + 2 = 11h, en vez de perderse las dos horas extra.
-    // sinPiso (día de descanso): la actividad sin tramo no puede cuantificarse
-    // por horario, así que se toma la jornada estándar como base igual —
+    // En día de descanso la actividad sin tramo no puede cuantificarse por
+    // horario, así que se toma la jornada estándar como base igual —
     // documenta un día trabajado sin registro de horas.
     if (sinTramo.length > 0) {
       let extra = 0;
@@ -981,21 +1007,12 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinP
       else fusionados.push([ini, fin]);
     }
 
+    // Cada tramo cuenta solo sus horas: sin piso de jornada.
     let total = 0;
     for (const [ini, fin] of fusionados) {
-      // sinPiso: cada tramo aporta lo suyo; el piso se aplica al total.
-      total += horasDeActividad({ horaInicio: ini, horaFin: fin }, horaEntrada, horaSalida, true);
+      total += horasDeActividad({ horaInicio: ini, horaFin: fin }, horaEntrada, horaSalida, sinSalidaCuentaCero);
     }
-    total = Math.round(total * 100) / 100;
-
-    // Piso de jornada: un día cubierto SOLO por actividad paga la jornada
-    // completa aunque los tramos sumen menos (los horarios documentan qué se
-    // hizo, no recortan el día). Si los tramos dan más, se respeta el exceso.
-    // Con checada real no aplica: ahí manda lo efectivamente trabajado.
-    // sinPiso: día de descanso (sábado/domingo). El sábado no es obligatorio,
-    // así que no se regala jornada completa: cuenta solo el tramo documentado.
-    if (!horaEntrada && !sinPiso) total = Math.max(total, HORAS_FIJAS_JORNADA);
-    return total;
+    return Math.round(total * 100) / 100;
   }
 
   const { horaInicio, horaFin } = actividad;
@@ -1023,11 +1040,8 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinP
       const despues = horasNetasTramo(Math.max(horaInicio, salMin), horaFin);
       return Math.round((antes + despues) * 100) / 100;
     }
-    // Sin checada: la jornada completa es el piso (los tramos documentan, no
-    // recortan). `sinPiso` lo desactiva cuando este cálculo es una parte de
-    // una suma mayor, donde el piso se aplica al total.
-    const netas = horasNetasTramo(horaInicio, horaFin);
-    return sinPiso ? netas : Math.max(netas, HORAS_FIJAS_JORNADA);
+    // Sin checada: cuenta solo el tramo capturado (16:00-17:00 = 1h).
+    return horasNetasTramo(horaInicio, horaFin);
   }
 
   return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
@@ -1086,7 +1100,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     const horas = (a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
-    const retardoDia = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
+    const retardoDia = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
     const minRetardoDia = a.Minutos_Retardo || 0;
     if (a.Presente && horas > 0) diasTrabajados++;
     if (retardoDia) { diasRetardo++; minutosRetardoTotal += minRetardoDia; }
@@ -1159,7 +1173,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // solo el tramo documentado (sábado no obligatorio, no se regala jornada).
     // Ausencia: 9h solo si es con goce (ver obtenerAusenciasJustificadas).
     const horasDia = actividadDia
-      ? horasDeActividad(actividadDia, null, null, esDescanso)
+      ? horasDeActividad(actividadDia, null, null)
       : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
     totalHoras += horasDia;
     dias.push({
@@ -1334,7 +1348,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // virtual 8am-primera entrada, con descuento de comida, + horas reales).
     const keyActividad = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
     const actividadDelDia = actividadesMap.get(keyActividad) || null;
-    const horasActividadDia = horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida, false,
+    const horasActividadDia = horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida,
       reglaToleranciaPorFecha(fechaLocalDB(a.Fecha)).restrictivo);
 
     // Jornada real: horas consolidadas. Sin salida NO se estima nada (0 h);
@@ -1348,10 +1362,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     }
     const h = horasReales + horasActividadDia;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
-    // Con actividad delegada NO hay retardo: la actividad justifica que no
+    // Una actividad sin tramo, o con tramo previo a la entrada, justifica que no
     // llegara a la hora normal (ej. home office que sella al mediodía).
     const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
-    const esRetardo = !actividadDelDia && a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
+    const esRetardo = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
     if (a.Presente && h > 0) acc.dias++;
     if (esRetardo) acc.retardos++;
     if (a.Multi_Planta) acc.multi++;
@@ -1457,7 +1471,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           // con goce, incapacidad RT…). Las sin goce (falta injustificada,
           // permiso sin goce, abandono) se etiquetan pero no pagan horas.
           const horasDia = topeHorasHoy(actividad
-            ? horasDeActividad(actividad, null, null, esDomingo)
+            ? horasDeActividad(actividad, null, null)
             : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0), key);
           horasCubiertasSinSello += horasDia;
           if (horasDia > 0) diasCubiertosSinSello++;

@@ -896,6 +896,11 @@ model Actividad_Recurrencias {
   Dia_Semana       Int       // 0=domingo .. 6=sábado (Date.getDay())
   Fecha_Inicio     DateTime  @db.Date
   Fecha_Fin        DateTime? @db.Date // null = indefinida
+  // Tramo horario de la regla para su día de semana, mismo formato que
+  // Actividad_Asignaciones (minutos desde medianoche; Hora_Fin > 1440 = termina
+  // al día siguiente). Ambos null = jornada implícita.
+  Hora_Inicio      Int?
+  Hora_Fin         Int?
   Activo           Boolean   @default(true)
   CreatedAt        DateTime  @default(now())
   CreatedBy        String?   @db.VarChar(100)
@@ -926,6 +931,8 @@ model Actividad_Asignaciones {
   // (ej. 480 = 8:00). Ambos null = jornada implícita: 9h fijas si no hubo
   // checada, o 8:00→primera checada si sí la hubo. Con valores, cuenta solo
   // ese tramo (descontando comida si lo cruza) y se SUMA a las horas reales.
+  // Hora_Fin > 1440 = el tramo termina al día siguiente (22:00-02:00 se
+  // guarda 1320-1560); todas sus horas cuentan en el día en que empieza.
   Hora_Inicio   Int?
   Hora_Fin      Int?
   CreatedAt     DateTime @default(now())

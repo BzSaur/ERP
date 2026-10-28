@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasNetasTramo, topeHorasHoy } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasNetasTramo, topeHorasHoy, fmtTramo } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -175,12 +175,10 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
 
         // Ausencia y actividad el mismo día: gana la asignada al último.
         // En día de descanso no hay ausencia válida que oponer: manda la actividad.
-        const fmtMin = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
         if (esDescanso || ganadorDelDia(periodoAus, actividadRaw) === 'ACTIVIDAD') {
-          // Sin checada: el tramo capturado manda; si no hay, jornada fija.
-          // En día de descanso solo cuenta el tramo documentado (sábado no
-          // obligatorio → no se regala jornada completa).
-          const horasAct = topeHorasHoy(horasDeActividad(actividadRaw, null, null, esDescanso), key);
+          // Sin checada: el tramo capturado manda (solo sus horas); si no
+          // hay tramo, jornada fija.
+          const horasAct = topeHorasHoy(horasDeActividad(actividadRaw, null, null), key);
           // Un día puede tener VARIAS actividades: el Excel las lista todas,
           // porque este reporte también justifica el trabajo realizado.
           const listaAct = actividadRaw.todas || [actividadRaw];
@@ -190,7 +188,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
           }).join(' + ');
           const horarios = listaAct
             .filter(av => Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
-            .map(av => `${fmtMin(av.horaInicio)}-${fmtMin(av.horaFin)}`)
+            .map(av => fmtTramo(av.horaInicio, av.horaFin))
             .join(' + ');
           fila.push(desc, horarios, horasAct);
           totalHoras += horasAct;
@@ -200,7 +198,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
             fecha: key, nombreDia: NOMBRES_DIA[d.getUTCDay()],
             tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
             horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
-              ? `${fmtMin(av.horaInicio)}-${fmtMin(av.horaFin)}` : 'Jornada completa',
+              ? fmtTramo(av.horaInicio, av.horaFin) : 'Jornada completa',
             recurrente: av.esRecurrente ? 'Sí' : 'No',
             encargado: av.responsable || '',
             checada: 'Sin checada'
@@ -259,16 +257,15 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         ? actividadRawChecada
         : null;
       if (actividadConChecada) {
-        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida, false,
+        horas += horasDeActividad(actividadConChecada, a.Hora_Entrada, a.Hora_Salida,
           reglaToleranciaPorFecha(d).restrictivo);
 
         // El reporte también justifica el trabajo delegado: la actividad se
         // anota junto a la checada, no solo sus horas. Antes se perdía.
-        const fmtMinC = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
         const listaC = actividadConChecada.todas || [actividadConChecada];
         const descC = listaC.map(av => {
           const tramo = (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
-            ? ` ${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : '';
+            ? ` ${fmtTramo(av.horaInicio, av.horaFin)}` : '';
           return `${av.tipo.toUpperCase()}: ${av.nombre}${tramo}${av.esRecurrente ? ' [recurrente]' : ''}`;
         }).join(' + ');
         // Un solo renglón: el writer de xlsx (build comunitario) descarta los
@@ -282,7 +279,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
           fecha: key, nombreDia: NOMBRES_DIA[d.getUTCDay()],
           tipo: av.tipo, actividad: av.nombre, empresa: av.empresa || '',
           horario: (Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
-            ? `${fmtMinC(av.horaInicio)}-${fmtMinC(av.horaFin)}` : 'Jornada completa',
+            ? fmtTramo(av.horaInicio, av.horaFin) : 'Jornada completa',
           recurrente: av.esRecurrente ? 'Sí' : 'No',
           encargado: av.responsable || '',
           checada: `${entRaw || '--:--'} / ${salRaw || '--:--'}`

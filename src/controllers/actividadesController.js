@@ -2,7 +2,7 @@ import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { crearNotificacionParaEmpleado } from '../services/notificacionesService.js';
 import { obtenerEquipoVigente, empleadoEnEquipoDeEncargado } from '../services/gruposService.js';
-import { resolverActividadesPorRango } from '../services/asistenciaService.js';
+import { resolverActividadesPorRango, fmtMinutos } from '../services/asistenciaService.js';
 import { getSemanaActual } from '../services/nominaService.js';
 import { fechaLocalDB } from '../utils/tiempo.js';
 
@@ -41,6 +41,24 @@ function resolverEncargadoEfectivo(req) {
 }
 
 const fmtFecha = (d) => new Date(d).toISOString().slice(0, 10);
+
+// Tramo horario del body ('HH:MM' -> minutos desde medianoche). Devuelve null
+// si ambos vienen vacíos (jornada implícita), { error } si es inválido, o
+// { ini, fin }. Un fin anterior al inicio termina al día siguiente: 22:00-02:00
+// se guarda como 1320-1560 y cuenta completo en el día en que empieza.
+function leerTramo(body, campoIni = 'Hora_Inicio', campoFin = 'Hora_Fin') {
+  const aMin = (hhmm) => {
+    if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+    const [h, m] = hhmm.split(':').map(Number);
+    return (h > 23 || m > 59) ? null : h * 60 + m;
+  };
+  const ini = aMin(body?.[campoIni]);
+  const fin = aMin(body?.[campoFin]);
+  if (ini == null && fin == null) return null;
+  if (ini == null || fin == null) return { error: 'Captura ambas horas, o deja las dos vacías' };
+  if (fin === ini) return { error: 'La hora de fin debe ser distinta a la de inicio' };
+  return { ini, fin: fin < ini ? fin + 1440 : fin };
+}
 
 // ============================================================
 // ACTIVIDADES
@@ -513,6 +531,8 @@ async function saltarDiaRecurrencia(regla, fecha, usuario, ip) {
           Dia_Semana: regla.Dia_Semana,
           Fecha_Inicio: proximaOcurrencia,
           Fecha_Fin: regla.Fecha_Fin,
+          Hora_Inicio: regla.Hora_Inicio,
+          Hora_Fin: regla.Hora_Fin,
           CreatedBy: usuario.Email_Office365
         }
       });
@@ -699,16 +719,14 @@ export const ver = async (req, res, next) => {
       }
       const fechaStr = fmtFecha(asig.Fecha);
       const sello = selloMap.get(`${asig.ID_Empleado}_${fechaStr}`) || null;
-      const fmtMin = (m) => Number.isFinite(m)
-        ? String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
-        : '';
       porEmpleado.get(key).dias.push({
         ID_Asignacion: asig.ID_Asignacion,
         fecha: fechaStr,
         sello: !!(sello && sello.Hora_Entrada),
         // Tramo horario capturado para ese día (vacío = jornada implícita).
-        horaInicio: fmtMin(asig.Hora_Inicio),
-        horaFin: fmtMin(asig.Hora_Fin),
+        horaInicio: fmtMinutos(asig.Hora_Inicio),
+        horaFin: fmtMinutos(asig.Hora_Fin),
+        terminaDiaSiguiente: asig.Hora_Fin >= 1440,
         tieneTramo: Number.isFinite(asig.Hora_Inicio) && Number.isFinite(asig.Hora_Fin)
       });
     }
@@ -1114,6 +1132,13 @@ export const toggleCelda = async (req, res, next) => {
     // que ya está (ej. home office por la mañana + capacitación por la tarde).
     const modoAgregar = req.body.agregar === true || req.body.agregar === 'true';
 
+    // Tramo horario opcional, para puntual y para recurrente (en la regla
+    // aplica a ese día de la semana todas las semanas).
+    const tramo = leerTramo(req.body);
+    if (tramo?.error) return res.status(400).json({ ok: false, error: tramo.error });
+    const horaInicioMin = tramo ? tramo.ini : null;
+    const horaFinMin = tramo ? tramo.fin : null;
+
     const puntual = modoAgregar ? null : await prisma.actividad_Asignaciones.findFirst({
       where: { ID_Empleado: idEmpleado, Fecha: fecha },
       include: { actividad: { select: { ID_Actividad: true, Nombre_Actividad: true, ID_Responsable: true } } }
@@ -1123,20 +1148,15 @@ export const toggleCelda = async (req, res, next) => {
         return res.status(403).json({ ok: false, error: 'Esa actividad pertenece a otro encargado' });
       }
 
-      // Si vienen datos de actividad Y son distintos a los actuales, es un
-      // REEMPLAZO (el usuario quiere cambiarle la actividad a ese día), no un
-      // "quitar". Se mueve el día a la actividad nueva sin borrar nada más.
+      // Si vienen datos de actividad es una EDICIÓN/REEMPLAZO del día (otra
+      // actividad, o la misma con otro horario), no un "quitar". Se mueve el
+      // día a la actividad indicada sin borrar nada más.
       const nomNuevo = (req.body.Nombre_Actividad || '').trim();
       const tipoNuevo = parseInt(req.body.ID_Tipo_Actividad);
       const empNuevo = parseInt(req.body.ID_Empresa);
       const traeDatos = nomNuevo && Number.isInteger(tipoNuevo) && Number.isInteger(empNuevo);
-      const esOtraActividad = traeDatos && (
-        nomNuevo !== puntual.actividad.Nombre_Actividad ||
-        tipoNuevo !== puntual.actividad.ID_Tipo_Actividad ||
-        empNuevo !== puntual.actividad.ID_Empresa
-      );
 
-      if (esOtraActividad && modo === 'PUNTUAL') {
+      if (traeDatos && modo === 'PUNTUAL') {
         const tipoOk = await prisma.cat_Tipo_Actividad.findUnique({ where: { ID_Tipo_Actividad: tipoNuevo } });
         if (!tipoOk || !tipoOk.Activo) {
           return res.status(400).json({ ok: false, error: 'El tipo de actividad seleccionado ya no está disponible' });
@@ -1159,21 +1179,9 @@ export const toggleCelda = async (req, res, next) => {
 
         // Horario que venga en el reemplazo; si no, se limpia el anterior
         // (pertenecía a la actividad que se está sustituyendo).
-        const aMinR = (hhmm) => {
-          if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-          const [h, m] = hhmm.split(':').map(Number);
-          return (h > 23 || m > 59) ? null : h * 60 + m;
-        };
-        const hIniR = aMinR(req.body.Hora_Inicio);
-        const hFinR = aMinR(req.body.Hora_Fin);
-
         await prisma.actividad_Asignaciones.update({
           where: { ID_Asignacion: puntual.ID_Asignacion },
-          data: {
-            ID_Actividad: destino.ID_Actividad,
-            Hora_Inicio: (hIniR != null && hFinR != null && hFinR > hIniR) ? hIniR : null,
-            Hora_Fin: (hIniR != null && hFinR != null && hFinR > hIniR) ? hFinR : null
-          }
+          data: { ID_Actividad: destino.ID_Actividad, Hora_Inicio: horaInicioMin, Hora_Fin: horaFinMin }
         });
 
         // La actividad anterior puede quedarse sin días.
@@ -1199,9 +1207,28 @@ export const toggleCelda = async (req, res, next) => {
           actividad: {
             ID_Actividad: destino.ID_Actividad, ID_Asignacion: puntual.ID_Asignacion,
             nombre: nomNuevo, tipo: tipoOk.Nombre, color: tipoOk.Color,
-            empresa: empresaSel?.Nombre_Empresa || '', esRecurrente: false
+            empresa: empresaSel?.Nombre_Empresa || '',
+            horaInicio: horaInicioMin, horaFin: horaFinMin, esRecurrente: false
           }
         });
+      }
+
+      // Con datos y modo RECURRENTE = convertir el día en regla semanal: se
+      // quita la puntual y se sigue abajo a crear/reemplazar la regla. Antes
+      // solo se borraba la puntual y la regla nunca se creaba. Se valida el
+      // traslape ANTES de borrar para no perder el día si la regla no procede.
+      const convertirARegla = traeDatos && modo === 'RECURRENTE';
+      if (convertirARegla) {
+        const cubre = await prisma.actividad_Recurrencias.findFirst({
+          where: {
+            ID_Empleado: idEmpleado, Dia_Semana: fecha.getDay(), Activo: true,
+            Fecha_Inicio: { lte: fecha },
+            OR: [{ Fecha_Fin: null }, { Fecha_Fin: { gte: fecha } }]
+          }
+        });
+        if (!cubre && await hayTraslapeRecurrencia(idEmpleado, fecha.getDay(), fecha, null)) {
+          return res.status(400).json({ ok: false, error: `Ya existe una recurrencia activa los ${NOMBRES_DIA[fecha.getDay()]} para ese empleado` });
+        }
       }
 
       await prisma.actividad_Asignaciones.delete({ where: { ID_Asignacion: puntual.ID_Asignacion } });
@@ -1222,10 +1249,12 @@ export const toggleCelda = async (req, res, next) => {
         ip: obtenerIP(req)
       });
 
-      // Puede reaparecer una recurrente que la puntual estaba tapando.
-      const resuelto = await resolverActividadesPorRango([idEmpleado], fecha, fecha);
-      const reaparece = resuelto.get(`${idEmpleado}_${fechaStr}`) || null;
-      return res.json({ ok: true, estado: reaparece ? 'RECURRENTE' : 'VACIO', actividad: reaparece });
+      if (!convertirARegla) {
+        // Puede reaparecer una recurrente que la puntual estaba tapando.
+        const resuelto = await resolverActividadesPorRango([idEmpleado], fecha, fecha);
+        const reaparece = resuelto.get(`${idEmpleado}_${fechaStr}`) || null;
+        return res.json({ ok: true, estado: reaparece ? 'RECURRENTE' : 'VACIO', actividad: reaparece });
+      }
     }
 
     // 2) ¿Hay una recurrente activa que cubra ese día?
@@ -1243,7 +1272,7 @@ export const toggleCelda = async (req, res, next) => {
         // Sin datos de actividad = botón "Quitar": saltar SOLO ese día (ej.
         // vino presencial esta semana); la regla sigue viva las demás.
         // Con datos = "Guardar" desde el panel: reemplaza la regla completa
-        // (nombre/tipo/empresa) de ahí en adelante, sin tocar el pasado.
+        // (nombre/tipo/empresa/horario) de ahí en adelante, sin tocar el pasado.
         const nombreNuevo = (req.body.Nombre_Actividad || '').trim();
         const tipoNuevo = parseInt(req.body.ID_Tipo_Actividad);
         const empresaNueva = parseInt(req.body.ID_Empresa);
@@ -1267,7 +1296,10 @@ export const toggleCelda = async (req, res, next) => {
         if (fecha.getTime() <= fechaLocalDB(regla.Fecha_Inicio).getTime()) {
           await prisma.actividad_Recurrencias.update({
             where: { ID_Recurrencia: regla.ID_Recurrencia },
-            data: { Nombre_Actividad: nombreNuevo, ID_Tipo_Actividad: tipoNuevo, ID_Empresa: empresaNueva }
+            data: {
+              Nombre_Actividad: nombreNuevo, ID_Tipo_Actividad: tipoNuevo, ID_Empresa: empresaNueva,
+              Hora_Inicio: horaInicioMin, Hora_Fin: horaFinMin
+            }
           });
         } else {
           await prisma.actividad_Recurrencias.update({
@@ -1285,6 +1317,8 @@ export const toggleCelda = async (req, res, next) => {
               Dia_Semana: regla.Dia_Semana,
               Fecha_Inicio: fecha,
               Fecha_Fin: regla.Fecha_Fin,
+              Hora_Inicio: horaInicioMin,
+              Hora_Fin: horaFinMin,
               CreatedBy: req.user.Email_Office365
             }
           });
@@ -1301,7 +1335,7 @@ export const toggleCelda = async (req, res, next) => {
 
         return res.json({
           ok: true, estado: 'RECURRENTE',
-          actividad: { nombre: nombreNuevo, tipo: tipoOk.Nombre, color: tipoOk.Color, empresa: empresaOk?.Nombre_Empresa || '', horaInicio: null, horaFin: null, esRecurrente: true }
+          actividad: { nombre: nombreNuevo, tipo: tipoOk.Nombre, color: tipoOk.Color, empresa: empresaOk?.Nombre_Empresa || '', horaInicio: horaInicioMin, horaFin: horaFinMin, esRecurrente: true }
         });
       }
       // Modo PUNTUAL sobre un día que cubre una recurrencia: NO es un error.
@@ -1327,22 +1361,6 @@ export const toggleCelda = async (req, res, next) => {
       select: { Nombre_Empresa: true }
     });
 
-    // Tramo horario opcional ('HH:MM' -> minutos). Solo aplica a puntuales:
-    // una regla recurrente no materializa un día con horario propio.
-    const aMin = (hhmm) => {
-      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-      const [h, m] = hhmm.split(':').map(Number);
-      if (h > 23 || m > 59) return null;
-      return h * 60 + m;
-    };
-    const horaInicioMin = modo === 'PUNTUAL' ? aMin(req.body.Hora_Inicio) : null;
-    const horaFinMin = modo === 'PUNTUAL' ? aMin(req.body.Hora_Fin) : null;
-    if ((horaInicioMin == null) !== (horaFinMin == null)) {
-      return res.status(400).json({ ok: false, error: 'Captura ambas horas, o deja las dos vacías' });
-    }
-    if (horaInicioMin != null && horaFinMin <= horaInicioMin) {
-      return res.status(400).json({ ok: false, error: 'La hora de fin debe ser posterior a la de inicio' });
-    }
     // Al sumar una segunda actividad al día, el tramo es obligatorio: sin él
     // no se sabría cuánto aporta cada una.
     if (modoAgregar && horaInicioMin == null) {
@@ -1355,13 +1373,18 @@ export const toggleCelda = async (req, res, next) => {
       tipo: tipoValido.Nombre,
       color: tipoValido.Color,
       empresa: empresaSel?.Nombre_Empresa || '',
-      horaInicio: esRecurrente ? null : horaInicioMin,
-      horaFin: esRecurrente ? null : horaFinMin,
+      horaInicio: horaInicioMin,
+      horaFin: horaFinMin,
       esRecurrente
     });
 
     if (modo === 'RECURRENTE') {
-      // La recurrencia arranca en la fecha de la celda clicada.
+      // La recurrencia arranca en la fecha de la celda clicada. Misma regla de
+      // no traslape que el resto de altas: sin esto un doble guardado dejaba
+      // dos reglas activas para el mismo día de semana.
+      if (await hayTraslapeRecurrencia(idEmpleado, diaSemana, fecha, null)) {
+        return res.status(400).json({ ok: false, error: `Ya existe una recurrencia activa los ${NOMBRES_DIA[diaSemana]} para ese empleado` });
+      }
       const grupoDelEncargado = await prisma.grupos.findFirst({
         where: { Activo: true, encargado: { ID_Empleado: miId }, miembros: { some: { ID_Empleado: idEmpleado, Activo: true } } },
         select: { ID_Grupo: true }
@@ -1378,6 +1401,8 @@ export const toggleCelda = async (req, res, next) => {
           ID_Empresa: idEmpresa,
           Dia_Semana: diaSemana,
           Fecha_Inicio: fecha,
+          Hora_Inicio: horaInicioMin,
+          Hora_Fin: horaFinMin,
           CreatedBy: req.user.Email_Office365
         }
       });
@@ -1511,25 +1536,14 @@ export const guardarHorasDia = async (req, res, next) => {
       return res.status(403).render('errors/403', { title: 'Acceso Denegado', message: 'Esta actividad no te pertenece' });
     }
 
-    // 'HH:MM' -> minutos desde medianoche; vacío -> null.
-    const aMinutos = (hhmm) => {
-      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-      const [h, m] = hhmm.split(':').map(Number);
-      if (h > 23 || m > 59) return null;
-      return h * 60 + m;
-    };
-    const ini = aMinutos(req.body.Hora_Inicio);
-    const fin = aMinutos(req.body.Hora_Fin);
-
     // O ambos, o ninguno: un solo extremo no define un tramo.
-    if ((ini == null) !== (fin == null)) {
-      req.flash('error', 'Captura la hora de inicio y la de fin, o deja ambas vacías');
+    const tramo = leerTramo(req.body);
+    if (tramo?.error) {
+      req.flash('error', tramo.error);
       return res.redirect(`/encargado/actividades/${id}`);
     }
-    if (ini != null && fin <= ini) {
-      req.flash('error', 'La hora de fin debe ser posterior a la de inicio');
-      return res.redirect(`/encargado/actividades/${id}`);
-    }
+    const ini = tramo ? tramo.ini : null;
+    const fin = tramo ? tramo.fin : null;
 
     await prisma.actividad_Asignaciones.update({
       where: { ID_Asignacion: idAsignacion },
@@ -1572,21 +1586,10 @@ export const guardarHorasDiaJson = async (req, res, next) => {
       return res.status(403).json({ ok: false, error: 'Esa actividad no te pertenece' });
     }
 
-    const aMinutos = (hhmm) => {
-      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-      const [h, m] = hhmm.split(':').map(Number);
-      if (h > 23 || m > 59) return null;
-      return h * 60 + m;
-    };
-    const ini = aMinutos(req.body.Hora_Inicio);
-    const fin = aMinutos(req.body.Hora_Fin);
-
-    if ((ini == null) !== (fin == null)) {
-      return res.status(400).json({ ok: false, error: 'Captura ambas horas, o deja las dos vacías' });
-    }
-    if (ini != null && fin <= ini) {
-      return res.status(400).json({ ok: false, error: 'La hora de fin debe ser posterior a la de inicio' });
-    }
+    const tramo = leerTramo(req.body);
+    if (tramo?.error) return res.status(400).json({ ok: false, error: tramo.error });
+    const ini = tramo ? tramo.ini : null;
+    const fin = tramo ? tramo.fin : null;
 
     await prisma.actividad_Asignaciones.update({
       where: { ID_Asignacion: idAsignacion },
@@ -1621,9 +1624,14 @@ export const guardarHorasDiaJson = async (req, res, next) => {
 // ============================================================
 
 // Devuelve las filas hermanas de una regla (mismo empleado, nombre, tipo y
-// empresa, todas activas), ordenadas por día de la semana.
+// empresa, todas activas), ordenadas por día de la semana. UNA por día: saltar
+// un día (saltarDiaRecurrencia) deja el tramo viejo cortado + una gemela del
+// mismo día; editar ambos en bloque les ponía la misma vigencia y el día
+// saltado volvía a aparecer. Se conserva la fila abierta para su día y, en
+// los demás, la vigente hoy o la que empieza más tarde; los tramos viejos
+// quedan como histórico intacto.
 async function filasDeLaRegla(regla) {
-  return prisma.actividad_Recurrencias.findMany({
+  const filas = await prisma.actividad_Recurrencias.findMany({
     where: {
       ID_Empleado: regla.ID_Empleado,
       Nombre_Actividad: regla.Nombre_Actividad,
@@ -1631,8 +1639,20 @@ async function filasDeLaRegla(regla) {
       ID_Empresa: regla.ID_Empresa,
       Activo: true
     },
-    orderBy: { Dia_Semana: 'asc' }
+    orderBy: [{ Dia_Semana: 'asc' }, { Fecha_Inicio: 'desc' }]
   });
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const vigenteHoy = (f) => fechaLocalDB(f.Fecha_Inicio) <= hoy && (!f.Fecha_Fin || fechaLocalDB(f.Fecha_Fin) >= hoy);
+  const porDia = new Map();
+  for (const f of filas) {
+    const actual = porDia.get(f.Dia_Semana);
+    if (!actual) { porDia.set(f.Dia_Semana, f); continue; }
+    if (actual.ID_Recurrencia === regla.ID_Recurrencia) continue;
+    if (f.ID_Recurrencia === regla.ID_Recurrencia || (vigenteHoy(f) && !vigenteHoy(actual))) {
+      porDia.set(f.Dia_Semana, f);
+    }
+  }
+  return [...porDia.values()];
 }
 
 // GET /encargado/recurrencias/:id - Detalle de una regla recurrente
@@ -1672,11 +1692,22 @@ export const verRecurrencia = async (req, res, next) => {
 
     const fmtInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : '';
 
+    // Horario por día de semana, listo para <input type="time">.
+    const horarioPorDia = {};
+    for (const h of hermanas) {
+      horarioPorDia[h.Dia_Semana] = {
+        ini: fmtMinutos(h.Hora_Inicio),
+        fin: fmtMinutos(h.Hora_Fin),
+        diaSiguiente: h.Hora_Fin >= 1440
+      };
+    }
+
     res.render('encargado/recurrencia-detalle', {
       title: `Recurrencia: ${regla.Nombre_Actividad}`,
       regla,
       diasActivos: hermanas.map(h => h.Dia_Semana),
       hermanas,
+      horarioPorDia,
       tiposActividad, empresas,
       puedeEditar: true,
       // La vigencia se toma de la fila abierta; al guardar se aplica a todas.
@@ -1735,6 +1766,17 @@ export const actualizarRecurrencia = async (req, res, next) => {
       return res.redirect(volver);
     }
 
+    // Horario propio de cada día marcado (vacío = jornada completa).
+    const horarioDia = new Map();
+    for (const dia of dias) {
+      const tramo = leerTramo(req.body, `Hora_Inicio_${dia}`, `Hora_Fin_${dia}`);
+      if (tramo?.error) {
+        req.flash('error', `${NOMBRES_DIA[dia]}: ${tramo.error}`);
+        return res.redirect(volver);
+      }
+      horarioDia.set(dia, { Hora_Inicio: tramo ? tramo.ini : null, Hora_Fin: tramo ? tramo.fin : null });
+    }
+
     const hermanas = await filasDeLaRegla(regla);
     const diasActuales = new Set(hermanas.map(h => h.Dia_Semana));
     const diasNuevos = new Set(dias);
@@ -1768,12 +1810,11 @@ export const actualizarRecurrencia = async (req, res, next) => {
     };
 
     await prisma.$transaction(async (tx) => {
-      // Días que se quedan: actualizar datos y vigencia.
-      const seQuedan = hermanas.filter(h => diasNuevos.has(h.Dia_Semana)).map(h => h.ID_Recurrencia);
-      if (seQuedan.length) {
-        await tx.actividad_Recurrencias.updateMany({
-          where: { ID_Recurrencia: { in: seQuedan } },
-          data: datosComunes
+      // Días que se quedan: actualizar datos, vigencia y su propio horario.
+      for (const h of hermanas.filter(h => diasNuevos.has(h.Dia_Semana))) {
+        await tx.actividad_Recurrencias.update({
+          where: { ID_Recurrencia: h.ID_Recurrencia },
+          data: { ...datosComunes, ...horarioDia.get(h.Dia_Semana) }
         });
       }
       // Días quitados: baja real (la regla nunca llegó a aplicar ese día si se
@@ -1793,7 +1834,8 @@ export const actualizarRecurrencia = async (req, res, next) => {
             ID_Responsable: regla.ID_Responsable,
             Dia_Semana: dia,
             CreatedBy: req.user.Email_Office365,
-            ...datosComunes
+            ...datosComunes,
+            ...horarioDia.get(dia)
           }))
         });
       }
@@ -1845,7 +1887,7 @@ export const detenerRecurrencia = async (req, res, next) => {
     for (const h of hermanas) {
       await prisma.actividad_Recurrencias.update({
         where: { ID_Recurrencia: h.ID_Recurrencia },
-        data: { Fecha_Fin: corte < h.Fecha_Inicio ? h.Fecha_Inicio : corte, Activo: false }
+        data: { Fecha_Fin: corte < fechaLocalDB(h.Fecha_Inicio) ? h.Fecha_Inicio : corte, Activo: false }
       });
     }
 

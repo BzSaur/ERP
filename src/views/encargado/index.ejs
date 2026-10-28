@@ -617,11 +617,11 @@
         // Horario siempre visible: en un día recurrente sirve para el tramo
         // de la actividad ADICIONAL que se vaya a agregar.
         const hhmm = m => Number.isFinite(m)
-          ? String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : '';
-        $$('pcalHoraIni').value = (act && !ctxCal.esRecurrente) ? hhmm(act.horaInicio) : '';
-        $$('pcalHoraFin').value = (act && !ctxCal.esRecurrente) ? hhmm(act.horaFin) : '';
+          ? String(Math.floor((m%1440)/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0') : '';
+        $$('pcalHoraIni').value = act ? hhmm(act.horaInicio) : '';
+        $$('pcalHoraFin').value = act ? hhmm(act.horaFin) : '';
         $$('pcalHorasAyuda').textContent = ctxCal.esRecurrente
-          ? 'Necesario para agregar otra actividad a este día.'
+          ? 'Con "Repetir cada semana" encendido el horario aplica a todos estos días de la semana; apagado, "Agregar otra" suma un tramo solo a este día. Si fin es antes que inicio, termina al día siguiente.'
           : (act && Number.isFinite(act.horaInicio) && Number.isFinite(act.horaFin))
             ? 'Solo cuenta este tramo; se suma a la checada.'
             : (d.asistencia ? 'Vacío: cuenta de 8:00 a su primera checada.' : 'Vacío: jornada completa (9h).');
@@ -666,9 +666,9 @@
 
       // Horario capturado en el mismo paso (solo aplica a puntuales).
       const hIni = $$('pcalHoraIni').value, hFin = $$('pcalHoraFin').value;
-      if (!$$('pcalRecurrente').checked) {
+      {
         if (!!hIni !== !!hFin) { errCal('Captura ambas horas, o deja las dos vacías'); return; }
-        if (hIni && hFin && hFin <= hIni) { errCal('La hora de fin debe ser posterior a la de inicio'); return; }
+        if (hIni && hFin && hFin === hIni) { errCal('La hora de fin debe ser distinta a la de inicio'); return; }
         if (hIni && hFin) { body.Hora_Inicio = hIni; body.Hora_Fin = hFin; }
       }
 
@@ -692,7 +692,7 @@
       const hI = $$('pcalHoraIni').value, hF = $$('pcalHoraFin').value;
       if (!nombre || !tipo || !empresa) { errCal('Completa nombre, tipo y empresa'); return; }
       if (!hI || !hF) { errCal('Para agregar otra actividad al día, captura su horario'); return; }
-      if (hF <= hI) { errCal('La hora de fin debe ser posterior a la de inicio'); return; }
+      if (hF === hI) { errCal('La hora de fin debe ser distinta a la de inicio'); return; }
 
       const body = {
         agregar: true,
@@ -724,7 +724,7 @@
       if (!ctxCal.idAsignacion) return;
       const ini = $$('pcalHoraIni').value, fin = $$('pcalHoraFin').value;
       if (!!ini !== !!fin) { errCal('Captura ambas horas, o deja las dos vacías'); return; }
-      if (ini && fin && fin <= ini) { errCal('La hora de fin debe ser posterior'); return; }
+      if (ini && fin && fin === ini) { errCal('La hora de fin debe ser distinta a la de inicio'); return; }
       errCal('');
       fetch('/encargado/actividades/asignacion/' + ctxCal.idAsignacion + '/horas-json', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

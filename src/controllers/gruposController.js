@@ -3,6 +3,7 @@ import prisma from '../config/database.js';
 import { registrarCambio, obtenerIP } from '../middleware/audit.js';
 import { crearNotificacionParaEmpleado } from '../services/notificacionesService.js';
 import { obtenerEmpleadosDisponiblesParaGrupo } from '../services/gruposService.js';
+import { fechaLocalDB } from '../utils/tiempo.js';
 
 // ============================================================
 // CONTROLADOR SUPERADMIN DE GRUPOS
@@ -616,7 +617,7 @@ export const toggleRecurrencia = async (req, res, next) => {
       const corte = new Date(hoy.getTime() - 24 * 3600 * 1000);
       await prisma.actividad_Recurrencias.update({
         where: { ID_Recurrencia: existente.ID_Recurrencia },
-        data: { Fecha_Fin: corte < existente.Fecha_Inicio ? existente.Fecha_Inicio : corte, Activo: false }
+        data: { Fecha_Fin: corte < fechaLocalDB(existente.Fecha_Inicio) ? existente.Fecha_Inicio : corte, Activo: false }
       });
 
       await registrarCambio({
