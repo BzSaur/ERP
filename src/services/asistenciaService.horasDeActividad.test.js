@@ -52,5 +52,6 @@ test('horasPorParesVista: suma pares, hueco no cuenta; impar = 0', async () => {
   const r = horasPorParesVista([ch(8), ch(12), ch(15), ch(18)]);
   assert.equal(r.real, 7);
   assert.equal(r.red, 7);
-  assert.deepEqual(horasPorParesVista([ch(8), ch(12), ch(15)]), { real: 0, red: 0 });
+  assert.deepEqual(horasPorParesVista([ch(8), ch(12), ch(15)]), { real: 0, red: 0, pares: [] });
+  assert.deepEqual(r.pares.map(x => [x.e, x.s]), [[480, 720], [900, 1080]]);
 });

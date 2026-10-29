@@ -478,9 +478,19 @@ export async function obtenerComandosPendientes(checador, limite = 20) {
 
 /**
  * Procesa la confirmación de un comando (POST /iclock/devicecmd).
- * Body ZK típico: "ID=<n>&Return=<code>&CMD=<cmd>"
+ * Body ZK típico: "ID=<n>&Return=<code>&CMD=<cmd>", una línea por comando: el
+ * device confirma varios en un solo POST. Antes solo se leía la primera línea;
+ * las demás quedaban en 'enviado' y se reenviaban cada 2 min hasta agotar
+ * intentos (un BLOQUEO reenviado podía pisar una reactivación posterior).
  */
 export async function confirmarComando(body) {
+  const lineas = String(body || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const resultados = [];
+  for (const linea of lineas) resultados.push(await confirmarLineaComando(linea));
+  return resultados;
+}
+
+async function confirmarLineaComando(body) {
   const params = {};
   String(body || '').split('&').forEach(kv => {
     const [k, v] = kv.split('=');

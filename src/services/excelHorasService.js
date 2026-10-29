@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -228,14 +228,20 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const entRaw = entradaPago ? fmtHora(entradaPago) : null;
       const salRaw = salidaPago ? fmtHora(salidaPago) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
-      const salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
+      let salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
+      const p = horasPorParesVista(a.historial_checadas);
+      // Varios periodos (salió y regresó): se listan todos, alineados por
+      // posición, para poder comprobar la suma de horas contra las checadas.
+      if (a.Hora_Salida && p.pares.length > 1) {
+        entMostrar = p.pares.map((x, i) => fmtMinutos(redondear ? x.eRed : x.e) + (i === 0 && plantaEnt ? ` (${plantaEnt})` : '')).join(' / ');
+        salMostrar = p.pares.map((x, i, arr) => fmtMinutos(redondear ? x.sRed : x.s) + (i === arr.length - 1 && plantaSal ? ` (${plantaSal})` : '')).join(' / ');
+      }
       // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
       let horas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0; // sin salida = 0 h, aunque BD tenga estimado
       // Sin redondeo: horas netas de la checada real (con descuento de comida).
       // Con redondeo: horas del par redondeado (regla restrictiva en cualquier fecha).
       // Se suman PARES entrada-salida: el hueco entre pares (salió y regresó) no cuenta.
       if (a.Hora_Entrada && a.Hora_Salida) {
-        const p = horasPorParesVista(a.historial_checadas);
         const real = redondear ? p.red : p.real;
         if (real > 0) horas = real;
       }
@@ -320,7 +326,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const cols = [{ wch: 6 }, { wch: 28 }, { wch: 16 }];
   // Entrada más ancha que Salida: además de la hora puede llevar la actividad
   // delegada del día ("07:47 (RAM 1) · CAMPO: HOME OFFICE [recurrente]").
-  for (let i = 0; i < dias.length; i++) cols.push({ wch: 30 }, { wch: 14 }, { wch: 7 });
+  for (let i = 0; i < dias.length; i++) cols.push({ wch: 30 }, { wch: 22 }, { wch: 7 });
   cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 });
   ws['!cols'] = cols;
 

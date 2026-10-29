@@ -1792,17 +1792,22 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // Horas del día sumando PARES entrada-salida (el hueco entre pares no cuenta),
 // sin redondeo y con el redondeo de la vista. Cantidad impar de checadas = par
 // abierto = sin salida: 0 h en ambos. checadas: filas de Historial_Checadas.
+// pares: minutos de cada par, real y redondeado, para mostrarlos (Excel).
 export function horasPorParesVista(checadas) {
   const c = consolidarChecadas(checadas || []);
-  if (c.length < 2 || c.length % 2) return { real: 0, red: 0 };
+  if (c.length < 2 || c.length % 2) return { real: 0, red: 0, pares: [] };
   const min = (x) => x.Fecha_Hora.getHours() * 60 + x.Fecha_Hora.getMinutes();
   let real = 0, red = 0;
+  const pares = [];
   for (let i = 0; i < c.length; i += 2) {
     const e = min(c[i]), s = min(c[i + 1]);
+    const eRed = i === 0 ? redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin) : e;
+    const sRed = redondearSalida(s);
     real += horasNetasTramo(e, s);
-    red += horasNetasTramo(i === 0 ? redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin) : e, redondearSalida(s));
+    red += horasNetasTramo(eRed, sRed);
+    pares.push({ e, s, eRed, sRed });
   }
-  return { real: Math.round(real * 100) / 100, red: Math.round(red * 100) / 100 };
+  return { real: Math.round(real * 100) / 100, red: Math.round(red * 100) / 100, pares };
 }
 
 /**
