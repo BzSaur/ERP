@@ -45,3 +45,12 @@ test('tramo posterior a la entrada no justifica retardo', () => {
   assert.equal(actividadJustificaRetardo(act(null, null), checada(9)), true);
   assert.equal(actividadJustificaRetardo(act(hm(7), hm(8)), checada(9)), true);
 });
+
+test('horasPorParesVista: suma pares, hueco no cuenta; impar = 0', async () => {
+  const { horasPorParesVista } = await import('./asistenciaService.js');
+  const ch = (h, m = 0) => ({ ID_Checada: h * 100 + m, Origen_Sincronizacion: 'ADMS_PUSH', Fecha_Hora: new Date(2026, 9, 20, h, m) });
+  const r = horasPorParesVista([ch(8), ch(12), ch(15), ch(18)]);
+  assert.equal(r.real, 7);
+  assert.equal(r.red, 7);
+  assert.deepEqual(horasPorParesVista([ch(8), ch(12), ch(15)]), { real: 0, red: 0 });
+});

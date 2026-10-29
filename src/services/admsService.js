@@ -292,6 +292,20 @@ function aplicarManuales(deviceDedup, manuales) {
     .sort((a, b) => a.Fecha_Hora - b.Fecha_Hora);
 }
 
+// Checadas que cuentan en el día: dobles del reloj colapsadas (<20 min) y las
+// manuales sustituyendo entrada/salida. Fuente única para recalcularJornada y
+// para las vistas/Excel que recalculan horas con o sin redondeo.
+export function consolidarChecadas(checadas) {
+  const delReloj = checadas.filter(c => c.Origen_Sincronizacion !== 'MANUAL');
+  const manuales = checadas.filter(c => c.Origen_Sincronizacion === 'MANUAL');
+  const enriquecidas = delReloj.map(c => ({
+    totalMinutos: c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes(),
+    c
+  }));
+  const relojDedup = dedupChecadas(enriquecidas, VENTANA_DEDUP_MIN).map(x => x.c);
+  return manuales.length ? aplicarManuales(relojDedup, manuales) : relojDedup;
+}
+
 export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, empleado) {
   const finDia = new Date(fechaDia);
   finDia.setHours(23, 59, 59, 999);
@@ -321,14 +335,7 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
   // entrada/salida y calcular horas. Evita que un doble marcaje (ej. 07:35 y
   // 07:36) quede como entrada+salida de 1 min. Solo aplica a las del reloj:
   // las manuales no se deduplican.
-  const delReloj = checadas.filter(c => c.Origen_Sincronizacion !== 'MANUAL');
-  const manuales = checadas.filter(c => c.Origen_Sincronizacion === 'MANUAL');
-  const enriquecidas = delReloj.map(c => ({
-    totalMinutos: c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes(),
-    c
-  }));
-  const relojDedup = dedupChecadas(enriquecidas, VENTANA_DEDUP_MIN).map(x => x.c);
-  const conservadas = manuales.length ? aplicarManuales(relojDedup, manuales) : relojDedup;
+  const conservadas = consolidarChecadas(checadas);
   if (conservadas.length === 0) return;
 
   const primera = conservadas[0];
@@ -354,7 +361,9 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
   const multiPlanta = plantaEntrada !== null && plantaSalida !== null && plantaEntrada !== plantaSalida;
 
   const horaEntrada = conservadas.length >= 1 ? primera.Fecha_Hora : null;
-  const horaSalida  = conservadas.length >= 2 ? ultima.Fecha_Hora : null;
+  // Par abierto (cantidad impar: entra, sale, regresa) = sin salida. Antes la
+  // última checada ("regresa") se guardaba como salida y el día aparecía cerrado.
+  const horaSalida  = conservadas.length >= 2 && !calc.incompleta ? ultima.Fecha_Hora : null;
 
   await tx.empleados_Asistencia.update({
     where: { ID_Asistencia: idAsistencia },
@@ -367,9 +376,9 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
       Retardo: calc.retardo || false,
       Presente: true,
       Ubicacion_Entrada: ubicEntrada || null,
-      Ubicacion_Salida: ubicSalida || null,
+      Ubicacion_Salida: horaSalida ? (ubicSalida || null) : null,
       ID_Checador_Entrada: primera.ID_Checador ?? null,
-      ID_Checador_Salida: ultima.ID_Checador ?? null,
+      ID_Checador_Salida: horaSalida ? (ultima.ID_Checador ?? null) : null,
       Multi_Planta: multiPlanta,
       Notas: calc.notas || null,
       UpdatedAt: new Date()
@@ -384,7 +393,7 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
     where: { ID_Checada: primera.ID_Checada },
     data: { Tipo_Checada: 'ENTRADA', Estado: estadoEntrada }
   });
-  if (conservadas.length >= 2) {
+  if (horaSalida) {
     await tx.historial_Checadas.update({ where: { ID_Checada: ultima.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
   }
 }

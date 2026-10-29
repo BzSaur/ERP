@@ -13,7 +13,7 @@ import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha, redondearEntrada, redondearSalida, VENTANA_DEDUP_MIN } from './checadorImportService.js';
 import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB } from '../utils/tiempo.js';
 import { esFestivo } from './diasFestivosService.js';
-import { recalcularJornada } from './admsService.js';
+import { recalcularJornada, consolidarChecadas } from './admsService.js';
 
 // ============================================================
 // CONSTANTES Y CONFIGURACIÓN
@@ -1313,7 +1313,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       Hora_Entrada: true, Hora_Salida: true, Minutos_Retardo: true,
       Horas_Trabajadas: true, Horas_Extras: true,
       Ubicacion_Entrada: true, Ubicacion_Salida: true,
-      ID_Checador_Entrada: true, ID_Checador_Salida: true
+      ID_Checador_Entrada: true, ID_Checador_Salida: true,
+      historial_checadas: { orderBy: { Fecha_Hora: 'asc' }, select: { ID_Checada: true, Fecha_Hora: true, Origen_Sincronizacion: true } }
     }
   });
 
@@ -1402,6 +1403,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       entradaRed: fmt(entradaRedondeadaVista(a.Hora_Entrada)),
       salidaRed: fmt(salidaRedondeadaVista(a.Hora_Salida)),
       horasActividad: horasActividadDia,
+      ...(() => { const p = horasPorParesVista(a.historial_checadas); return { horasReal: p.real, horasRed: p.red }; })(),
       incompleta,
       enCurso,
       retardo: esRetardo,
@@ -1785,6 +1787,22 @@ export function salidaRedondeadaVista(horaSalidaReal) {
   const out = new Date(d);
   out.setHours(Math.floor(redondearSalida(d.getHours() * 60 + d.getMinutes()) / 60), 0, 0, 0);
   return out;
+}
+
+// Horas del día sumando PARES entrada-salida (el hueco entre pares no cuenta),
+// sin redondeo y con el redondeo de la vista. Cantidad impar de checadas = par
+// abierto = sin salida: 0 h en ambos. checadas: filas de Historial_Checadas.
+export function horasPorParesVista(checadas) {
+  const c = consolidarChecadas(checadas || []);
+  if (c.length < 2 || c.length % 2) return { real: 0, red: 0 };
+  const min = (x) => x.Fecha_Hora.getHours() * 60 + x.Fecha_Hora.getMinutes();
+  let real = 0, red = 0;
+  for (let i = 0; i < c.length; i += 2) {
+    const e = min(c[i]), s = min(c[i + 1]);
+    real += horasNetasTramo(e, s);
+    red += horasNetasTramo(i === 0 ? redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin) : e, redondearSalida(s));
+  }
+  return { real: Math.round(real * 100) / 100, red: Math.round(red * 100) / 100 };
 }
 
 /**

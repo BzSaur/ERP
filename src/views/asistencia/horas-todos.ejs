@@ -409,6 +409,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-ent-red="<%= c.entradaRed || '' %>"
                     data-sal-red="<%= c.salidaRed || '' %>"
                     data-hact="<%= c.horasActividad || 0 %>"
+                    data-hreal="<%= c.horasReal || 0 %>"
+                    data-hred="<%= c.horasRed || 0 %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
@@ -567,13 +569,6 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   // Activo (default) = lo que se paga (entrada/salida y horas del servidor).
   // Apagado = checadas reales, horas netas con descuento de comida 14-15.
   const LIMITE_SEMANAL = 45;
-  function minutosEntre(ent, sal) {
-    const [he, me] = ent.split(':').map(Number);
-    const [hs, ms] = sal.split(':').map(Number);
-    const e = he*60+me, s = hs*60+ms;
-    if (s <= e) return 0;
-    return s - e - Math.max(0, Math.min(s, 900) - Math.max(e, 840));
-  }
   const chk = document.getElementById('chkRedondear');
   function aplicarRedondeo() {
     const redondeado = chk.checked;
@@ -593,16 +588,16 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
           if (entP) ent = entP;
           if (salP) sal = salP;
           if (entP && salP) {
-            const m = minutosEntre(entP, salP);
-            if (m > 0) horas = m / 60 + hAct;
+            const hp = parseFloat(td.dataset.hred) || 0; // suma por pares (sin el hueco entre pares)
+            if (hp > 0) horas = hp + hAct;
           }
         } else {
           // Entrada/salida reales aunque falte la otra; las horas solo con el par completo.
           if (entR) ent = entR;
           if (salR) sal = salR;
           if (entR && salR) {
-            const m = minutosEntre(entR, salR);
-            if (m > 0) horas = m / 60 + hAct;
+            const hp = parseFloat(td.dataset.hreal) || 0;
+            if (hp > 0) horas = hp + hAct;
           }
         }
         celEs.querySelector('.ent').textContent = ent || '--:--';
