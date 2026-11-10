@@ -241,9 +241,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       // Sin redondeo: horas netas de la checada real (con descuento de comida).
       // Con redondeo: horas del par redondeado (regla restrictiva en cualquier fecha).
       // Se suman PARES entrada-salida: el hueco entre pares (salió y regresó) no cuenta.
-      if (a.Hora_Entrada && a.Hora_Salida) {
+      if (a.Hora_Entrada) {
         const real = redondear ? p.red : p.real;
-        if (real > 0) horas = real;
+        if (real > 0) horas = real; // sin Hora_Salida: solo pares cerrados
       }
 
       // Actividad delegada Y checada real el mismo día: se suman el tramo de la

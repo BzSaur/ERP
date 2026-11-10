@@ -1356,6 +1356,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // solo si hay entrada y salida pero faltan horas consolidadas se calcula del par.
     // Sin Hora_Salida ignora lo guardado en BD (jornadas viejas quedaron estimadas a 18:00).
     let horasReales = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0;
+    // Par abierto (impar) pero con pares cerrados antes: esos sí suman.
+    if (!a.Hora_Salida && a.Presente) horasReales = horasPorParesVista(a.historial_checadas).red;
     if (horasReales === 0 && a.Presente && a.Hora_Entrada && a.Hora_Salida) {
       const entR = new Date(a.Hora_Entrada);
       const salR = new Date(a.Hora_Salida);
@@ -1794,8 +1796,9 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // abierto = sin salida: 0 h en ambos. checadas: filas de Historial_Checadas.
 // pares: minutos de cada par, real y redondeado, para mostrarlos (Excel).
 export function horasPorParesVista(checadas) {
-  const c = consolidarChecadas(checadas || []);
-  if (c.length < 2 || c.length % 2) return { real: 0, red: 0, pares: [] };
+  let c = consolidarChecadas(checadas || []);
+  if (c.length % 2) c = c.slice(0, -1); // par abierto no suma, los pares cerrados sí
+  if (c.length < 2) return { real: 0, red: 0, pares: [] };
   const min = (x) => x.Fecha_Hora.getHours() * 60 + x.Fecha_Hora.getMinutes();
   let real = 0, red = 0;
   const pares = [];
