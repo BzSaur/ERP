@@ -857,7 +857,10 @@ export async function obtenerResumenAsistencia({
  * @param {Array} checadas filas de Historial_Checadas (con Fecha_Hora), ordenadas asc
  * @param {Object} [empleadoRegla] { area, puesto }
  */
-function paresDesdeChecadas(checadas, empleadoRegla) {
+function paresDesdeChecadas(checadasCrudas, empleadoRegla) {
+  // Mismas checadas que cuentan para las horas (sin dobles <20 min): si no, la
+  // tabla muestra 2 pares completos mientras el cálculo ve un par abierto.
+  const checadas = consolidarChecadas(checadasCrudas);
   const fmt = d => { const x = new Date(d); return String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
   const pares = [];
   for (let i = 0; i < checadas.length; i += 2) {
@@ -1097,7 +1100,9 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Si hubo actividad delegada Y checada real el mismo día, se SUMAN: el
     // tramo de la actividad (capturado, o 8am→primera entrada) más las horas
     // reales ya calculadas por admsService.
-    const horas = (a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0) + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
+    // Sin Hora_Salida (par abierto): suman solo los pares cerrados.
+    const horasChecadas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : (a.Presente ? horasPorParesVista(checadas).red : 0);
+    const horas = horasChecadas + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
     const retardoDia = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);

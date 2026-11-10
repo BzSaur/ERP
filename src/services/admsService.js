@@ -302,7 +302,13 @@ export function consolidarChecadas(checadas) {
     totalMinutos: c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes(),
     c
   }));
-  const relojDedup = dedupChecadas(enriquecidas, VENTANA_DEDUP_MIN).map(x => x.c);
+  const dedup = dedupChecadas(enriquecidas, VENTANA_DEDUP_MIN);
+  // Impar por dedup: la última conservada tenía un doble pegado (ej. 18:02+18:03
+  // tras salir 16:05) = marcaje espurio, no entrada sin salida. Se descarta y el
+  // día queda cerrado en el último par completo. Impar sin dobles (entra, sale,
+  // regresa) sigue siendo par abierto.
+  if (dedup.length >= 3 && dedup.length % 2 && dedup[dedup.length - 1] !== enriquecidas[enriquecidas.length - 1]) dedup.pop();
+  const relojDedup = dedup.map(x => x.c);
   return manuales.length ? aplicarManuales(relojDedup, manuales) : relojDedup;
 }
 
