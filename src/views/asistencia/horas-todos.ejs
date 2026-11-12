@@ -340,7 +340,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <th class="text-center">Norm</th>
             <th class="text-center" title="Horas completas sobre 45h de cada semana">Extra</th>
             <th class="text-center sortable" data-sort="total" data-type="num">Total <span class="arrow"></span></th>
-            <th class="text-center" title="Total ÷ 9 (jornada de 9h), solo si no hay extra. 2.8 = 2 días y 8 horas">Días</th>
+            <th class="text-center" title="Total ÷ 9 (jornada de 9h), fracción real de día para multiplicar por el sueldo diario. 50h = 5.56">Días</th>
             <th class="text-center">Ret</th>
           </tr>
         </thead>
@@ -641,16 +641,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       const set = (c, m) => { const el = tr.querySelector(c); if (el) el.textContent = m > 0 ? fmtH(m / 60) : '-'; };
       set('.col-normal', totalMin - extraMin); set('.col-extra', extraMin);
       const tot = tr.querySelector('.col-total .tot'); if (tot) tot.textContent = fmtH(totalMin / 60);
-      // Días = total ÷ 9 truncado a 1 decimal. Con horas enteras el decimal son
-      // las horas sobrantes: 26h -> 2.8 (2 días y 8 h), como lo anota RH.
-      // Solo sin extra: con extra se paga la semana completa + extra.
+      // Días = total ÷ 9 como fracción REAL de día (2 decimales), porque se
+      // multiplica por el sueldo diario: 50h -> 5.56, no 5.5 (5.5 días = 49.5h).
+      // El tooltip da la lectura "días y horas" (50h = 5 días y 5 h).
       const tdD = tr.querySelector('.col-dias');
       if (tdD) {
-        const dias = Math.floor(totalMin / 60 / 9 * 10 + 1e-9) / 10;
-        const diasEnteros = Math.floor(totalMin / 60 / 9);
-        tdD.textContent = (extraMin === 0 && totalMin > 0) ? dias.toFixed(1) : '-';
-        tdD.title = (extraMin === 0 && totalMin > 0)
-          ? diasEnteros + ' día(s) y ' + fmtH(totalMin / 60 - diasEnteros * 9) + ' h' : '';
+        const dias = totalMin / 60 / 9;
+        const diasEnteros = Math.floor(dias + 1e-9);
+        tdD.textContent = totalMin > 0 ? dias.toFixed(2) : '-';
+        tdD.title = totalMin > 0 ? diasEnteros + ' día(s) y ' + fmtH(totalMin / 60 - diasEnteros * 9) + ' h' : '';
       }
       tr.dataset.total = totalMin / 60;
     });

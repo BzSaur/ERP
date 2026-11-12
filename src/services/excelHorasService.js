@@ -145,7 +145,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     head2.push('Entrada', 'Salida', 'Horas');
   }
   head1.push('Total hrs', 'Normal', 'Extra', 'Días');
-  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h/sem)`, `(>${LIMITE_SEMANAL_HORAS}h/sem, horas completas)`, '(total ÷ 9, sin extra)');
+  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h/sem)`, `(>${LIMITE_SEMANAL_HORAS}h/sem, horas completas)`, '(total ÷ 9)');
   aoa.push(head1);
   aoa.push(head2);
 
@@ -308,8 +308,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     const diasRango = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
     if (minPorDia.length < diasRango) minPorDia.length = diasRango;
     const r = repartirSemanal(minPorDia);
-    // Días = total ÷ 9 truncado a 1 decimal (26h -> 2.8 = 2 días y 8 h), solo sin extra.
-    const diasPago = (r.extras === 0 && r.total > 0) ? Math.floor(r.total / 9 * 10 + 1e-9) / 10 : '';
+    // Días = total ÷ 9 como fracción real de día (se multiplica por el sueldo
+    // diario): 50h -> 5.56. Redondeado a 2 decimales: lo que se ve es lo que se multiplica.
+    const diasPago = r.total > 0 ? Math.round(r.total / 9 * 100) / 100 : '';
     fila.push(r.total / 24, r.normales / 24, r.extras / 24, diasPago);
     return { fila, id: e.ID_Empleado, nombre, total: r.total };
   });
@@ -344,6 +345,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const cell = ws[XLSX.utils.encode_cell({ r: rIdx, c })];
       if (cell && cell.t === 'n') cell.z = '[h]:mm';
     }
+    // Días (total ÷ 9) con 2 decimales.
+    const celDias = ws[XLSX.utils.encode_cell({ r: rIdx, c: colTotal + 3 })];
+    if (celDias && celDias.t === 'n') celDias.z = '0.00';
   }
   const cols = [{ wch: 6 }, { wch: 28 }, { wch: 16 }];
   // Entrada más ancha que Salida: además de la hora puede llevar la actividad
