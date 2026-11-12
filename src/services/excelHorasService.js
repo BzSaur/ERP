@@ -14,7 +14,7 @@ import * as XLSX from 'xlsx';
 import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { esDiaNocturno, asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
+import { esDiaNocturno, entranteAplicada, asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -243,9 +243,11 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const p = nocturno ? { real: 0, red: 0, pares: [] } : horasPorParesVista(a.historial_checadas);
       if (nocturno) {
         // El xlsx no conserva estilos de celda: la marca va en el texto.
-        if (a.Nocturna_Entrante && entMostrar) entMostrar = `${entMostrar} (-1)`;
-        if (a.Nocturna_Estado && a.Nocturna_Estado !== 'RECHAZADA' && salMostrar) salMostrar = `${salMostrar} (+1)`;
-        entMostrar = `NOCTURNA${a.Nocturna_Estado === 'AUTO' ? ' POR CONFIRMAR' : ''} · ${entMostrar}`;
+        const entra = entranteAplicada(a);
+        const sale = ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado);
+        if (entra && entMostrar) entMostrar = `${entMostrar} (-1)`;
+        if (sale && salMostrar) salMostrar = `${salMostrar} (+1)`;
+        if (entra || sale) entMostrar = `NOCTURNA${a.Nocturna_Estado === 'AUTO' ? ' POR CONFIRMAR (no suma)' : ''} · ${entMostrar}`;
       }
       // Varios periodos (salió y regresó): se listan todos, alineados por
       // posición, para poder comprobar la suma de horas contra las checadas.

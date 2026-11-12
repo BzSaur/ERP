@@ -313,6 +313,7 @@ export function consolidarChecadas(checadas) {
 }
 
 const ESTADOS_NOCTURNA_FIJOS = ['CONFIRMADA', 'MANUAL', 'RECHAZADA'];
+const NOCTURNA_APLICADA = ['CONFIRMADA', 'MANUAL'];
 const claveLocal = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
 const claveDB = (f) => new Date(f).toISOString().slice(0, 10); // @db.Date llega 00:00Z
 const diaMas = (fecha, delta) => { const f = new Date(fecha); f.setDate(f.getDate() + delta); f.setHours(0, 0, 0, 0); return f; };
@@ -377,7 +378,11 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   const pIn = detectarCruceNocturno(propiasPrev, act.cs, prev.fila?.Nocturna_Estado ?? null);
   const propias = pIn ? act.cs.slice(1) : act.cs;
   const pOut = detectarCruceNocturno(propias, sig.cs, fila.Nocturna_Estado);
-  const ePrev = pIn ? propiasPrev[propiasPrev.length - 1] : null;
+  // Detectada sola (AUTO) = pendiente: se marca y su salida no se empareja con
+  // nada, pero NO suma horas hasta que RH diga "Sí" (CONFIRMADA) o la marque a mano.
+  const aplicaIn = !!pIn && NOCTURNA_APLICADA.includes(prev.fila?.Nocturna_Estado);
+  const aplicaOut = !!pOut && NOCTURNA_APLICADA.includes(fila.Nocturna_Estado);
+  const ePrev = aplicaIn ? propiasPrev[propiasPrev.length - 1] : null;
   const minutosDe = (c) => c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes();
 
   const { toleranciaMin, aplicaCobertura, restrictivo } = reglaToleranciaPorFecha(fechaDia);
@@ -391,7 +396,24 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   }
 
   // Dobles checadas (<20 min) y manuales ya resueltas en consolidarChecadas.
-  const conservadas = pIn ? [pIn, ...propias] : propias;
+  const conservadas = aplicaIn ? [pIn, ...propias] : propias;
+  if (conservadas.length === 0) {
+    // Solo trae la salida de una nocturna aún por confirmar: el día no suma nada.
+    await tx.empleados_Asistencia.update({
+      where: { ID_Asistencia: fila.ID_Asistencia },
+      data: {
+        Hora_Entrada: null, Hora_Salida: null, Horas_Trabajadas: 0, Horas_Extras: 0,
+        Minutos_Retardo: 0, Retardo: false, Presente: true, Multi_Planta: false,
+        Ubicacion_Entrada: null, Ubicacion_Salida: null, ID_Checador_Entrada: null, ID_Checador_Salida: null,
+        Notas: 'Salida de jornada nocturna por confirmar',
+        Nocturna_Estado: fila.Nocturna_Estado === 'RECHAZADA' ? 'RECHAZADA' : null,
+        Nocturna_Entrante: true,
+        UpdatedAt: new Date()
+      }
+    });
+    await tx.historial_Checadas.update({ where: { ID_Checada: pIn.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
+    return false;
+  }
 
   // Construir input para calcularHorasPorPares (espera {hora, minuto, totalMinutos, horaStr})
   const checadasCalc = conservadas.map(c => {
@@ -406,7 +428,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
     esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo,
     // Entró la víspera: el tramo cuenta desde las 22:00 (o su entrada si fue más tarde).
     entradaNocturnaMin: ePrev ? Math.max(minutosDe(ePrev), CORTE_NOCTURNO_MIN) - 1440 : null,
-    salidaNocturna: !!pOut
+    salidaNocturna: aplicaOut
   });
 
   const primera = ePrev || conservadas[0];
@@ -428,7 +450,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   // Salida nocturna: la checada real de mañana.
   const horaSalida = pOut
     ? pOut.Fecha_Hora
-    : ((conservadas.length >= 2 || pIn) && !calc.incompleta ? ultima.Fecha_Hora : null);
+    : ((conservadas.length >= 2 || aplicaIn) && !calc.incompleta ? ultima.Fecha_Hora : null);
 
   // CONFIRMADA/MANUAL/RECHAZADA las decide RH y no se pisan mientras el cruce
   // exista; si el día ya no tiene par abierto que cruce, se limpia (salvo RECHAZADA).
@@ -452,7 +474,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
       ID_Checador_Entrada: primera.ID_Checador ?? null,
       ID_Checador_Salida: horaSalida ? (ultima.ID_Checador ?? null) : null,
       Multi_Planta: multiPlanta,
-      Notas: calc.notas || null,
+      Notas: (pOut && !aplicaOut ? 'Nocturna por confirmar (no suma) · ' : '') + (calc.notas || ''),
       Nocturna_Estado: nocturnaEstado,
       Nocturna_Entrante: !!pIn,
       UpdatedAt: new Date()

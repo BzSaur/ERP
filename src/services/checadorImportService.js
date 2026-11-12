@@ -798,7 +798,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     esSabado,
     totalChecadas: orden.length,
     pares,
-    notas: `${pares.length} periodo(s)${nocIn || salidaNocturna ? ' · nocturna' : ''}${notaIncompleta}${retardo ? ` · retardo ${minutosRetardo}min` : ''}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
+    notas: `${pares.length} periodo(s)${nocIn || salidaNocturna ? ' · nocturna' : ''}${notaIncompleta}${horasExtras > 0 ? ` · ${horasExtras.toFixed(1)}h extra` : ''}`
   };
 }
 

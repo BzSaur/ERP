@@ -920,8 +920,9 @@ function paresDesdeChecadas(checadasCrudas, empleadoRegla, noc = null) {
   const pares = [];
   // Jornada nocturna recibida: la primera checada es la salida del tramo que
   // empezó la víspera (22:00 o la entrada real si fue después).
+  // Con la nocturna pendiente esa salida no se empareja con nada (no se muestra).
   if (noc?.entrante && checadas.length) {
-    pares.push({ entrada: fmt(noc.horaEntrada) + ' (-1)', salida: fmt(checadas[0].Fecha_Hora) });
+    if (noc.aplicada) pares.push({ entrada: fmt(noc.horaEntrada) + ' (-1)', salida: fmt(checadas[0].Fecha_Hora) });
     checadas = checadas.slice(1);
     empleadoRegla = null;
   }
@@ -1205,10 +1206,11 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       incompleta: a.Presente && (!a.Hora_Entrada || !a.Hora_Salida),
       // Jornada nocturna: estado del cruce que sale este día y si recibe el de la víspera.
       nocturna: esDiaNocturno(a) && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
-      nocturnaEntrante: !!a.Nocturna_Entrante,
+      nocturnaEntrante: entranteAplicada(a),
       // Pares entrada-salida para visualización (consecutivos desde checadas crudas).
       pares: paresDesdeChecadas(checadas, empParaRegla, esDiaNocturno(a) ? {
         entrante: a.Nocturna_Entrante,
+        aplicada: entranteAplicada(a),
         saliente: ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado),
         horaEntrada: a.Hora_Entrada, horaSalida: a.Hora_Salida
       } : null),
@@ -1499,7 +1501,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       multiPlanta: a.Multi_Planta,
       planta: planta || null,
       nocturna: nocturno && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
-      nocturnaEntrante: !!a.Nocturna_Entrante,
+      nocturnaEntrante: entranteAplicada(a),
       nocturnaEstado: a.Nocturna_Estado || null
     });
   }
@@ -1898,6 +1900,11 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // Día con jornada nocturna (sale de madrugada o recibe el tramo de la víspera):
 // sus horas solo existen consolidadas en BD. Recalcular por pares del día
 // calendario las rompería (la salida de las 06:00 es de la víspera).
+// El día recibe de verdad el tramo de la víspera (nocturna confirmada): su entrada
+// es de la noche anterior. Con la nocturna pendiente no hay tramo que mostrar.
+export const entranteAplicada = (a) =>
+  !!(a?.Nocturna_Entrante && a.Hora_Entrada && new Date(a.Hora_Entrada) < fechaLocalDB(a.Fecha));
+
 export const esDiaNocturno = (a) =>
   !!a && (a.Nocturna_Entrante || ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado));
 
