@@ -113,7 +113,7 @@
             <div class="col-md-2 col-sm-4 mb-3">
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
-                        <h3 class="mb-0 text-info"><%= resumen.horasTrabajadas.toFixed(1) %></h3>
+                        <h3 class="mb-0 text-info"><% const _tm = Math.round((Number(resumen.horasTrabajadas) || 0) * 60); %><%= Math.floor(_tm / 60) + ':' + String(_tm % 60).padStart(2, '0') %></h3>
                         <small class="text-body-secondary">Horas Trabajadas</small>
                     </div>
                 </div>

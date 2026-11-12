@@ -29,6 +29,35 @@ const UBICACIONES = {
 // extra por día (post-18:00) — el extra es puramente el excedente semanal.
 const LIMITE_SEMANAL_HORAS = 45;
 
+// Horas (decimal) -> minutos enteros. Los totales se suman en minutos enteros
+// para que el total mostrado sea exactamente la suma de las celdas mostradas
+// (RH lo comprueba a mano). Sumar horas con decimales acumulaba centésimas.
+export function aMinutos(horas) {
+  return Math.round((Number(horas) || 0) * 60);
+}
+
+/**
+ * Reparte las horas de un rango en normales/extras POR SEMANA: bloques de 7
+ * días contados desde el inicio del rango, cada uno con su tope de 45h. Así un
+ * rango de dos semanas no convierte 45h normales en extra.
+ * El extra se cuenta en horas completas: los minutos sueltos sobre el tope no
+ * hacen extra (se quedan en normales para que Norm + Extra = Total).
+ * @param {Array<number>} minutosPorDia minutos de cada día, índice = días desde el inicio (huecos = 0)
+ * @returns {{ total:number, normales:number, extras:number, semanas:number }} en horas
+ */
+export function repartirSemanal(minutosPorDia) {
+  const tope = LIMITE_SEMANAL_HORAS * 60;
+  let totalMin = 0, extraMin = 0;
+  const semanas = Math.max(1, Math.ceil((minutosPorDia.length || 0) / 7));
+  for (let s = 0; s < semanas; s++) {
+    let semMin = 0;
+    for (let i = s * 7; i < s * 7 + 7 && i < minutosPorDia.length; i++) semMin += minutosPorDia[i] || 0;
+    totalMin += semMin;
+    extraMin += Math.floor(Math.max(0, semMin - tope) / 60) * 60;
+  }
+  return { total: totalMin / 60, normales: (totalMin - extraMin) / 60, extras: extraMin / 60, semanas };
+}
+
 // ============================================================
 // FILTRO DE VISIBILIDAD POR USUARIO (permisos granulares)
 // ============================================================
@@ -907,11 +936,14 @@ const JORNADA_INICIO_MIN = 8 * 60, JORNADA_FIN_MIN = 18 * 60;
 
 // Horas netas de un tramo [desdeMin, hastaMin] descontando la comida si lo
 // cruza. Mismo criterio de overlap que calcularHorasPorPares.
-export function horasNetasTramo(desdeMin, hastaMin) {
+export function minutosNetosTramo(desdeMin, hastaMin) {
   if (!Number.isFinite(desdeMin) || !Number.isFinite(hastaMin) || hastaMin <= desdeMin) return 0;
   let netos = hastaMin - desdeMin;
   netos -= Math.max(0, Math.min(hastaMin, COMIDA_FIN_MIN) - Math.max(desdeMin, COMIDA_INI_MIN));
-  return Math.round((Math.max(0, netos) / 60) * 100) / 100;
+  return Math.max(0, netos);
+}
+export function horasNetasTramo(desdeMin, hastaMin) {
+  return Math.round((minutosNetosTramo(desdeMin, hastaMin) / 60) * 100) / 100;
 }
 
 // Minutos desde medianoche -> 'HH:MM'. Un fin de tramo > 1440 (termina al día
@@ -1102,7 +1134,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // reales ya calculadas por admsService.
     // Sin Hora_Salida (par abierto): suman solo los pares cerrados.
     const horasChecadas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : (a.Presente ? horasPorParesVista(checadas).red : 0);
-    const horas = horasChecadas + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida);
+    const horas = aMinutos(horasChecadas + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida)) / 60;
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
     // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
     const retardoDia = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
@@ -1177,9 +1209,9 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // Actividad: tramo capturado o jornada implícita. En día de descanso cuenta
     // solo el tramo documentado (sábado no obligatorio, no se regala jornada).
     // Ausencia: 9h solo si es con goce (ver obtenerAusenciasJustificadas).
-    const horasDia = actividadDia
+    const horasDia = aMinutos(actividadDia
       ? horasDeActividad(actividadDia, null, null)
-      : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0);
+      : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0)) / 60;
     totalHoras += horasDia;
     dias.push({
       fecha,
@@ -1199,12 +1231,23 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   dias.sort((a, b) => a.fecha - b.fecha);
 
   // ---- KPIs ----
-  // Límite semanal FIJO de 45h para todos. El extra es el excedente semanal
-  // (incluye sábado en el total); no hay extra por día.
-  const limiteSemana = LIMITE_SEMANAL_HORAS;
-  const horasRedondeadas = Math.round(totalHoras * 100) / 100;
-  const extrasSobreLimite = Math.max(0, Math.round((horasRedondeadas - limiteSemana) * 100) / 100);
-  const normalesSemana = Math.round((horasRedondeadas - extrasSobreLimite) * 100) / 100;
+  // Límite FIJO de 45h por cada semana del rango (bloques de 7 días desde el
+  // inicio). El extra es el excedente de cada semana, en horas completas
+  // (incluye sábado); no hay extra por día. Suma en minutos enteros.
+  const minutosPorDia = [];
+  for (const d of dias) {
+    const idx = Math.round((new Date(d.fecha).setHours(0, 0, 0, 0) - inicio.getTime()) / 86400000);
+    if (idx >= 0) minutosPorDia[idx] = (minutosPorDia[idx] || 0) + aMinutos(d.horas);
+  }
+  // Largo = días del rango completo: el número de semanas sale del rango, no
+  // del último día con datos.
+  const diasRango = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+  if (minutosPorDia.length < diasRango) minutosPorDia.length = diasRango;
+  const reparto = repartirSemanal(minutosPorDia);
+  const limiteSemana = LIMITE_SEMANAL_HORAS * reparto.semanas;
+  const horasRedondeadas = reparto.total;
+  const extrasSobreLimite = reparto.extras;
+  const normalesSemana = reparto.normales;
   // Días laborables del rango (L-S, sin domingos). Los días de ausencia
   // justificada (vacaciones/permiso) en que NO trabajó no cuentan como
   // laborables: no penalizan el % de cumplimiento.
@@ -1368,7 +1411,8 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       const salR = new Date(a.Hora_Salida);
       horasReales = horasNetasTramo(entR.getHours() * 60 + entR.getMinutes(), salR.getHours() * 60 + salR.getMinutes());
     }
-    const h = horasReales + horasActividadDia;
+    // Minutos enteros: la celda muestra exactamente lo que suma al total.
+    const h = aMinutos(horasReales + horasActividadDia) / 60;
     // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
     // Una actividad sin tramo, o con tramo previo a la entrada, justifica que no
     // llegara a la hora normal (ej. home office que sella al mediodía).
@@ -1479,9 +1523,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           // Ausencia: 9h solo si es CON goce de sueldo (vacaciones, permiso
           // con goce, incapacidad RT…). Las sin goce (falta injustificada,
           // permiso sin goce, abandono) se etiquetan pero no pagan horas.
-          const horasDia = topeHorasHoy(actividad
+          const horasDia = aMinutos(topeHorasHoy(actividad
             ? horasDeActividad(actividad, null, null)
-            : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0), key);
+            : (periodoAus?.conGoce ? HORAS_FIJAS_JORNADA : 0), key)) / 60;
           horasCubiertasSinSello += horasDia;
           if (horasDia > 0) diasCubiertosSinSello++;
           return {
@@ -1516,13 +1560,13 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
 
-    // Los días sin checada cubiertos (actividad o ausencia) suman al total,
-    // igual que si hubiera trabajado.
-    const horas = Math.round((acc.horas + horasCubiertasSinSello) * 100) / 100;
-    // Extra = excedente sobre 45h semanales (incluye sábado en el total).
-    // Normal = lo trabajado hasta el tope de 45h.
-    const extras = Math.max(0, Math.round((horas - LIMITE_SEMANAL_HORAS) * 100) / 100);
-    const normales = Math.round((horas - extras) * 100) / 100;
+    // Total = suma de las celdas (días checados + días sin checada cubiertos por
+    // actividad o ausencia), en minutos enteros. Extra = excedente sobre 45h de
+    // cada semana del rango, en horas completas (ver repartirSemanal).
+    const reparto = repartirSemanal(celdas.map(c => aMinutos(c.horas)));
+    const horas = reparto.total;
+    const extras = reparto.extras;
+    const normales = reparto.normales;
 
     // Horas esperadas: la jornada obligatoria de lunes a viernes (45h por
     // defecto). El sábado es opcional — quien va a recuperar o a hacer extras
@@ -1800,22 +1844,27 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // sin redondeo y con el redondeo de la vista. Cantidad impar de checadas = par
 // abierto = sin salida: 0 h en ambos. checadas: filas de Historial_Checadas.
 // pares: minutos de cada par, real y redondeado, para mostrarlos (Excel).
+// Redondeado: TODA entrada (no solo la primera) pasa por la tolerancia — dentro
+// de ella cuenta la hora, fuera de ella esa hora no cuenta — y toda salida baja
+// a la hora completa. Así el día redondeado siempre da horas completas.
+// Se suma en minutos enteros y se convierte a horas al final (sin centésimas
+// acumuladas).
 export function horasPorParesVista(checadas) {
   let c = consolidarChecadas(checadas || []);
   if (c.length % 2) c = c.slice(0, -1); // par abierto no suma, los pares cerrados sí
   if (c.length < 2) return { real: 0, red: 0, pares: [] };
   const min = (x) => x.Fecha_Hora.getHours() * 60 + x.Fecha_Hora.getMinutes();
-  let real = 0, red = 0;
+  let realMin = 0, redMin = 0;
   const pares = [];
   for (let i = 0; i < c.length; i += 2) {
     const e = min(c[i]), s = min(c[i + 1]);
-    const eRed = i === 0 ? redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin) : e;
+    const eRed = redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin);
     const sRed = redondearSalida(s);
-    real += horasNetasTramo(e, s);
-    red += horasNetasTramo(eRed, sRed);
+    realMin += minutosNetosTramo(e, s);
+    redMin += minutosNetosTramo(eRed, sRed);
     pares.push({ e, s, eRed, sRed });
   }
-  return { real: Math.round(real * 100) / 100, red: Math.round(red * 100) / 100, pares };
+  return { real: realMin / 60, red: redMin / 60, pares };
 }
 
 /**

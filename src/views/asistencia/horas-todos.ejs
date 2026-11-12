@@ -1,5 +1,6 @@
 <%
-function fmtH(n){ if(n==null) return '-'; const h=Math.floor(n); const m=Math.round((n-h)*60); if(h===0&&m===0) return '0'; if(h===0) return m+'m'; if(m===0) return h+'h'; return h+'h '+m+'m'; }
+// Horas decimales -> 'H:MM' (8.6667 -> '8:40'). Mismo formato en celdas y totales para que se puedan sumar a mano.
+function fmtH(n){ if(n==null) return '-'; const t=Math.round((Number(n)||0)*60); const a=Math.abs(t); return (t<0?'-':'')+Math.floor(a/60)+':'+String(a%60).padStart(2,'0'); }
 const urlExcelBase = typeof excelUrl !== 'undefined' && excelUrl ? excelUrl : '/asistencia/horas/excel';
 // SuperAdmin en la vista por encargado: debe elegir uno antes de ver datos.
 const delegando = typeof esSupervisorParaDelegar !== 'undefined' && esSupervisorParaDelegar;
@@ -81,7 +82,9 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
     </div>
     <div class="form-check form-switch mb-1">
-      <input class="form-check-input" type="checkbox" id="chkRedondear" name="redondear" value="1">
+      <input class="form-check-input" type="checkbox" id="chkRedondear" checked>
+      <%# El valor viaja en este hidden (1/0), no en el checkbox: apagado tiene que mandar 0, porque el default es activo. %>
+      <input type="hidden" name="redondear" id="hidRedondear" value="1">
       <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
     </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
@@ -165,7 +168,7 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
               <% r.dias.forEach(function(d){ %>
                 <span class="badge bg-warning text-dark" title="<%= d.motivo %> · entrada <%= d.entrada||'—' %> / salida <%= d.salida||'—' %>">
                   <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
-                  <%= d.horas.toFixed(1) %>h · <%= d.motivo %>
+                  <%= fmtH(d.horas) %> · <%= d.motivo %>
                 </span>
               <% }); %>
             </div>
@@ -335,8 +338,9 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
               </th>
             <% }); %>
             <th class="text-center">Norm</th>
-            <th class="text-center">Extra</th>
+            <th class="text-center" title="Horas completas sobre 45h de cada semana">Extra</th>
             <th class="text-center sortable" data-sort="total" data-type="num">Total <span class="arrow"></span></th>
+            <th class="text-center" title="Total ÷ 9 (jornada de 9h), solo si no hay extra. 2.8 = 2 días y 8 horas">Días</th>
             <th class="text-center">Ret</th>
           </tr>
         </thead>
@@ -379,10 +383,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                    }
                    else if (!c.presente && c.actividad) {
                      cls='cel-actividad'; bgStyle=tinteActividad;
-                     tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + (c.horas||0).toFixed(1) + 'h';
+                     tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + fmtH(c.horas||0);
                    }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
-                   else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + (c.horas||0).toFixed(1) + 'h (menos de 2h con checada)'; }
+                   else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + fmtH(c.horas||0) + ' (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
                    else if (c.incompleta) { cls='cel-parcial'; tip='Sin salida · 0 h (solo suma la actividad, si hay)'; }
                    else if (c.presente) {
@@ -426,7 +430,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <% } else { %>
                       <% const etiquetaCorta = c.ausencia === 'Vacaciones' ? 'Vac' : c.ausencia === 'Festivo' ? 'Fest' : 'Perm'; %>
                       <span class="text-primary fw-bold d-block"><%= etiquetaCorta %></span>
-                      <span class="text-primary" style="font-size:.68rem"><%= (c.horas||0).toFixed(1) %>h</span>
+                      <span class="text-primary" style="font-size:.68rem"><%= fmtH(c.horas||0) %></span>
                     <% } %>
                   <% } else if (!c.presente && c.actividad) { %>
                     <%
@@ -449,7 +453,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <% }); %>
                       <% if (c.actividad.empresa) { %><div class="act-emp" title="<%= c.actividad.empresa %>"><%= c.actividad.empresa %></div><% } %>
                       <% if (c.actividad.responsable) { %><div class="act-enc" title="Encargado: <%= c.actividad.responsable %>"><i class="bi bi-person-badge"></i> <%= c.actividad.responsable %></div><% } %>
-                      <div class="act-hora mt-1 pt-1 border-top" title="Horas que cuenta la actividad ese día"><%= (c.horas||0).toFixed(1) %>h</div>
+                      <div class="act-hora mt-1 pt-1 border-top" title="Horas que cuenta la actividad ese día"><%= fmtH(c.horas||0) %></div>
                     </div>
                   <% } else if (!c.presente && c.vacio) { %>
                     <span class="text-danger fw-bold">Falta</span>
@@ -458,11 +462,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <div class="ent"><%= c.entrada || '--:--' %></div>
                       <div class="sal"><%= c.salida || '--:--' %></div>
                       <% if (c.requiereRevision) { %>
-                        <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= (c.horas||0).toFixed(1) %>h</div>
+                        <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= fmtH(c.horas||0) %></div>
                       <% } else if (c.enCurso) { %>
-                        <div class="hrs text-primary"><i class="bi bi-hourglass-split"></i> <%= (c.horas||0).toFixed(1) %>h</div>
+                        <div class="hrs text-primary"><i class="bi bi-hourglass-split"></i> <%= fmtH(c.horas||0) %></div>
                       <% } else { %>
-                        <div class="hrs"><%= (c.horas||0).toFixed(1) %>h</div>
+                        <div class="hrs"><%= fmtH(c.horas||0) %></div>
                       <% } %>
                       <% if (c.actividad) { %>
                         <%
@@ -491,14 +495,27 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                   <% } else { %>-<% } %>
                 </td>
               <% }); %>
-              <td class="text-center col-normal"><%= f.normales>0?f.normales.toFixed(1):'-' %></td>
-              <td class="text-center col-extra"><%= f.extras>0?f.extras.toFixed(1):'-' %></td>
-              <td class="text-center fw-bold col-total"><%= f.horas>0?f.horas.toFixed(1):'0' %></td>
+              <td class="text-center col-normal"><%= f.normales>0?fmtH(f.normales):'-' %></td>
+              <td class="text-center col-extra"><%= f.extras>0?fmtH(f.extras):'-' %></td>
+              <%
+                // Días cerrados con entrada pero sin salida: cuentan 0 h. Se avisa junto al
+                // total porque RH suele completarlos a mano y si no el total "no cuadra".
+                const sinSalida = f.celdas.filter(function(c){ return c.presente && c.incompleta && !c.enCurso; }).length;
+              %>
+              <td class="text-center fw-bold col-total">
+                <span class="tot"><%= fmtH(f.horas) %></span>
+                <% if (sinSalida > 0) { %>
+                  <div class="small fw-normal text-danger" style="font-size:.65rem" title="<%= sinSalida %> día(s) con entrada pero sin salida: no suman horas. Registra la salida (checada manual) para que cuenten.">
+                    <%= sinSalida %> sin salida
+                  </div>
+                <% } %>
+              </td>
+              <td class="text-center col-dias"></td>
               <td class="text-center <%= f.retardos>0?'text-danger fw-bold':'' %>"><%= f.retardos>0?f.retardos:'-' %></td>
             </tr>
             <% }); %>
           <% } else { %>
-            <tr><td colspan="<%= datos.fechas.length + 6 %>" class="text-center text-body-secondary py-4">No hay empleados activos</td></tr>
+            <tr><td colspan="<%= datos.fechas.length + 7 %>" class="text-center text-body-secondary py-4">No hay empleados activos</td></tr>
           <% } %>
         </tbody>
       </table>
@@ -566,20 +583,26 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   inputBuscar.addEventListener('input', guardarVista);
 
   // ---- Redondeo de horas ----
-  // Activo (default) = lo que se paga (entrada/salida y horas del servidor).
+  // Activo (default) = regla de pago: toda entrada pasa por la tolerancia
+  // (dentro cuenta la hora, fuera no) y la salida baja a la hora completa:
+  // horas enteras, igual que RH las cuenta a mano (los minutos no suman).
   // Apagado = checadas reales, horas netas con descuento de comida 14-15.
-  const LIMITE_SEMANAL = 45;
+  // Las sumas van en minutos enteros: el Total es exactamente la suma de las
+  // celdas que se ven. Extra = horas completas sobre 45h de cada semana del rango.
+  const LIMITE_SEMANAL_MIN = 45 * 60;
+  const aMin = (h) => Math.round((Number(h) || 0) * 60);
+  const fmtH = (h) => { const t = aMin(h), a = Math.abs(t); return (t < 0 ? '-' : '') + Math.floor(a / 60) + ':' + String(a % 60).padStart(2, '0'); };
   const chk = document.getElementById('chkRedondear');
   function aplicarRedondeo() {
     const redondeado = chk.checked;
     getRows().forEach(tr => {
-      let totalFila = 0;
-      tr.querySelectorAll('.cel-dia').forEach(td => {
+      const minPorDia = []; // índice = día del rango (para el corte por semana)
+      tr.querySelectorAll('.cel-dia').forEach((td, idx) => {
         if (td.dataset.dom === '1' || td.dataset.vacio === '1') return;
         const horasPago = parseFloat(td.dataset.horas) || 0;
         const celEs = td.querySelector('.cel-es');
         const entR = td.dataset.entReal, salR = td.dataset.salReal;
-        if (td.dataset.presente !== '1' || !celEs) { totalFila += horasPago; return; }
+        if (td.dataset.presente !== '1' || !celEs) { minPorDia[idx] = aMin(horasPago); return; }
         let ent = td.dataset.ent, sal = td.dataset.sal, horas = horasPago;
         const hAct = parseFloat(td.dataset.hact) || 0; // aporte de actividad delegada del día
         if (redondeado) {
@@ -604,28 +627,54 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
         celEs.querySelector('.sal').textContent = sal || '--:--';
         const hrs = celEs.querySelector('.hrs');
         // conserva el icono (revisión / en curso): solo cambia el nodo de texto final
-        hrs.lastChild.textContent = ' ' + (Math.round(horas * 10) / 10).toFixed(1) + 'h';
-        totalFila += horas;
+        hrs.lastChild.textContent = ' ' + fmtH(horas);
+        minPorDia[idx] = aMin(horas);
       });
-      totalFila = Math.round(totalFila * 100) / 100;
-      const extra = Math.max(0, Math.round((totalFila - LIMITE_SEMANAL) * 100) / 100);
-      const normal = Math.round((totalFila - extra) * 100) / 100;
-      const set = (c, v) => { const el = tr.querySelector(c); if (el) el.textContent = v > 0 ? v.toFixed(1) : '-'; };
-      set('.col-normal', normal); set('.col-extra', extra);
-      const tdT = tr.querySelector('.col-total'); if (tdT) tdT.textContent = totalFila > 0 ? totalFila.toFixed(1) : '0';
-      tr.dataset.total = totalFila;
+      // Mismo reparto que repartirSemanal (asistenciaService): bloques de 7 días.
+      let totalMin = 0, extraMin = 0;
+      for (let s = 0; s < minPorDia.length; s += 7) {
+        let semMin = 0;
+        for (let i = s; i < s + 7 && i < minPorDia.length; i++) semMin += minPorDia[i] || 0;
+        totalMin += semMin;
+        extraMin += Math.floor(Math.max(0, semMin - LIMITE_SEMANAL_MIN) / 60) * 60;
+      }
+      const set = (c, m) => { const el = tr.querySelector(c); if (el) el.textContent = m > 0 ? fmtH(m / 60) : '-'; };
+      set('.col-normal', totalMin - extraMin); set('.col-extra', extraMin);
+      const tot = tr.querySelector('.col-total .tot'); if (tot) tot.textContent = fmtH(totalMin / 60);
+      // Días = total ÷ 9 truncado a 1 decimal. Con horas enteras el decimal son
+      // las horas sobrantes: 26h -> 2.8 (2 días y 8 h), como lo anota RH.
+      // Solo sin extra: con extra se paga la semana completa + extra.
+      const tdD = tr.querySelector('.col-dias');
+      if (tdD) {
+        const dias = Math.floor(totalMin / 60 / 9 * 10 + 1e-9) / 10;
+        const diasEnteros = Math.floor(totalMin / 60 / 9);
+        tdD.textContent = (extraMin === 0 && totalMin > 0) ? dias.toFixed(1) : '-';
+        tdD.title = (extraMin === 0 && totalMin > 0)
+          ? diasEnteros + ' día(s) y ' + fmtH(totalMin / 60 - diasEnteros * 9) + ' h' : '';
+      }
+      tr.dataset.total = totalMin / 60;
     });
   }
-  chk.addEventListener('change', () => { aplicarRedondeo(); actualizarLinkExcel(); });
-  // El estado sobrevive al filtrar / cambiar de encargado: viaja en la URL (?redondear=1).
-  chk.checked = new URLSearchParams(location.search).get('redondear') === '1';
+  // El estado sobrevive al filtrar / cambiar de encargado: viaja en la URL
+  // (?redondear=0 lo apaga; sin parámetro queda activo). Se usan inputs
+  // hidden y no un listener de submit porque flatpickr envía con form.submit(),
+  // que no dispara el evento.
+  const hidRed = document.getElementById('hidRedondear');
   const formEnc = document.getElementById('formEncargado');
-  if (formEnc) formEnc.addEventListener('submit', () => {
-    if (!chk.checked) return;
-    const h = document.createElement('input');
-    h.type = 'hidden'; h.name = 'redondear'; h.value = '1';
-    formEnc.appendChild(h);
-  });
+  let hidEnc = null;
+  if (formEnc) {
+    hidEnc = document.createElement('input');
+    hidEnc.type = 'hidden'; hidEnc.name = 'redondear';
+    formEnc.appendChild(hidEnc);
+  }
+  const syncRedondear = () => {
+    const v = chk.checked ? '1' : '0';
+    if (hidRed) hidRed.value = v;
+    if (hidEnc) hidEnc.value = v;
+  };
+  chk.checked = new URLSearchParams(location.search).get('redondear') !== '0';
+  syncRedondear();
+  chk.addEventListener('change', () => { syncRedondear(); aplicarRedondeo(); actualizarLinkExcel(); });
   aplicarRedondeo();
 
   // Restaura orden y búsqueda de la visita anterior (el ?ids= del grupo manda sobre la búsqueda).
@@ -647,7 +696,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     let url = `${URL_EXCEL_BASE}?fechaInicio=${fi}&fechaFin=${ff}`;
     if (ID_ENCARGADO_SEL) url += `&encargado=${ID_ENCARGADO_SEL}`;
     if (sortState.key) url += `&sort=${sortState.key}&dir=${sortState.asc ? 'asc' : 'desc'}`;
-    if (chk.checked) url += '&redondear=1';
+    url += chk.checked ? '&redondear=1' : '&redondear=0';
     btnExcel.href = url;
   }
   if (btnExcel) btnExcel.addEventListener('click', actualizarLinkExcel);
@@ -942,7 +991,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             let h = '<div class="row g-2 mb-2">' +
               '<div class="col-4"><div class="dato-lbl">Entrada</div><div class="dato-val">' + (d.asistencia.entrada || '--:--') + '</div></div>' +
               '<div class="col-4"><div class="dato-lbl">Salida</div><div class="dato-val">' + (d.asistencia.salida || '--:--') + '</div></div>' +
-              '<div class="col-4"><div class="dato-lbl">Horas</div><div class="dato-val">' + d.asistencia.horas.toFixed(1) + 'h</div></div>' +
+              '<div class="col-4"><div class="dato-lbl">Horas</div><div class="dato-val">' + (function(h){ const t=Math.round((Number(h)||0)*60); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); })(d.asistencia.horas) + '</div></div>' +
               '</div>';
             if (d.asistencia.plantaEntrada) h += '<div class="small text-body-secondary">Planta: ' + d.asistencia.plantaEntrada + '</div>';
             if (d.asistencia.minutosRetardo > 0) h += '<div class="small text-danger">Retardo: ' + d.asistencia.minutosRetardo + ' min</div>';

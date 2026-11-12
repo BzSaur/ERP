@@ -166,7 +166,7 @@ export const descargarHorasExcel = async (req, res, next) => {
     const fin = fechaFin ? new Date(`${fechaFin}T00:00:00`) : semana.sabado;
 
     const filtro = await asistenciaService.getFiltroVisibilidad(req.user);
-    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, filtro, redondear: redondear === '1' });
+    const buffer = await generarExcelHoras(inicio, fin, { sort, dir, filtro, redondear: redondear !== '0' }); // default = redondeado (regla de pago)
 
     const f1 = inicio.toISOString().slice(0, 10);
     const f2 = fin.toISOString().slice(0, 10);

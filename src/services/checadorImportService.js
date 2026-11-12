@@ -669,8 +669,13 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
       if (restrictivo) continue; // sin salida no se estima: el par abierto no suma
     }
 
-    // El primer par usa la entrada redondeada (pago); los demás, la real
-    const entMin = (i === 0) ? entradaPagoMin : ent.totalMinutos;
+    // El primer par usa la entrada redondeada (pago). En la regla restrictiva
+    // las demás entradas también pasan por la tolerancia (dentro cuenta la
+    // hora, fuera no): con la salida a hora completa, el día da horas enteras.
+    // Antes de la regla restrictiva, las demás usan la hora real.
+    const entMin = (i === 0)
+      ? entradaPagoMin
+      : (restrictivo ? redondearEntrada(ent.totalMinutos, toleranciaMin) : ent.totalMinutos);
     const salMin = restrictivo ? redondearSalida(sal.totalMinutos) : sal.totalMinutos;
     if (salMin <= entMin) continue;
 

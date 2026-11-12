@@ -57,3 +57,32 @@ test('horasPorParesVista: suma pares, hueco no cuenta; impar = 0', async () => {
   assert.deepEqual(horasPorParesVista([ch(8)]), { real: 0, red: 0, pares: [] });
   assert.deepEqual(r.pares.map(x => [x.e, x.s]), [[480, 720], [900, 1080]]);
 });
+
+test('horasPorParesVista: redondeado aplica tolerancia a cada entrada; real sin centésimas acumuladas', async () => {
+  const { horasPorParesVista } = await import('./asistenciaService.js');
+  const ch = (h, m = 0) => ({ ID_Checada: h * 100 + m, Origen_Sincronizacion: 'ADMS_PUSH', Fecha_Hora: new Date(2026, 9, 20, h, m) });
+  const r = horasPorParesVista([ch(8), ch(12, 50), ch(13, 12), ch(18, 20)]);
+  assert.equal(r.red, 7); // 08-12 + 14-18 menos comida
+  // real: 4:50 + (13:12-18:20 = 5:08 - 1:00 comida) = 8:58 exactos
+  assert.equal(Math.round(r.real * 60), 538);
+});
+
+test('aMinutos + repartirSemanal: total = suma de celdas; extra por semana en horas completas', async () => {
+  const { aMinutos, repartirSemanal } = await import('./asistenciaService.js');
+  // 5 días de 8:40 -> 43:20 exactos (antes: celdas 8.7 y total 43.4)
+  const cincoDias = Array(5).fill(aMinutos(8 + 40 / 60));
+  assert.equal(repartirSemanal(cincoDias).total * 60, 5 * 520);
+  // 45:59 en la semana: los minutos sueltos no hacen extra
+  const casi = repartirSemanal([45 * 60 + 59]);
+  assert.equal(casi.extras, 0);
+  assert.equal(casi.normales * 60, 45 * 60 + 59);
+  // 47:30 -> 2h extra, 45:30 normales (Norm + Extra = Total)
+  const r = repartirSemanal([47 * 60 + 30]);
+  assert.equal(r.extras, 2);
+  assert.equal((r.normales + r.extras) * 60, 47 * 60 + 30);
+  // Dos semanas de 45h: 90h, cero extra (antes daba 45h extra)
+  const dos = repartirSemanal([...Array(7).fill(0).map((_, i) => i === 0 ? 2700 : 0), 2700, 0, 0, 0, 0, 0, 0]);
+  assert.equal(dos.total, 90);
+  assert.equal(dos.extras, 0);
+  assert.equal(dos.semanas, 2);
+});

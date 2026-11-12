@@ -13,7 +13,7 @@
 import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos } from './asistenciaService.js';
+import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -144,8 +144,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     head1.push(`${NOMBRES_DIA[d.getUTCDay()]} ${fmtFechaCorta(d)}`, '', '');
     head2.push('Entrada', 'Salida', 'Horas');
   }
-  head1.push('Total hrs', 'Normal', 'Extra');
-  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h)`, `(>${LIMITE_SEMANAL_HORAS}h)`);
+  head1.push('Total hrs', 'Normal', 'Extra', 'Días');
+  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h/sem)`, `(>${LIMITE_SEMANAL_HORAS}h/sem, horas completas)`, '(total ÷ 9, sin extra)');
   aoa.push(head1);
   aoa.push(head2);
 
@@ -158,10 +158,20 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const filas = empleados.map(e => {
     const nombre = [e.Nombre, e.Apellido_Paterno, e.Apellido_Materno].filter(Boolean).join(' ');
     const fila = [e.ID_Empleado, nombre, e.area?.Nombre_Area || ''];
-    let totalHoras = 0;
+    // Minutos enteros por día del rango (índice = días desde el inicio, aunque
+    // se excluyan domingos): el total es la suma exacta de las celdas y el
+    // extra se corta por semana.
+    const minPorDia = [];
+    let offsetDia = 0;
+    const horaCelda = (h) => {
+      const m = aMinutos(h);
+      minPorDia[offsetDia] = (minPorDia[offsetDia] || 0) + m;
+      return m ? m / 1440 : ''; // fracción de día: Excel la muestra [h]:mm y SUM cuadra
+    };
 
     for (const d of dias) {
       const key = d.toISOString().slice(0, 10);
+      offsetDia = Math.round((new Date(d).setHours(0, 0, 0, 0) - inicio.getTime()) / 86400000);
       const a = idx.get(e.ID_Empleado)?.get(key);
       if (!a) {
         const esDescanso = esDiaDescanso(d);
@@ -190,8 +200,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
             .filter(av => Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
             .map(av => fmtTramo(av.horaInicio, av.horaFin))
             .join(' + ');
-          fila.push(desc, horarios, horasAct);
-          totalHoras += horasAct;
+          fila.push(desc, horarios, horaCelda(horasAct));
 
           listaAct.forEach(av => detalleActividades.push({
             id: e.ID_Empleado, nombre, area: e.area?.Nombre_Area || '',
@@ -211,9 +220,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
           fila.push(
             periodoAus.etiqueta.toUpperCase() + (periodoAus.conGoce ? '' : ' (sin goce)'),
             '',
-            horasAus || ''
+            horaCelda(horasAus)
           );
-          totalHoras += horasAus;
         }
         continue;
       }
@@ -292,16 +300,18 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         }));
       }
 
-      totalHoras += horas;
-      fila.push(entMostrar, salMostrar, horas ? Math.round(horas * 100) / 100 : '');
+      fila.push(entMostrar, salMostrar, horaCelda(horas));
     }
 
-    const total = Math.round(totalHoras * 100) / 100;
-    // Split semanal: extra = excedente sobre 45h (incluye sábado en el total).
-    const extra = Math.max(0, Math.round((total - LIMITE_SEMANAL_HORAS) * 100) / 100);
-    const normal = Math.round((total - extra) * 100) / 100;
-    fila.push(total, normal, extra);
-    return { fila, id: e.ID_Empleado, nombre, total };
+    // Split por semana del rango: extra = horas completas sobre 45h de cada
+    // semana (incluye sábado). Mismo reparto que las vistas HTML.
+    const diasRango = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+    if (minPorDia.length < diasRango) minPorDia.length = diasRango;
+    const r = repartirSemanal(minPorDia);
+    // Días = total ÷ 9 truncado a 1 decimal (26h -> 2.8 = 2 días y 8 h), solo sin extra.
+    const diasPago = (r.extras === 0 && r.total > 0) ? Math.floor(r.total / 9 * 10 + 1e-9) / 10 : '';
+    fila.push(r.total / 24, r.normales / 24, r.extras / 24, diasPago);
+    return { fila, id: e.ID_Empleado, nombre, total: r.total };
   });
 
   // Orden del reporte. Con ~120 empleados el orden importa para poder
@@ -323,11 +333,23 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
 
   // ---- Hoja + anchos ----
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Columnas de horas (la 3ª de cada día + Total/Normal/Extra) como duración
+  // [h]:mm: se leen "8:40" y SUM en Excel da el mismo total que el reporte.
+  const colsHoras = dias.map((_, i) => 3 + i * 3 + 2);
+  const colTotal = 3 + dias.length * 3;
+  colsHoras.push(colTotal, colTotal + 1, colTotal + 2);
+  const FILA_DATOS = 4; // título, espacio, 2 cabeceras
+  for (let rIdx = FILA_DATOS; rIdx < aoa.length; rIdx++) {
+    for (const c of colsHoras) {
+      const cell = ws[XLSX.utils.encode_cell({ r: rIdx, c })];
+      if (cell && cell.t === 'n') cell.z = '[h]:mm';
+    }
+  }
   const cols = [{ wch: 6 }, { wch: 28 }, { wch: 16 }];
   // Entrada más ancha que Salida: además de la hora puede llevar la actividad
   // delegada del día ("07:47 (RAM 1) · CAMPO: HOME OFFICE [recurrente]").
   for (let i = 0; i < dias.length; i++) cols.push({ wch: 30 }, { wch: 22 }, { wch: 7 });
-  cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 });
+  cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 }, { wch: 7 });
   ws['!cols'] = cols;
 
   // Merge del título sobre las primeras columnas

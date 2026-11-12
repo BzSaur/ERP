@@ -41,3 +41,17 @@ test('dedup: checadas a menos de 20 min cuentan como una', () => {
   const out = dedupChecadas([ck('08:00'), ck('08:15'), ck('08:20'), ck('18:00')]);
   assert.deepEqual(out.map(c => c.horaStr), ['08:00', '08:20', '18:00']);
 });
+
+test('restrictivo: toda entrada pasa por la tolerancia, no solo la primera (día en horas enteras)', () => {
+  // 2º par: 13:05 dentro de tolerancia -> 13:00; 13:12 fuera -> 14:00. Salidas a la hora.
+  const dentro = calcularHorasPorPares([ck('08:00'), ck('12:30'), ck('13:05'), ck('18:20')], R);
+  assert.equal(dentro.horasTrabajadas, 8); // 08-12 (4) + 13-18 menos comida (4)
+  const fuera = calcularHorasPorPares([ck('08:00'), ck('12:30'), ck('13:12'), ck('18:20')], R);
+  assert.equal(fuera.horasTrabajadas, 7); // 08-12 (4) + 14-18 menos comida (3)
+  assert.equal(Number.isInteger(fuera.horasTrabajadas), true);
+});
+
+test('antes del corte: entradas posteriores siguen con la hora real', () => {
+  const r = calcularHorasPorPares([ck('08:00'), ck('12:00'), ck('13:12'), ck('18:00')], { toleranciaMin: 10 });
+  assert.equal(r.horasTrabajadas, 7.8); // 4 + (13:12-18:00 = 4:48 menos 1h comida = 3:48)
+});
