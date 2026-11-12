@@ -141,64 +141,89 @@ const urlNocturna = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asist
 </div>
 <% } %>
 
-<!-- Panel de revisiones (días <2h con checada: probable olvido de entrada/salida) -->
+<!-- Panel de revisiones: días <2h con checada (probable olvido) y jornadas nocturnas por confirmar.
+     Compacto: una fila por persona, altura máxima con scroll y filtro por tipo. -->
 <% if (datos.totalRevisiones && datos.totalRevisiones > 0) { %>
+<%
+  let revNoc = 0, revChk = 0;
+  datos.revisiones.forEach(function(r){ r.dias.forEach(function(d){ if (d.nocturna === 'AUTO') revNoc++; else revChk++; }); });
+  const esRH = hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador');
+  const fmtDM = function(f){ return new Date(f + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}); };
+%>
 <div class="card border-warning mb-4" id="panelRevisiones">
-  <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center">
-    <span class="fw-semibold">
-      <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-      <%= datos.totalRevisiones %> día(s) requieren revisión de RH
-      <small class="text-body-secondary ms-1">(menos de <%= datos.umbralRevision %>h con checada — posible olvido de entrada/salida — o jornada nocturna por confirmar)</small>
+  <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+    <span class="fw-semibold small">
+      <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+      <%= datos.totalRevisiones %> día(s) a revisar
+      <span class="fw-normal text-body-secondary ms-1">
+        <%= revChk %> de checada (menos de <%= datos.umbralRevision %>h) · <%= revNoc %> nocturna(s) por confirmar
+      </span>
     </span>
-    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaRevisiones">
-      Ver / ocultar
-    </button>
+    <div class="d-flex gap-2 align-items-center">
+      <div class="btn-group btn-group-sm" role="group" aria-label="Filtrar revisiones">
+        <button type="button" class="btn btn-outline-secondary active rev-filtro" data-filtro="todos">Todos</button>
+        <button type="button" class="btn btn-outline-secondary rev-filtro" data-filtro="noc" <%= revNoc ? '' : 'disabled' %>>Nocturnas</button>
+        <button type="button" class="btn btn-outline-secondary rev-filtro" data-filtro="chk" <%= revChk ? '' : 'disabled' %>>Checadas</button>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaRevisiones">Ver / ocultar</button>
+    </div>
   </div>
   <div class="collapse show" id="listaRevisiones">
-    <div class="list-group list-group-flush">
-      <% datos.revisiones.forEach(function(r){ %>
-        <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2" data-rev-emp="<%= r.ID_Empleado %>">
-          <div>
-            <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
-            <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="fw-semibold text-decoration-none">
-              <%= r.nombre %>
-            </a>
-            <% } else { %><span class="fw-semibold"><%= r.nombre %></span><% } %>
-            <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
-            <div class="mt-1 d-flex flex-wrap gap-1">
+    <div class="rev-scroll">
+      <table class="table table-sm table-hover align-middle mb-0 rev-tabla">
+        <tbody>
+        <% datos.revisiones.forEach(function(r){ %>
+          <tr class="rev-item" data-rev-emp="<%= r.ID_Empleado %>">
+            <td class="rev-emp">
+              <% if (esRH) { %>
+                <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="fw-semibold text-decoration-none rev-nombre"><%= r.nombre %></a>
+              <% } else { %><span class="fw-semibold rev-nombre"><%= r.nombre %></span><% } %>
+              <% if (r.area) { %><div class="text-body-secondary rev-area"><%= r.area %></div><% } %>
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
               <% r.dias.forEach(function(d){ %>
                 <% if (d.nocturna === 'AUTO') { %>
-                <span class="badge badge-nocturna d-inline-flex align-items-center gap-1" title="Entrada sin salida ese día y salida a la mañana siguiente. Confirma si fue jornada nocturna o si olvidó sellar.">
-                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
-                  nocturna <%= d.entrada||'—' %> a <%= d.salida||'—' %> (+1)
-                  <% if (puedeManual) { %>
-                  <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="confirmar">Confirmar</button>
-                  <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="rechazar">Fue olvido</button>
-                  <% } %>
-                </span>
-                <% return; } %>
-                <span class="badge bg-warning text-dark" title="<%= d.motivo %> · entrada <%= d.entrada||'—' %> / salida <%= d.salida||'—' %>">
-                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
-                  <%= fmtH(d.horas) %> · <%= d.motivo %>
-                </span>
+                  <span class="badge badge-nocturna rev-badge d-inline-flex align-items-center gap-1" data-tipo="noc"
+                        title="Nocturna por confirmar: entró <%= d.entrada||'—' %> y salió <%= d.salida||'—' %> del día siguiente. Sí = jornada nocturna; No = olvidó sellar salida.">
+                    <%= d.nombreDia %> <%= fmtDM(d.fecha) %> · <%= d.entrada||'—' %>-<%= d.salida||'—' %><sup>+1</sup>
+                    <% if (puedeManual) { %>
+                      <span class="noc-confirmar"><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="rechazar" title="No fue nocturna: olvidó sellar salida">No</button></span>
+                    <% } %>
+                  </span>
+                <% } else { %>
+                  <span class="badge bg-warning-subtle text-dark border border-warning-subtle rev-badge" data-tipo="chk"
+                        title="<%= d.motivo %> · entrada <%= d.entrada||'—' %> / salida <%= d.salida||'—' %> · <%= fmtH(d.horas) %>">
+                    <%= d.nombreDia %> <%= fmtDM(d.fecha) %> · <%= d.motivo %><%= d.horas > 0 ? ' · ' + fmtH(d.horas) : '' %>
+                  </span>
+                <% } %>
               <% }); %>
-            </div>
-          </div>
-          <div class="d-flex gap-2 align-self-center">
-            <% if (hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador')) { %>
-            <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="btn btn-sm btn-outline-primary">
-              <i class="bi bi-eye me-1"></i>Revisar
-            </a>
-            <% } %>
-            <button type="button" class="btn btn-sm btn-outline-secondary btn-descartar-rev" data-rev-emp="<%= r.ID_Empleado %>">
-              <i class="bi bi-check2 me-1"></i>Descartar
-            </button>
-          </div>
-        </div>
-      <% }); %>
+              </div>
+            </td>
+            <td class="text-end rev-acciones">
+              <% if (esRH) { %>
+                <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="btn btn-sm btn-link p-0 me-2">Revisar</a>
+              <% } %>
+              <button type="button" class="btn btn-sm btn-link p-0 text-body-secondary btn-descartar-rev" data-rev-emp="<%= r.ID_Empleado %>">Descartar</button>
+            </td>
+          </tr>
+        <% }); %>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
+<style>
+  #panelRevisiones .rev-scroll { max-height:300px; overflow-y:auto; }
+  #panelRevisiones .rev-tabla td { font-size:.8rem; padding-top:.3rem; padding-bottom:.3rem; }
+  #panelRevisiones .rev-emp { width:240px; min-width:180px; }
+  #panelRevisiones .rev-area { font-size:.7rem; line-height:1.1; }
+  #panelRevisiones .rev-acciones { width:140px; white-space:nowrap; }
+  #panelRevisiones .rev-badge { font-size:.7rem; font-weight:500; }
+  #panelRevisiones .noc-confirmar .btn-noc-accion { font-size:.62rem; padding:0 .3rem; line-height:1.3; border-radius:0; }
+  #panelRevisiones .noc-confirmar .btn-noc-accion:first-child { border-radius:3px 0 0 3px; }
+  #panelRevisiones .noc-confirmar .btn-noc-accion:last-child { border-radius:0 3px 3px 0; border-left:0; }
+</style>
 <% } %>
 
 <!-- Panel de actividades de campo (asistencia delegada por un encargado) -->
@@ -325,10 +350,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
      punteado (por confirmar); confirmada o marcada a mano = borde sólido. */
   .matriz-horas td.cel-nocturna { background:#e0e7ff; outline:2px solid #6366f1; outline-offset:-2px; }
   .matriz-horas td.cel-nocturna.noc-auto { outline-style:dashed; }
-  .matriz-horas .cel-es .noc-tag { color:#3730a3; font-size:.62rem; font-weight:700; }
-  .matriz-horas .cel-es .noc-dia { color:#3730a3; font-size:.6rem; }
-  .matriz-horas .cel-es .noc-confirmar { font-size:.6rem; color:#3730a3; margin-top:2px; }
-  .matriz-horas .cel-es .noc-confirmar .btn-noc-accion { font-size:.6rem; padding:0 .3rem; }
+  .matriz-horas .cel-es .noc-dia { color:#3730a3; font-size:.55rem; font-weight:700; vertical-align:super; margin-left:1px; }
+  .matriz-horas .cel-es .noc-confirmar { margin-top:1px; line-height:1; }
+  .matriz-horas .cel-es .noc-confirmar .btn-noc-accion { font-size:.58rem; padding:0 .25rem; line-height:1.3; border-radius:0; }
+  .matriz-horas .cel-es .noc-confirmar .btn-noc-accion:first-child { border-radius:3px 0 0 3px; }
+  .matriz-horas .cel-es .noc-confirmar .btn-noc-accion:last-child { border-radius:0 3px 3px 0; border-left:0; }
   .badge-nocturna { background:#e0e7ff; color:#3730a3; border:1px solid #6366f1; font-weight:600; }
   .btn-noc-accion { padding:0 .35rem; font-size:.65rem; line-height:1.4; border:1px solid #6366f1; color:#3730a3; background:#fff; }
   .btn-noc-accion:hover { background:#6366f1; color:#fff; }
@@ -491,19 +517,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <span class="text-danger fw-bold">Falta</span>
                   <% } else if (c.presente) { %>
                     <div class="cel-es">
-                      <div><span class="ent"><%= c.entrada || '--:--' %></span><% if (c.nocturnaEntrante) { %> <span class="noc-dia">(-1)</span><% } %></div>
-                      <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %> <span class="noc-dia">(+1)</span><% } %></div>
-                      <% if (c.nocturna || c.nocturnaEntrante) { %>
-                        <div class="noc-tag">
-                          <% if (c.nocturna) { %>Nocturna, sale <%= c.salidaReal || c.salida %> (+1)<% } else { %>Nocturna desde 22:00 (-1)<% } %>
+                      <%# Nocturna compacta: el color de la celda ya la distingue; -1/+1 marcan el
+                          día anterior/siguiente y la hora real de salida va en el title. %>
+                      <div><span class="ent"><%= c.entrada || '--:--' %></span><% if (c.nocturnaEntrante) { %><span class="noc-dia">-1</span><% } %></div>
+                      <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %><span class="noc-dia">+1</span><% } %></div>
+                      <% if (c.nocturna === 'AUTO' && puedeManual) { %>
+                        <div class="noc-confirmar">
+                          <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="rechazar" title="No fue nocturna: olvidó sellar salida">No</button>
                         </div>
-                        <% if (c.nocturna === 'AUTO' && puedeManual) { %>
-                          <div class="noc-confirmar">
-                            <span>¿Nocturna?</span>
-                            <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button>
-                            <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="rechazar" title="No: olvidó sellar salida">No</button>
-                          </div>
-                        <% } %>
                       <% } %>
                       <% if (c.requiereRevision && c.nocturna !== 'AUTO') { %>
                         <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= fmtH(c.horas||0) %></div>
@@ -749,16 +770,33 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   const panel = document.getElementById('panelRevisiones');
   function pendientesRevision(){
     if (!panel) return [];
-    return Array.from(panel.querySelectorAll('.list-group-item:not([data-descartada])'));
+    return Array.from(panel.querySelectorAll('.rev-item:not([data-descartada])'));
   }
+  // Filtro por tipo (nocturnas por confirmar / faltas de checada). Oculta los
+  // badges del otro tipo y las filas que se quedan sin ninguno.
+  document.querySelectorAll('.rev-filtro').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const f = this.dataset.filtro;
+      document.querySelectorAll('.rev-filtro').forEach(b => b.classList.toggle('active', b === this));
+      panel.querySelectorAll('.rev-item').forEach(tr => {
+        let visibles = 0;
+        tr.querySelectorAll('.rev-badge').forEach(b => {
+          const ver = f === 'todos' || b.dataset.tipo === f;
+          b.classList.toggle('d-none', !ver);
+          if (ver) visibles++;
+        });
+        tr.classList.toggle('d-none', visibles === 0);
+      });
+    });
+  });
   // Descartar una persona de la lista (no persiste; solo oculta para esta sesión)
   document.querySelectorAll('.btn-descartar-rev').forEach(btn => {
     btn.addEventListener('click', function(){
-      const item = this.closest('.list-group-item');
+      const item = this.closest('.rev-item');
       item.setAttribute('data-descartada', '1');
       item.style.opacity = '.45';
       item.querySelectorAll('a, button').forEach(el => { el.classList.add('disabled'); el.setAttribute('tabindex','-1'); });
-      this.innerHTML = '<i class="bi bi-check2-all me-1"></i>Revisado';
+      this.textContent = 'Revisado';
       // Si ya no quedan pendientes, atenuar el header del panel
       if (pendientesRevision().length === 0) {
         panel.querySelector('.card-header').classList.add('bg-opacity-10');
@@ -770,7 +808,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     btnExcel.addEventListener('click', function(ev){
       const pend = pendientesRevision();
       if (pend.length === 0) return; // nada que revisar
-      const nombres = pend.map(i => i.querySelector('.fw-semibold')?.textContent.trim()).filter(Boolean);
+      const nombres = pend.map(i => i.querySelector('.rev-nombre')?.textContent.trim()).filter(Boolean);
       const lista = nombres.slice(0, 8).join(', ') + (nombres.length > 8 ? `, +${nombres.length - 8} más` : '');
       const ok = window.confirm(
         `Hay ${pend.length} persona(s) con días de menos de 2h (posible olvido de checada):\n\n${lista}\n\n` +
