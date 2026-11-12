@@ -13,6 +13,7 @@ import { getConfig, getConfigMultiple } from './nominaService.js';
 import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha, redondearEntrada, redondearSalida, VENTANA_DEDUP_MIN } from './checadorImportService.js';
 import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB } from '../utils/tiempo.js';
 import { esFestivo } from './diasFestivosService.js';
+import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
 import { recalcularJornada, consolidarChecadas } from './admsService.js';
 
 // ============================================================
@@ -683,6 +684,39 @@ export async function registrarChecadaManualDia({ empleadoId, fecha, entrada = '
 }
 
 /**
+ * Jornada nocturna: RH/encargado decide sobre el cruce del día `fecha` (día en
+ * que entró). confirmar/marcar fuerzan el enlace con la primera checada del día
+ * siguiente; rechazar = "fue olvido" (el día queda con falta de salida);
+ * quitar = vuelve a la detección automática.
+ */
+const ACCIONES_NOCTURNA = { confirmar: 'CONFIRMADA', marcar: 'MANUAL', rechazar: 'RECHAZADA', quitar: null };
+
+export async function cambiarEstadoNocturna({ empleadoId, fecha, accion }) {
+  if (!(accion in ACCIONES_NOCTURNA)) throw new Error('Acción inválida');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw new Error('Fecha inválida');
+  const fechaDia = new Date(`${fecha}T00:00:00`);
+  return prisma.$transaction(async (tx) => {
+    const fila = await tx.empleados_Asistencia.findUnique({
+      where: { ID_Empleado_Fecha: { ID_Empleado: empleadoId, Fecha: fechaDia } },
+      select: { ID_Asistencia: true }
+    });
+    if (!fila) throw new Error('Ese día no tiene checadas');
+    await tx.empleados_Asistencia.update({
+      where: { ID_Asistencia: fila.ID_Asistencia },
+      data: { Nocturna_Estado: ACCIONES_NOCTURNA[accion] }
+    });
+    await recalcularJornada(tx, fila.ID_Asistencia, empleadoId, fechaDia);
+    const despues = await tx.empleados_Asistencia.findUnique({
+      where: { ID_Asistencia: fila.ID_Asistencia }, select: { Nocturna_Estado: true }
+    });
+    if ((accion === 'confirmar' || accion === 'marcar') && !despues.Nocturna_Estado) {
+      throw new Error('No hay entrada abierta con una checada al día siguiente para enlazar');
+    }
+    return despues;
+  });
+}
+
+/**
  * Evalúa el estado de una checada (a tiempo, retardo, etc.)
  */
 function evaluarEstadoChecada(tipoChecada, fechaHora, config) {
@@ -809,8 +843,6 @@ export async function obtenerResumenAsistencia({
     diasPresentes: 0,
     diasAusentes: 0,
     diasJustificados: 0, // vacaciones/incidencia aprobada: no cuentan como falta
-    retardos: 0,
-    minutosRetardoTotal: 0,
     horasTrabajadas: 0,
     checadasCompletas: 0, // Días con entrada Y salida
     porUbicacion: {
@@ -821,21 +853,15 @@ export async function obtenerResumenAsistencia({
   };
 
   for (const asistencia of asistencias) {
-    // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
-    // Fecha de BD (@db.Date, medianoche UTC) a local para getDay/regla de tolerancia.
+    // Fecha de BD (@db.Date, medianoche UTC) a local.
     const fechaDia = fechaLocalDB(asistencia.Fecha);
     const entradaMostrada = entradaPagoDesde(asistencia.Hora_Entrada, empParaRegla) || asistencia.Hora_Entrada;
-    const retardoDia = asistencia.Presente && hayRetardoEnEntrada(entradaMostrada, fechaDia);
     const etiquetaAusencia = ausenciaEnFecha(ausencias, empleadoId, fechaDia);
 
     if (asistencia.Presente) {
       resumen.diasPresentes++;
 
-      if (retardoDia) {
-        resumen.retardos++;
-        resumen.minutosRetardoTotal += asistencia.Minutos_Retardo || 0;
-      }
-      
+
       // Verificar checada completa
       if (asistencia.Hora_Entrada && asistencia.Hora_Salida) {
         resumen.checadasCompletas++;
@@ -869,14 +895,14 @@ export async function obtenerResumenAsistencia({
       entrada: entradaMostrada,
       entradaReal: asistencia.Hora_Entrada,
       salida: asistencia.Hora_Salida,
-      retardo: retardoDia,
-      minutosRetardo: asistencia.Minutos_Retardo,
       ubicacionEntrada: asistencia.Ubicacion_Entrada,
       ubicacionSalida: asistencia.Ubicacion_Salida
     });
   }
 
   resumen.horasTrabajadas = Math.round(resumen.horasTrabajadas * 100) / 100;
+  // Sin retardos: solo cuenta si gana el bono (entrada 08:00 o antes lun-vie).
+  resumen.bono = bonoDeAsistencias(asistencias, fechaInicio, fechaFin);
 
   return resumen;
 }
@@ -886,12 +912,19 @@ export async function obtenerResumenAsistencia({
  * @param {Array} checadas filas de Historial_Checadas (con Fecha_Hora), ordenadas asc
  * @param {Object} [empleadoRegla] { area, puesto }
  */
-function paresDesdeChecadas(checadasCrudas, empleadoRegla) {
+function paresDesdeChecadas(checadasCrudas, empleadoRegla, noc = null) {
   // Mismas checadas que cuentan para las horas (sin dobles <20 min): si no, la
   // tabla muestra 2 pares completos mientras el cálculo ve un par abierto.
-  const checadas = consolidarChecadas(checadasCrudas);
+  let checadas = consolidarChecadas(checadasCrudas);
   const fmt = d => { const x = new Date(d); return String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
   const pares = [];
+  // Jornada nocturna recibida: la primera checada es la salida del tramo que
+  // empezó la víspera (22:00 o la entrada real si fue después).
+  if (noc?.entrante && checadas.length) {
+    pares.push({ entrada: fmt(noc.horaEntrada) + ' (-1)', salida: fmt(checadas[0].Fecha_Hora) });
+    checadas = checadas.slice(1);
+    empleadoRegla = null;
+  }
   for (let i = 0; i < checadas.length; i += 2) {
     const entradaDate = (i === 0 && empleadoRegla)
       ? (entradaPagoDesde(checadas[i].Fecha_Hora, empleadoRegla) || checadas[i].Fecha_Hora)
@@ -901,6 +934,9 @@ function paresDesdeChecadas(checadasCrudas, empleadoRegla) {
       salida: checadas[i + 1] ? fmt(checadas[i + 1].Fecha_Hora) : null
     });
   }
+  // Sale de madrugada: el último par abierto cierra con la checada de mañana.
+  const ultimo = pares[pares.length - 1];
+  if (noc?.saliente && ultimo && !ultimo.salida && noc.horaSalida) ultimo.salida = fmt(noc.horaSalida) + ' (+1)';
   return pares;
 }
 
@@ -1118,8 +1154,7 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
   const NOMBRES_DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const dias = [];
   let totalHoras = 0;
-  let diasTrabajados = 0, diasRetardo = 0, diasMultiPlanta = 0;
-  let minutosRetardoTotal = 0;
+  let diasTrabajados = 0, diasMultiPlanta = 0;
   const horasPorPlanta = new Map(); // planta -> horas
 
   for (const a of asistencias) {
@@ -1133,14 +1168,10 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
     // tramo de la actividad (capturado, o 8am→primera entrada) más las horas
     // reales ya calculadas por admsService.
     // Sin Hora_Salida (par abierto): suman solo los pares cerrados.
-    const horasChecadas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : (a.Presente ? horasPorParesVista(checadas).red : 0);
+    const horasChecadas = (a.Hora_Salida || esDiaNocturno(a)) ? (Number(a.Horas_Trabajadas) || 0) : (a.Presente ? horasPorParesVista(checadas).red : 0);
     const horas = aMinutos(horasChecadas + horasDeActividad(actividadDelDia, a.Hora_Entrada, a.Hora_Salida)) / 60;
     const entradaMostradaDia = entradaPagoDesde(a.Hora_Entrada, empParaRegla);
-    // Con actividad delegada no se marca retardo (ver obtenerHorasSemanalTodos).
-    const retardoDia = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaMostradaDia, fecha);
-    const minRetardoDia = a.Minutos_Retardo || 0;
     if (a.Presente && horas > 0) diasTrabajados++;
-    if (retardoDia) { diasRetardo++; minutosRetardoTotal += minRetardoDia; }
     if (a.Multi_Planta) diasMultiPlanta++;
     totalHoras += horas;
 
@@ -1166,16 +1197,21 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       // El extra ya no es por día: es el excedente semanal sobre 45h (ver totales).
       horas, extras: 0,
       normales: horas,
-      retardo: retardoDia,
-      minutosRetardo: minRetardoDia,
       multiPlanta: a.Multi_Planta,
       ubicacionEntrada: a.Ubicacion_Entrada,
       ubicacionSalida: a.Ubicacion_Salida,
       minutosComida: 0,
       totalChecadas: checadas.length,
       incompleta: a.Presente && (!a.Hora_Entrada || !a.Hora_Salida),
+      // Jornada nocturna: estado del cruce que sale este día y si recibe el de la víspera.
+      nocturna: esDiaNocturno(a) && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
+      nocturnaEntrante: !!a.Nocturna_Entrante,
       // Pares entrada-salida para visualización (consecutivos desde checadas crudas).
-      pares: paresDesdeChecadas(checadas, empParaRegla),
+      pares: paresDesdeChecadas(checadas, empParaRegla, esDiaNocturno(a) ? {
+        entrante: a.Nocturna_Entrante,
+        saliente: ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado),
+        horaEntrada: a.Hora_Entrada, horaSalida: a.Hora_Salida
+      } : null),
       checadas: checadas.map(c => ({
         hora: new Date(c.Fecha_Hora),
         tipo: c.Tipo_Checada,
@@ -1222,7 +1258,6 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       presente: false,
       entrada: null, entradaReal: null, salida: null,
       horas: horasDia, extras: 0, normales: horasDia,
-      retardo: false, minutosRetardo: 0,
       multiPlanta: false, ubicacionEntrada: null, ubicacionSalida: null,
       minutosComida: 0, totalChecadas: 0, incompleta: false,
       pares: [], checadas: [], notas: ''
@@ -1278,13 +1313,12 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       horas: horasRedondeadas,
       normales: normalesSemana,
       extras: extrasSobreLimite,
-      diasTrabajados, diasRetardo, diasMultiPlanta
+      diasTrabajados, diasMultiPlanta
     },
     kpis: {
       limiteSemana,
       extrasSobreLimite,
-      minutosRetardoTotal,
-      diasRetardo,
+      bono: bonoDeAsistencias(asistencias, inicio, fin),
       diasLaborables,
       diasAusenciaJustificada,
       frecuenciaAsistencia,   // % de días laborables con asistencia
@@ -1359,7 +1393,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     select: {
       ID_Empleado: true, Fecha: true, Presente: true, Retardo: true, Multi_Planta: true,
       Hora_Entrada: true, Hora_Salida: true, Minutos_Retardo: true,
-      Horas_Trabajadas: true, Horas_Extras: true,
+      Horas_Trabajadas: true, Horas_Extras: true, Nocturna_Estado: true, Nocturna_Entrante: true,
       Ubicacion_Entrada: true, Ubicacion_Salida: true,
       ID_Checador_Entrada: true, ID_Checador_Salida: true,
       historial_checadas: { orderBy: { Fecha_Hora: 'asc' }, select: { ID_Checada: true, Fecha_Hora: true, Origen_Sincronizacion: true } }
@@ -1381,6 +1415,12 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     fechas.push(f);
   }
 
+  const asistenciasPorEmp = new Map();
+  for (const a of asistencias) {
+    if (!asistenciasPorEmp.has(a.ID_Empleado)) asistenciasPorEmp.set(a.ID_Empleado, []);
+    asistenciasPorEmp.get(a.ID_Empleado).push(a);
+  }
+
   const porEmpleado = new Map();
   const porPlanta = new Map();   // planta -> { horas, dias }
   const diasEmp = new Map();     // ID_Empleado -> (yyyy-mm-dd -> celda)
@@ -1392,7 +1432,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       if (!asistenciaVisible({ idPlanta, idArea: areaPorEmp.get(a.ID_Empleado) }, filtroVisibilidad)) continue;
       empConDatos.add(a.ID_Empleado);
     }
-    const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
+    const acc = porEmpleado.get(a.ID_Empleado) || { horas: 0, extras: 0, dias: 0, multi: 0 };
     // Si hubo actividad delegada Y checada real el mismo día, se SUMAN (tramo
     // virtual 8am-primera entrada, con descuento de comida, + horas reales).
     const keyActividad = `${a.ID_Empleado}_${new Date(a.Fecha).toISOString().slice(0, 10)}`;
@@ -1405,21 +1445,18 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     // Sin Hora_Salida ignora lo guardado en BD (jornadas viejas quedaron estimadas a 18:00).
     let horasReales = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0;
     // Par abierto (impar) pero con pares cerrados antes: esos sí suman.
-    if (!a.Hora_Salida && a.Presente) horasReales = horasPorParesVista(a.historial_checadas).red;
-    if (horasReales === 0 && a.Presente && a.Hora_Entrada && a.Hora_Salida) {
+    const nocturno = esDiaNocturno(a);
+    if (nocturno) horasReales = Number(a.Horas_Trabajadas) || 0;
+    else if (!a.Hora_Salida && a.Presente) horasReales = horasPorParesVista(a.historial_checadas).red;
+    if (!nocturno && horasReales === 0 && a.Presente && a.Hora_Entrada && a.Hora_Salida) {
       const entR = new Date(a.Hora_Entrada);
       const salR = new Date(a.Hora_Salida);
       horasReales = horasNetasTramo(entR.getHours() * 60 + entR.getMinutes(), salR.getHours() * 60 + salR.getMinutes());
     }
     // Minutos enteros: la celda muestra exactamente lo que suma al total.
     const h = aMinutos(horasReales + horasActividadDia) / 60;
-    // Retardo derivado de la entrada mostrada (coherente con lo que se ve).
-    // Una actividad sin tramo, o con tramo previo a la entrada, justifica que no
-    // llegara a la hora normal (ej. home office que sella al mediodía).
     const entradaCelda = entradaPagoDesde(a.Hora_Entrada, empReglaMap.get(a.ID_Empleado));
-    const esRetardo = !actividadJustificaRetardo(actividadDelDia, a.Hora_Entrada) && a.Presente && hayRetardoEnEntrada(entradaCelda, fechaLocalDB(a.Fecha));
     if (a.Presente && h > 0) acc.dias++;
-    if (esRetardo) acc.retardos++;
     if (a.Multi_Planta) acc.multi++;
     acc.horas += h;
     acc.extras += Number(a.Horas_Extras) || 0;
@@ -1454,13 +1491,16 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       entradaRed: fmt(entradaRedondeadaVista(a.Hora_Entrada)),
       salidaRed: fmt(salidaRedondeadaVista(a.Hora_Salida)),
       horasActividad: horasActividadDia,
-      ...(() => { const p = horasPorParesVista(a.historial_checadas); return { horasReal: p.real, horasRed: p.red }; })(),
+      // Nocturna: sin real/redondeado por pares del día; ambas = lo consolidado.
+      ...(nocturno ? { horasReal: horasReales, horasRed: horasReales }
+        : (() => { const p = horasPorParesVista(a.historial_checadas); return { horasReal: p.real, horasRed: p.red }; })()),
       incompleta,
       enCurso,
-      retardo: esRetardo,
-      minutosRetardo: esRetardo ? (a.Minutos_Retardo || 0) : 0,
       multiPlanta: a.Multi_Planta,
-      planta: planta || null
+      planta: planta || null,
+      nocturna: nocturno && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
+      nocturnaEntrante: !!a.Nocturna_Entrante,
+      nocturnaEstado: a.Nocturna_Estado || null
     });
   }
 
@@ -1475,7 +1515,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
 
 
   const filas = empleadosVisibles.map(e => {
-    const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, retardos: 0, multi: 0 };
+    const acc = porEmpleado.get(e.ID_Empleado) || { horas: 0, extras: 0, dias: 0, multi: 0 };
     const jornada = e.tipo_horario?.Horas_Jornada || 8;
 
     // Matriz: una celda por cada fecha del rango
@@ -1546,7 +1586,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       // Revisión: presente, día YA cerrado (no en curso), con checada, pero <2h.
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
       const tieneChecada = !!(c.entrada || c.salida);
-      const requiereRevision = c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS;
+      // Jornada nocturna detectada sola (AUTO): RH confirma o la deshace (fue olvido).
+      const requiereRevision = (c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS)
+        || c.nocturna === 'AUTO';
       if (requiereRevision) {
         revisiones.push({
           fecha: key,
@@ -1554,7 +1596,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           horas: c.horas,
           entrada: c.entrada || null,
           salida: c.salida || null,
-          motivo: !c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')
+          motivo: c.nocturna === 'AUTO' ? 'Nocturna por confirmar'
+            : (!c.salida ? 'Falta salida' : (!c.entrada ? 'Falta entrada' : 'Jornada muy corta')),
+          nocturna: c.nocturna
         });
       }
       return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
@@ -1583,7 +1627,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       area: e.area?.Nombre_Area || '',
       puesto: e.puesto?.Nombre_Puesto || '',
       horas, extras, normales,
-      dias: acc.dias, retardos: acc.retardos, multi: acc.multi,
+      dias: acc.dias, multi: acc.multi,
+      // Sin retardos: solo si gana el bono de puntualidad en el rango mostrado.
+      bono: bonoDeAsistencias(asistenciasPorEmp.get(e.ID_Empleado) || [], inicio, fin),
       diasAusencia,
       esperadas,
       faltantes: Math.max(0, Math.round((esperadas - horas) * 100) / 100),
@@ -1849,6 +1895,12 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // a la hora completa. Así el día redondeado siempre da horas completas.
 // Se suma en minutos enteros y se convierte a horas al final (sin centésimas
 // acumuladas).
+// Día con jornada nocturna (sale de madrugada o recibe el tramo de la víspera):
+// sus horas solo existen consolidadas en BD. Recalcular por pares del día
+// calendario las rompería (la salida de las 06:00 es de la víspera).
+export const esDiaNocturno = (a) =>
+  !!a && (a.Nocturna_Entrante || ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado));
+
 export function horasPorParesVista(checadas) {
   let c = consolidarChecadas(checadas || []);
   if (c.length % 2) c = c.slice(0, -1); // par abierto no suma, los pares cerrados sí
@@ -1943,8 +1995,7 @@ export async function obtenerPresenciaPorPlanta(fecha = null, filtro = null) {
       puesto: a.empleado.puesto?.Nombre_Puesto,
       area: a.empleado.area?.Nombre_Area,
       entrada: entradaPago || a.Hora_Entrada,
-      entradaReal: a.Hora_Entrada,
-      retardo: hayRetardoEnEntrada(entradaPago, fechaLocalDB(a.Fecha))
+      entradaReal: a.Hora_Entrada
     });
     totalPresentes++;
   }
@@ -2047,7 +2098,6 @@ export async function obtenerChecadasDelDia(fecha = null, plantaId = null, filtr
       horaReal: c.Fecha_Hora,
       tipo: c.Tipo_Checada,
       estado: c.Estado,
-      jornadaRetardo: esEntrada ? hayRetardoEnEntrada(horaMostrar, new Date(c.Fecha_Hora)) : (c.asistencia?.Retardo || false),
       origen: c.Origen_Sincronizacion,
       dispositivo: c.checador?.Nombre || c.Dispositivo || null,
       planta: c.checador?.planta?.Nombre || c.Ubicacion || 'Sin planta',
@@ -2122,14 +2172,30 @@ export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
     }
   });
 
-  // Retardo derivado de la entrada mostrada (ajustada), coherente con lo que se ve.
-  const tieneRetardo = a => a.Presente && hayRetardoEnEntrada(
-    entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada, fechaLocalDB(a.Fecha)
-  );
   const presentes = asistenciasVisibles.filter(a => a.Presente);
   const conEntrada = asistenciasVisibles.filter(a => a.Hora_Entrada);
   const conSalida = asistenciasVisibles.filter(a => a.Hora_Salida);
-  const conRetardo = asistenciasVisibles.filter(tieneRetardo);
+
+  // Sin retardos: cuántos ya perdieron el bono de puntualidad en la semana
+  // (lunes a este día). Los días que aún no pasan no cuentan como falla.
+  const lunes = new Date(fechaInicio);
+  lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+  const [activosIds, semana] = await Promise.all([
+    prisma.empleados.findMany({ where: { estatus: { is: { Nombre_Estatus: 'ACTIVO' } } }, select: { ID_Empleado: true } }),
+    prisma.empleados_Asistencia.findMany({
+      where: { Fecha: { gte: lunes, lte: fechaFin } },
+      select: { ID_Empleado: true, Fecha: true, Presente: true, Hora_Entrada: true }
+    })
+  ]);
+  const semanaPorEmp = new Map();
+  for (const a of semana) {
+    if (!semanaPorEmp.has(a.ID_Empleado)) semanaPorEmp.set(a.ID_Empleado, []);
+    semanaPorEmp.get(a.ID_Empleado).push(a);
+  }
+  const sinBono = activosIds.filter(e => {
+    const b = bonoDeAsistencias(semanaPorEmp.get(e.ID_Empleado) || [], lunes, fechaInicio);
+    return !b.aplica && !b.pendiente;
+  }).length;
 
   // Conteo por ubicación dinámico (cualquier planta, no solo RAM1/RAM2)
   const porUbicacionMap = new Map();
@@ -2152,7 +2218,7 @@ export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
       : 0,
     conEntrada: conEntrada.length,
     conSalida: conSalida.length,
-    conRetardo: conRetardo.length,
+    sinBono,
     porUbicacion,
     detalle: asistenciasVisibles.map(a => ({
       empleadoId: a.ID_Empleado,
@@ -2163,8 +2229,6 @@ export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
       horaEntrada: entradaPagoDesde(a.Hora_Entrada, a.empleado) || a.Hora_Entrada,
       horaEntradaReal: a.Hora_Entrada,
       horaSalida: a.Hora_Salida,
-      retardo: tieneRetardo(a),
-      minutosRetardo: a.Minutos_Retardo,
       ubicacionEntrada: a.Ubicacion_Entrada,
       ubicacionSalida: a.Ubicacion_Salida
     }))
@@ -2282,6 +2346,7 @@ export async function marcarFaltasAutomaticas(fecha = null) {
 export default {
   registrarChecada,
   registrarChecadaManualDia,
+  cambiarEstadoNocturna,
   obtenerResumenAsistencia,
   obtenerReportePorUbicacion,
   obtenerPresenciaPorPlanta,

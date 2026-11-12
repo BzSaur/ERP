@@ -97,6 +97,9 @@ router.post('/checada-manual', isAdminOrRH, asistenciaController.registrarChecad
 // Captura manual de entrada/salida de un día desde la tabla de horas (JSON)
 router.post('/checada-manual-dia', isAdminOrRH, asistenciaController.guardarChecadaManualDia);
 
+// Jornada nocturna: confirmar / fue olvido / marcar / quitar (JSON)
+router.post('/nocturna', isAdminOrRH, asistenciaController.cambiarNocturna);
+
 // Marcar faltas (solo RH/Admin)
 router.post('/api/marcar-faltas', isAdminOrRH, asistenciaController.apiMarcarFaltas);
 

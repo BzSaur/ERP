@@ -388,6 +388,12 @@ model Empleados_Asistencia {
   ID_Checador_Salida  Int?
   Multi_Planta        Boolean   @default(false)  // true si entrada y salida en plantas distintas
 
+  // Jornada nocturna (cruza medianoche). En el día D que sale de noche:
+  // AUTO (detectada) | CONFIRMADA | RECHAZADA (fue olvido) | MANUAL; null = no aplica.
+  // Nocturna_Entrante en el día D+1, que recibe el tramo desde las 22:00 de D.
+  Nocturna_Estado     String?   @db.VarChar(12)
+  Nocturna_Entrante   Boolean   @default(false)
+
   // Relaciones
   empleado           Empleados            @relation(fields: [ID_Empleado], references: [ID_Empleado], onDelete: Cascade)
   historial_checadas Historial_Checadas[]

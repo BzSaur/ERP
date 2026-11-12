@@ -11,9 +11,10 @@
  */
 
 import * as XLSX from 'xlsx';
+import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
 import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha } from './checadorImportService.js';
-import { asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
+import { esDiaNocturno, asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
 
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
@@ -85,8 +86,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   const asistencias = await prisma.empleados_Asistencia.findMany({
     where: { Fecha: { gte: inicio, lte: fin } },
     select: {
-      ID_Empleado: true, Fecha: true, Hora_Entrada: true, Hora_Salida: true,
-      Horas_Trabajadas: true, Multi_Planta: true,
+      ID_Empleado: true, Fecha: true, Presente: true, Hora_Entrada: true, Hora_Salida: true,
+      Horas_Trabajadas: true, Multi_Planta: true, Nocturna_Estado: true, Nocturna_Entrante: true,
       Ubicacion_Entrada: true, Ubicacion_Salida: true,
       historial_checadas: {
         orderBy: { Fecha_Hora: 'asc' },
@@ -144,8 +145,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     head1.push(`${NOMBRES_DIA[d.getUTCDay()]} ${fmtFechaCorta(d)}`, '', '');
     head2.push('Entrada', 'Salida', 'Horas');
   }
-  head1.push('Total hrs', 'Normal', 'Extra', 'Días');
-  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h/sem)`, `(>${LIMITE_SEMANAL_HORAS}h/sem, horas completas)`, '(total ÷ 9)');
+  head1.push('Total hrs', 'Normal', 'Extra', 'Días', 'Bono puntualidad');
+  head2.push('', `(≤${LIMITE_SEMANAL_HORAS}h/sem)`, `(>${LIMITE_SEMANAL_HORAS}h/sem, horas completas)`, '(total ÷ 9)', '(entrada ≤ 8:00 lun-vie)');
   aoa.push(head1);
   aoa.push(head2);
 
@@ -237,15 +238,23 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
       const salRaw = salidaPago ? fmtHora(salidaPago) : null;
       let entMostrar = entRaw ? `${entRaw}${plantaEnt ? ' (' + plantaEnt + ')' : ''}` : '';
       let salMostrar = salRaw ? `${salRaw}${plantaSal ? ' (' + plantaSal + ')' : ''}` : '';
-      const p = horasPorParesVista(a.historial_checadas);
+      // Jornada nocturna: horas solo consolidadas en BD; el día no se recalcula por pares.
+      const nocturno = esDiaNocturno(a);
+      const p = nocturno ? { real: 0, red: 0, pares: [] } : horasPorParesVista(a.historial_checadas);
+      if (nocturno) {
+        // El xlsx no conserva estilos de celda: la marca va en el texto.
+        if (a.Nocturna_Entrante && entMostrar) entMostrar = `${entMostrar} (-1)`;
+        if (a.Nocturna_Estado && a.Nocturna_Estado !== 'RECHAZADA' && salMostrar) salMostrar = `${salMostrar} (+1)`;
+        entMostrar = `NOCTURNA${a.Nocturna_Estado === 'AUTO' ? ' POR CONFIRMAR' : ''} · ${entMostrar}`;
+      }
       // Varios periodos (salió y regresó): se listan todos, alineados por
       // posición, para poder comprobar la suma de horas contra las checadas.
-      if (a.Hora_Salida && p.pares.length > 1) {
+      if (!nocturno && a.Hora_Salida && p.pares.length > 1) {
         entMostrar = p.pares.map((x, i) => fmtMinutos(redondear ? x.eRed : x.e) + (i === 0 && plantaEnt ? ` (${plantaEnt})` : '')).join(' / ');
         salMostrar = p.pares.map((x, i, arr) => fmtMinutos(redondear ? x.sRed : x.s) + (i === arr.length - 1 && plantaSal ? ` (${plantaSal})` : '')).join(' / ');
       }
       // Horas consolidadas en BD (misma fuente que la vista /asistencia/horas).
-      let horas = a.Hora_Salida ? (Number(a.Horas_Trabajadas) || 0) : 0; // sin salida = 0 h, aunque BD tenga estimado
+      let horas = (a.Hora_Salida || nocturno) ? (Number(a.Horas_Trabajadas) || 0) : 0; // sin salida = 0 h, aunque BD tenga estimado
       // Sin redondeo: horas netas de la checada real (con descuento de comida).
       // Con redondeo: horas del par redondeado (regla restrictiva en cualquier fecha).
       // Se suman PARES entrada-salida: el hueco entre pares (salió y regresó) no cuenta.
@@ -311,7 +320,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     // Días = total ÷ 9 como fracción real de día (se multiplica por el sueldo
     // diario): 50h -> 5.56. Redondeado a 2 decimales: lo que se ve es lo que se multiplica.
     const diasPago = r.total > 0 ? Math.round(r.total / 9 * 100) / 100 : '';
-    fila.push(r.total / 24, r.normales / 24, r.extras / 24, diasPago);
+    const bono = bonoDeAsistencias([...(idx.get(e.ID_Empleado)?.values() || [])], inicio, fin);
+    fila.push(r.total / 24, r.normales / 24, r.extras / 24, diasPago,
+      bono.aplica ? 'SÍ' : (bono.pendiente ? 'EN CURSO' : `NO · ${bono.fallas.map(x => `${x.fecha.slice(5)} ${x.motivo}`).join(', ')}`));
     return { fila, id: e.ID_Empleado, nombre, total: r.total };
   });
 
@@ -353,7 +364,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   // Entrada más ancha que Salida: además de la hora puede llevar la actividad
   // delegada del día ("07:47 (RAM 1) · CAMPO: HOME OFFICE [recurrente]").
   for (let i = 0; i < dias.length; i++) cols.push({ wch: 30 }, { wch: 22 }, { wch: 7 });
-  cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 }, { wch: 7 });
+  cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 28 });
   ws['!cols'] = cols;
 
   // Merge del título sobre las primeras columnas

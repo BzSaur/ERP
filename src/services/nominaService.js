@@ -17,6 +17,7 @@
  */
 
 import prisma from '../config/database.js';
+import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
 
 // ============================================================
 // OBTENER CONFIGURACIÓN DE NÓMINA
@@ -423,111 +424,30 @@ export async function calcularFiniquitoEstimado({
 // ============================================================
 
 /**
- * Evalúa si un empleado cumple con los requisitos de puntualidad
- * Nota: Semana laboral configurable (5 o 6 días)
+ * Bono de puntualidad: entrada a las 08:00 o antes TODOS los días lun-vie del
+ * periodo; cualquier ausencia lo quita (regla en src/utils/bonoPuntualidad.js,
+ * la misma que usan asistencia y el cálculo de nómina).
  */
 export async function evaluarPuntualidad({
   empleadoId,
   fechaInicio,
   fechaFin
 }) {
-  // Obtener el tipo de horario del empleado para saber días laborables
-  const empleado = await prisma.empleados.findUnique({
-    where: { ID_Empleado: empleadoId },
-    include: { tipo_horario: true }
-  });
-
-  const diasLaborables = empleado?.tipo_horario?.Dias_Semana || 6;
-
-  // Obtener registros de asistencia de la semana
   const asistencias = await prisma.empleados_Asistencia.findMany({
-    where: {
-      ID_Empleado: empleadoId,
-      Fecha: {
-        gte: fechaInicio,
-        lte: fechaFin
-      }
-    },
-    orderBy: { Fecha: 'asc' }
+    where: { ID_Empleado: empleadoId, Fecha: { gte: fechaInicio, lte: fechaFin } },
+    select: { Fecha: true, Presente: true, Hora_Entrada: true }
   });
-
-  const config = await getConfigMultiple([
-    'BONO_PUNTUALIDAD_CHECADAS',
-    'BONO_PUNTUALIDAD_DIAS',
-    'BONO_PUNTUALIDAD_MONTO',
-    'TOLERANCIA_MINUTOS'
-  ]);
-
-  const toleranciaMinutos = config.TOLERANCIA_MINUTOS || 15;
-
-  let checadasCorrectas = 0;
-  let diasConChecada = 0;
-  let faltas = 0;
-  let retardos = 0;
-  let horasFaltantes = 0;
-
-  for (const asistencia of asistencias) {
-    // Ignorar domingos (día 0). getUTCDay: Fecha es @db.Date (medianoche UTC);
-    // getDay() local en México corre -1 día y saltaba lunes en vez de domingo.
-    const fecha = new Date(asistencia.Fecha);
-    if (fecha.getUTCDay() === 0) {
-      continue;
-    }
-
-    if (!asistencia.Presente) {
-      faltas++;
-      continue;
-    }
-
-    diasConChecada++;
-
-    // Verificar entrada y salida
-    if (asistencia.Hora_Entrada && asistencia.Hora_Salida) {
-      checadasCorrectas += 2;
-
-      // Verificar si llegó tarde
-      const horaEntrada = new Date(asistencia.Hora_Entrada);
-      if (horaEntrada.getHours() > 8 ||
-          (horaEntrada.getHours() === 8 && horaEntrada.getMinutes() > toleranciaMinutos)) {
-        retardos++;
-      }
-    } else if (asistencia.Hora_Entrada || asistencia.Hora_Salida) {
-      checadasCorrectas += 1;
-    }
-
-    // Calcular horas faltantes del día
-    const horasTrabajadas = Number(asistencia.Horas_Trabajadas) || 0;
-    const horasEsperadas = empleado?.tipo_horario?.Horas_Jornada || 8;
-    if (horasTrabajadas < horasEsperadas && asistencia.Presente) {
-      horasFaltantes += (horasEsperadas - horasTrabajadas);
-    }
-  }
-
-  const checadasRequeridas = config.BONO_PUNTUALIDAD_CHECADAS || (diasLaborables * 2);
-  const diasRequeridos = config.BONO_PUNTUALIDAD_DIAS || diasLaborables;
-
-  const cumpleRequisitos =
-    checadasCorrectas >= checadasRequeridas &&
-    diasConChecada >= diasRequeridos &&
-    faltas === 0 &&
-    retardos === 0;
+  const config = await getConfigMultiple(['BONO_PUNTUALIDAD_ACTIVO', 'BONO_PUNTUALIDAD_MONTO']);
+  const bono = bonoDeAsistencias(asistencias, fechaInicio, fechaFin);
+  const cumpleRequisitos = config.BONO_PUNTUALIDAD_ACTIVO !== false && bono.aplica;
 
   return {
     empleadoId,
     periodo: { fechaInicio, fechaFin },
-    diasEvaluados: asistencias.length,
-    diasConChecada,
-    checadasCorrectas,
-    faltas,
-    retardos,
-    horasFaltantes: redondear(horasFaltantes),
-    requisitos: {
-      checadasRequeridas,
-      diasRequeridos,
-      diasLaborables
-    },
     cumpleRequisitos,
-    montoBono: cumpleRequisitos ? (config.BONO_PUNTUALIDAD_MONTO || 50) : 0
+    pendiente: bono.pendiente,
+    fallas: bono.fallas,
+    montoBono: cumpleRequisitos ? (Number(config.BONO_PUNTUALIDAD_MONTO) || 50) : 0
   };
 }
 

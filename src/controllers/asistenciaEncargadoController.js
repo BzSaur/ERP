@@ -164,7 +164,7 @@ export const detalleDia = async (req, res, next) => {
         where: { ID_Empleado: idEmpleado, Fecha: fecha },
         select: {
           Presente: true, Hora_Entrada: true, Hora_Salida: true, Horas_Trabajadas: true,
-          Minutos_Retardo: true, Ubicacion_Entrada: true, Ubicacion_Salida: true,
+          Ubicacion_Entrada: true, Ubicacion_Salida: true,
           historial_checadas: {
             orderBy: { Fecha_Hora: 'asc' },
             select: { Fecha_Hora: true, Tipo_Checada: true, Ubicacion: true }
@@ -197,7 +197,6 @@ export const detalleDia = async (req, res, next) => {
         entrada: fmtHora(asistencia.Hora_Entrada),
         salida: fmtHora(asistencia.Hora_Salida),
         horas: Number(asistencia.Horas_Trabajadas) || 0,
-        minutosRetardo: asistencia.Minutos_Retardo || 0,
         plantaEntrada: asistencia.Ubicacion_Entrada || null,
         checadas: asistencia.historial_checadas.map(c => ({
           hora: fmtHora(c.Fecha_Hora), tipo: c.Tipo_Checada, planta: c.Ubicacion || null
@@ -242,4 +241,24 @@ export const guardarChecadaManual = async (req, res) => {
   }
 };
 
-export default { horasEquipo, horasEquipoExcel, detalleDia, guardarChecadaManual };
+// POST /encargado/asistencia/nocturna  { ID_Empleado, fecha, accion }
+export const cambiarNocturna = async (req, res) => {
+  try {
+    const miId = resolverEncargadoEfectivo({ ...req, query: { ...req.query, ...req.body } });
+    if (!miId) return res.status(400).json({ ok: false, error: 'Selecciona un encargado responsable' });
+    const idEmpleado = parseInt(req.body.ID_Empleado);
+    const fechaStr = (req.body.fecha || '').trim();
+    if (!Number.isInteger(idEmpleado) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
+      return res.status(400).json({ ok: false, error: 'Empleado o fecha inválidos' });
+    }
+    if (!(await empleadoEnEquipoDeEncargado(idEmpleado, miId, new Date(`${fechaStr}T00:00:00`)))) {
+      return res.status(403).json({ ok: false, error: 'Ese empleado no pertenece a tu equipo vigente esa fecha' });
+    }
+    const r = await asistenciaService.cambiarEstadoNocturna({ empleadoId: idEmpleado, fecha: fechaStr, accion: req.body.accion });
+    res.json({ ok: true, estado: r.Nocturna_Estado });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+};
+
+export default { horasEquipo, horasEquipoExcel, detalleDia, guardarChecadaManual, cambiarNocturna };

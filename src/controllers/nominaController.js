@@ -5,6 +5,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple, calcularNominaSemanal } from '../services/nominaService.js';
+import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
 import { obtenerAusenciasJustificadas, ausenciaEnFecha } from '../services/asistenciaService.js';
 
 // ============================================================
@@ -181,7 +182,9 @@ export const calcularNomina = async (req, res) => {
       'TASA_IMSS_EMPLEADO',
       'TASA_ISR',
       'PRESTAMOS_ACTIVO',
-      'PRESTAMOS_TASA_INTERES'
+      'PRESTAMOS_TASA_INTERES',
+      'BONO_PUNTUALIDAD_ACTIVO',
+      'BONO_PUNTUALIDAD_MONTO'
     ]);
     
     // Obtener empleados activos con sus datos de la semana
@@ -309,7 +312,14 @@ export const calcularNomina = async (req, res) => {
       const pagoHorasDobles = redondear(totalHorasDobles * salarioHora * 2);
       const pagoHorasTriples = redondear(totalHorasTriples * salarioHora * 3);
       
-      const totalPercepciones = redondear(salarioBase + pagoHorasDobles + pagoHorasTriples);
+      // Bono de puntualidad: entrada a las 08:00 o antes TODOS los días lun-vie del
+      // periodo (cualquier ausencia lo quita). Misma regla que muestra asistencia.
+      const bono = bonoDeAsistencias(empleado.asistencia, diasPeriodo[0], diasPeriodo[diasPeriodo.length - 1]);
+      const bonoPuntualidad = config.BONO_PUNTUALIDAD_ACTIVO !== false && diasPeriodo.length && bono.aplica
+        ? redondear(Number(config.BONO_PUNTUALIDAD_MONTO) || 50)
+        : 0;
+
+      const totalPercepciones = redondear(salarioBase + pagoHorasDobles + pagoHorasTriples + bonoPuntualidad);
       
       // ============================================================
       // DEDUCCIONES — Controladas por SuperAdmin
@@ -388,6 +398,7 @@ export const calcularNomina = async (req, res) => {
           Pago_Horas_Extra: 0,
           Pago_Horas_Dobles: pagoHorasDobles,
           Pago_Horas_Triples: pagoHorasTriples,
+          Bono_Puntualidad: bonoPuntualidad,
           Total_Percepciones: totalPercepciones,
           Deduccion_IMSS: deduccionIMSS,
           Deduccion_ISR: deduccionISR,
@@ -409,6 +420,7 @@ export const calcularNomina = async (req, res) => {
           Pago_Horas_Extra: 0,
           Pago_Horas_Dobles: pagoHorasDobles,
           Pago_Horas_Triples: pagoHorasTriples,
+          Bono_Puntualidad: bonoPuntualidad,
           Total_Percepciones: totalPercepciones,
           Deduccion_IMSS: deduccionIMSS,
           Deduccion_ISR: deduccionISR,

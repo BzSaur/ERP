@@ -97,14 +97,6 @@
             <div class="col-md-2 col-sm-4 mb-3">
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
-                        <h3 class="mb-0 text-warning"><%= resumen.retardos %></h3>
-                        <small class="text-body-secondary">Retardos</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2 col-sm-4 mb-3">
-                <div class="card border-0 shadow-sm h-100 text-center">
-                    <div class="card-body">
                         <h3 class="mb-0 text-primary"><%= resumen.checadasCompletas %></h3>
                         <small class="text-body-secondary">Checadas Completas</small>
                     </div>
@@ -121,9 +113,10 @@
             <div class="col-md-2 col-sm-4 mb-3">
                 <div class="card border-0 shadow-sm h-100 text-center">
                     <div class="card-body">
-                        <% const cumpleBono = resumen.checadasCompletas >= 4 && resumen.diasPresentes >= 6 && resumen.diasAusentes === 0 && resumen.retardos === 0; %>
-                        <h3 class="mb-0 <%= cumpleBono ? 'text-success' : 'text-danger' %>">
-                            <i class="bi bi-<%= cumpleBono ? 'check-circle' : 'x-circle' %>"></i>
+                        <% const b = resumen.bono; %>
+                        <h3 class="mb-0 <%= b.aplica ? 'text-success' : (b.pendiente ? 'text-body-secondary' : 'text-danger') %>"
+                            title="<%= b.fallas.map(function(x){ return x.fecha + ': ' + x.motivo; }).join(' · ') || 'Entrada a las 8:00 o antes de lunes a viernes' %>">
+                            <%= b.aplica ? 'Sí' : (b.pendiente ? 'En curso' : 'No') %>
                         </h3>
                         <small class="text-body-secondary">Bono Puntualidad</small>
                     </div>
@@ -179,13 +172,12 @@
                                 <th>Salida</th>
                                 <th>Ubicación Entrada</th>
                                 <th>Ubicación Salida</th>
-                                <th>Retardo</th>
                             </tr>
                         </thead>
                         <tbody>
                             <% if (resumen.detalle && resumen.detalle.length > 0) { %>
                                 <% resumen.detalle.forEach(dia => { %>
-                                    <tr class="<%= !dia.presente ? (dia.ausencia ? 'table-info' : 'table-danger') : (dia.retardo ? 'table-warning' : '') %>">
+                                    <tr class="<%= !dia.presente ? (dia.ausencia ? 'table-info' : 'table-danger') : '' %>">
                                         <td>
                                             <strong><%= new Date(dia.fecha).toLocaleDateString('es-MX') %></strong>
                                         </td>
@@ -234,25 +226,11 @@
                                                 <span class="text-body-secondary">-</span>
                                             <% } %>
                                         </td>
-                                        <td>
-                                            <% if (dia.retardo) { %>
-                                                <span class="text-danger">
-                                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                                    Retardo
-                                                </span>
-                                            <% } else if (dia.presente) { %>
-                                                <span class="text-success">
-                                                    <i class="bi bi-check-circle"></i>
-                                                </span>
-                                            <% } else { %>
-                                                <span class="text-body-secondary">-</span>
-                                            <% } %>
-                                        </td>
                                     </tr>
                                 <% }); %>
                             <% } else { %>
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-body-secondary">
+                                    <td colspan="7" class="text-center py-4 text-body-secondary">
                                         <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                         No hay registros de asistencia en este período
                                     </td>

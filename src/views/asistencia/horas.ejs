@@ -94,9 +94,10 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
         <div class="fs-5 fw-bold text-warning"><%= fmtH(k.extrasSobreLimite) %></div>
       </div>
       <div class="col-6 col-md-2">
-        <div class="text-body-secondary small">Retardos</div>
-        <div class="fs-5 fw-bold <%= k.diasRetardo > 0 ? 'text-danger' : 'text-success' %>"><%= k.diasRetardo %></div>
-        <% if (k.minutosRetardoTotal > 0) { %><div class="small text-body-secondary"><%= k.minutosRetardoTotal %> min total</div><% } %>
+        <div class="text-body-secondary small" title="Entrada a las 8:00 o antes todos los días de lunes a viernes; cualquier ausencia lo quita">Bono puntualidad</div>
+        <div class="fs-5 fw-bold <%= k.bono.aplica ? 'text-success' : (k.bono.pendiente ? 'text-body-secondary' : 'text-danger') %>"><%= k.bono.aplica ? 'Sí' : (k.bono.pendiente ? 'En curso' : 'No') %></div>
+        <% k.bono.fallas.slice(0, 3).forEach(function(x){ %><div class="small text-body-secondary"><%= new Date(x.fecha + 'T12:00:00').toLocaleDateString('es-MX', { weekday:'short', day:'2-digit' }) %>: <%= x.motivo %></div><% }); %>
+        <% if (k.bono.fallas.length > 3) { %><div class="small text-body-secondary">+<%= k.bono.fallas.length - 3 %> más</div><% } %>
       </div>
       <div class="col-6 col-md-2">
         <div class="text-body-secondary small">Promedio/día</div>
@@ -138,7 +139,7 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
         <tbody>
           <% if (desglose.dias && desglose.dias.length > 0) { %>
             <% desglose.dias.forEach(function(d) { %>
-            <tr class="<%= !d.presente ? 'table-light text-body-secondary' : '' %>">
+            <tr class="<%= !d.presente ? 'table-light text-body-secondary' : '' %>"<% if (d.nocturna || d.nocturnaEntrante) { %> style="--bs-table-bg:#e0e7ff"<% } %>>
               <td><strong><%= d.nombreDia %></strong> <span class="small text-body-secondary"><%= fmtFecha(d.fecha) %></span></td>
               <td>
                 <% if (d.pares && d.pares.length > 0) { %>
@@ -150,7 +151,7 @@ function fmtFecha(d){ const dt=new Date(d); return String(dt.getDate()).padStart
                     </span>
                   <% }); %>
                   <% if (d.incompleta) { %><span class="badge bg-warning text-dark" title="Falta marcar salida">⚠ sin salida</span><% } %>
-                  <% if (d.retardo) { %><span class="badge bg-danger ms-1" title="Retardo <%= d.minutosRetardo %> min">Retardo</span><% } %>
+                  <% if (d.nocturna || d.nocturnaEntrante) { %><span class="badge ms-1" style="background:#e0e7ff;color:#3730a3;border:1px solid #6366f1" title="Jornada nocturna: 18-22 cuenta como extra del día en que entró; desde las 22:00 como jornada del día siguiente<%= d.nocturna === 'AUTO' ? ' · detectada automáticamente, por confirmar' : '' %>">Nocturna<%= d.nocturna === 'AUTO' ? ' (auto)' : '' %></span><% } %>
                   <% if (d.ausencia) { %><span class="badge bg-primary ms-1" title="Trabajó durante periodo de <%= d.ausencia.toLowerCase() %>"><%= d.ausencia %></span><% } %>
                   <% if (d.actividad) { %>
                     <span class="badge ms-1" style="background-color:#6f42c1" title="Tipo: <%= d.actividad.tipo %> · Encargado: <%= d.actividad.responsable %> · Actividad: <%= d.actividad.nombre %><%= d.actividad.empresa ? ' · Empresa: ' + d.actividad.empresa : '' %>">

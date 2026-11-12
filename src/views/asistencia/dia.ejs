@@ -94,7 +94,6 @@
                                                         <i class="bi bi-box-arrow-in-right"></i>
                                                         <%= new Date(p.entrada).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'}) %>
                                                     </span>
-                                                    <% if (p.retardo) { %><br><small class="text-danger">retardo</small><% } %>
                                                 </div>
                                             </<%= puedeDetalle ? 'a' : 'div' %>>
                                         <% }); %>
@@ -171,14 +170,13 @@
                                         </td>
                                         <td>
                                             <%
-                                                var esEntradaDia = c.tipo === 'ENTRADA';
-                                                var estadoDia = c.estado;
-                                                if (esEntradaDia && c.jornadaRetardo) estadoDia = 'RETARDO';
+                                                // Sin retardos: solo se indica si la entrada cuenta para el bono (08:00 o antes).
+                                                var hDia = new Date(c.horaReal);
+                                                var paraBonoDia = c.tipo === 'ENTRADA' && (hDia.getHours() * 60 + hDia.getMinutes()) <= 480;
                                             %>
-                                            <% if (estadoDia === 'A_TIEMPO') { %><span class="text-success"><i class="bi bi-check-circle-fill"></i></span>
-                                            <% } else if (estadoDia === 'TOLERANCIA') { %><span class="text-warning"><i class="bi bi-exclamation-circle-fill"></i></span>
-                                            <% } else if (estadoDia === 'RETARDO') { %><span class="text-danger"><i class="bi bi-x-circle-fill"></i> Retardo</span>
-                                            <% } else { %><small class="text-body-secondary"><%= estadoDia %></small><% } %>
+                                            <% if (c.tipo !== 'ENTRADA') { %><small class="text-body-secondary">-</small>
+                                            <% } else if (paraBonoDia) { %><small class="text-success">Cuenta para bono</small>
+                                            <% } else { %><small class="text-body-secondary">Después de 8:00</small><% } %>
                                         </td>
                                     </tr>
                                 <% }); %>

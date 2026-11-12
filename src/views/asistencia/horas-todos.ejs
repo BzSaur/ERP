@@ -11,6 +11,7 @@ const esEncargadoView = typeof panelEditable !== 'undefined' && panelEditable;
 const rhManual = !esEncargadoView && hasRole('ADMIN','Administrador','RH','Recursos Humanos','RECURSOS_HUMANOS','SuperAdministrador');
 const puedeManual = esEncargadoView || rhManual;
 const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asistencia/checada-manual' : '/asistencia/checada-manual-dia';
+const urlNocturna = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asistencia/nocturna' : '/asistencia/nocturna';
 %>
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-2">
   <div>
@@ -147,7 +148,7 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
     <span class="fw-semibold">
       <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
       <%= datos.totalRevisiones %> día(s) requieren revisión de RH
-      <small class="text-body-secondary ms-1">(menos de <%= datos.umbralRevision %>h con checada — posible olvido de entrada/salida)</small>
+      <small class="text-body-secondary ms-1">(menos de <%= datos.umbralRevision %>h con checada — posible olvido de entrada/salida — o jornada nocturna por confirmar)</small>
     </span>
     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#listaRevisiones">
       Ver / ocultar
@@ -166,6 +167,16 @@ const urlManual = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asisten
             <% if (r.area) { %><small class="text-body-secondary ms-1"><%= r.area %></small><% } %>
             <div class="mt-1 d-flex flex-wrap gap-1">
               <% r.dias.forEach(function(d){ %>
+                <% if (d.nocturna === 'AUTO') { %>
+                <span class="badge badge-nocturna d-inline-flex align-items-center gap-1" title="Entrada sin salida ese día y salida a la mañana siguiente. Confirma si fue jornada nocturna o si olvidó sellar.">
+                  <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
+                  nocturna <%= d.entrada||'—' %> a <%= d.salida||'—' %> (+1)
+                  <% if (puedeManual) { %>
+                  <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="confirmar">Confirmar</button>
+                  <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="rechazar">Fue olvido</button>
+                  <% } %>
+                </span>
+                <% return; } %>
                 <span class="badge bg-warning text-dark" title="<%= d.motivo %> · entrada <%= d.entrada||'—' %> / salida <%= d.salida||'—' %>">
                   <%= d.nombreDia %> <%= new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit'}) %>:
                   <%= fmtH(d.horas) %> · <%= d.motivo %>
@@ -310,6 +321,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas .cel-es .ent { color:#0d6efd; }
   .matriz-horas .cel-es .sal { color:#dc3545; }
   .matriz-horas .cel-es .hrs { font-weight:600; border-top:1px solid #ccc; }
+  /* Jornada nocturna (cruza medianoche): color propio. Detectada sola = borde
+     punteado (por confirmar); confirmada o marcada a mano = borde sólido. */
+  .matriz-horas td.cel-nocturna { background:#e0e7ff; outline:2px solid #6366f1; outline-offset:-2px; }
+  .matriz-horas td.cel-nocturna.noc-auto { outline-style:dashed; }
+  .matriz-horas .cel-es .noc-tag { color:#3730a3; font-size:.62rem; font-weight:700; }
+  .matriz-horas .cel-es .noc-dia { color:#3730a3; font-size:.6rem; }
+  .badge-nocturna { background:#e0e7ff; color:#3730a3; border:1px solid #6366f1; font-weight:600; }
+  .btn-noc-accion { padding:0 .35rem; font-size:.65rem; line-height:1.4; border:1px solid #6366f1; color:#3730a3; background:#fff; }
+  .btn-noc-accion:hover { background:#6366f1; color:#fff; }
   .matriz-horas th.sortable { cursor:pointer; user-select:none; }
   .matriz-horas th.sortable:hover { background:#e9ecef; }
   .matriz-horas th .arrow { font-size:.65rem; opacity:.5; }
@@ -341,7 +361,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <th class="text-center" title="Horas completas sobre 45h de cada semana">Extra</th>
             <th class="text-center sortable" data-sort="total" data-type="num">Total <span class="arrow"></span></th>
             <th class="text-center" title="Total ÷ 9 (jornada de 9h), fracción real de día para multiplicar por el sueldo diario. 50h = 5.56">Días</th>
-            <th class="text-center">Ret</th>
+            <th class="text-center" title="Bono de puntualidad: entrada a las 8:00 o antes todos los días de lunes a viernes del rango; cualquier ausencia lo quita">Bono</th>
           </tr>
         </thead>
         <tbody id="matrizBody">
@@ -386,6 +406,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                      tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + fmtH(c.horas||0);
                    }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
+                   else if (c.presente && (c.nocturna || c.nocturnaEntrante)) {
+                     cls = 'cel-nocturna' + (c.nocturna === 'AUTO' ? ' noc-auto' : '');
+                     tip = 'Jornada nocturna'
+                       + (c.nocturnaEntrante ? ' · incluye el tramo desde las 22:00 del día anterior' : '')
+                       + (c.nocturna ? ' · sale al día siguiente a las ' + (c.salidaReal || c.salida || '') + ' (18-22 extra, desde 22:00 cuenta al día siguiente)' : '')
+                       + (c.nocturna === 'AUTO' ? ' · detectada automáticamente, por confirmar' : '')
+                       + ' · ' + fmtH(c.horas||0);
+                   }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + fmtH(c.horas||0) + ' (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
                    else if (c.incompleta) { cls='cel-parcial'; tip='Sin salida · 0 h (solo suma la actividad, si hay)'; }
@@ -417,6 +445,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-hred="<%= c.horasRed || 0 %>"
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
+                    data-noc="<%= c.nocturnaEstado || '' %>"
+                    data-inc="<%= c.incompleta ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
                     data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
                   <% if (descansoVacio) { %>
@@ -459,9 +489,12 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <span class="text-danger fw-bold">Falta</span>
                   <% } else if (c.presente) { %>
                     <div class="cel-es">
-                      <div class="ent"><%= c.entrada || '--:--' %></div>
-                      <div class="sal"><%= c.salida || '--:--' %></div>
-                      <% if (c.requiereRevision) { %>
+                      <div><span class="ent"><%= c.entrada || '--:--' %></span><% if (c.nocturnaEntrante) { %> <span class="noc-dia">(-1)</span><% } %></div>
+                      <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %> <span class="noc-dia">(+1)</span><% } %></div>
+                      <% if (c.nocturna || c.nocturnaEntrante) { %>
+                        <div class="noc-tag">Nocturna<%= c.nocturna === 'AUTO' ? ' (auto)' : '' %></div>
+                      <% } %>
+                      <% if (c.requiereRevision && c.nocturna !== 'AUTO') { %>
                         <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= fmtH(c.horas||0) %></div>
                       <% } else if (c.enCurso) { %>
                         <div class="hrs text-primary"><i class="bi bi-hourglass-split"></i> <%= fmtH(c.horas||0) %></div>
@@ -511,7 +544,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                 <% } %>
               </td>
               <td class="text-center col-dias"></td>
-              <td class="text-center <%= f.retardos>0?'text-danger fw-bold':'' %>"><%= f.retardos>0?f.retardos:'-' %></td>
+              <td class="text-center fw-bold <%= f.bono.aplica ? 'text-success' : (f.bono.pendiente ? 'text-body-secondary' : 'text-danger') %>"
+                  title="<%= f.bono.fallas.map(function(x){ return x.fecha + ': ' + x.motivo; }).join(' · ') || (f.bono.pendiente ? 'Semana en curso, sin fallas hasta hoy' : 'Entrada a las 8:00 o antes todos los días') %>"><%= f.bono.aplica ? 'Sí' : (f.bono.pendiente ? '...' : 'No') %></td>
             </tr>
             <% }); %>
           <% } else { %>
@@ -738,6 +772,30 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 </script>
 
 <% if (puedeManual) { %>
+<script>
+(function(){
+  const URL_NOCTURNA = <%- JSON.stringify(urlNocturna) %>;
+  const ENC_DELEGADO = <%- JSON.stringify(delegando ? idEncSel : null) %>;
+  document.addEventListener('click', function(ev){
+    const b = ev.target.closest('.btn-noc');
+    if (!b) return;
+    ev.stopPropagation();
+    b.disabled = true;
+    const body = { ID_Empleado: parseInt(b.dataset.emp), fecha: b.dataset.fecha, accion: b.dataset.accion };
+    if (ENC_DELEGADO) body.encargado = ENC_DELEGADO;
+    fetch(URL_NOCTURNA, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) return window.location.reload();
+        b.disabled = false;
+        const err = document.getElementById('manualError');
+        if (err && b.closest('#modalManual')) { err.textContent = res.error || 'No se pudo guardar'; err.classList.remove('d-none'); }
+        else window.alert(res.error || 'No se pudo guardar');
+      })
+      .catch(() => { b.disabled = false; });
+  });
+})();
+</script>
 <style>
   .cel-manual { cursor:pointer; }
   .cel-manual:hover { outline:2px solid #0d6efd; outline-offset:-2px; }
@@ -764,6 +822,11 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
         <small class="text-body-secondary d-block mt-2" style="font-size:.72rem">
           Sustituye la checada del reloj en la tabla y en el Excel. Con ambas vacías se vuelve a lo que marcó el reloj.
         </small>
+        <div class="mt-3 pt-2 border-top d-none" id="manualNoc">
+          <div class="small fw-semibold mb-1">Jornada nocturna</div>
+          <p class="small text-body-secondary mb-2" id="manualNocTxt" style="font-size:.72rem"></p>
+          <div class="d-flex flex-wrap gap-1" id="manualNocBtns"></div>
+        </div>
         <div class="small text-danger mt-2 d-none" id="manualError"></div>
       </div>
       <div class="modal-footer py-2">
@@ -792,7 +855,40 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     $('manualEnt').value = td.dataset.entReal || '';
     $('manualSal').value = td.dataset.salReal || '';
     $('manualError').classList.add('d-none');
+    pintarNocturna(td);
     modal.show();
+  }
+
+  // Jornada nocturna: acciones según el estado del día.
+  const NOC_TXT = {
+    '': 'Entrada sin salida este día. Si salió al día siguiente, márcala como nocturna: 18-22 cuenta como extra y desde las 22:00 como jornada del día siguiente.',
+    AUTO: 'Detectada automáticamente: entró este día y salió a la mañana siguiente.',
+    CONFIRMADA: 'Jornada nocturna confirmada.',
+    MANUAL: 'Jornada nocturna marcada a mano.',
+    RECHAZADA: 'Se marcó como olvido de salida (no nocturna).'
+  };
+  const NOC_BTNS = {
+    '': [['marcar', 'Marcar nocturna']],
+    AUTO: [['confirmar', 'Confirmar nocturna'], ['rechazar', 'Fue olvido']],
+    CONFIRMADA: [['rechazar', 'Fue olvido']],
+    MANUAL: [['rechazar', 'Fue olvido']],
+    RECHAZADA: [['quitar', 'Volver a detectar']]
+  };
+  function pintarNocturna(td) {
+    const est = td.dataset.noc || '';
+    const aplica = est !== '' || td.dataset.inc === '1';
+    $('manualNoc').classList.toggle('d-none', !aplica);
+    if (!aplica) return;
+    $('manualNocTxt').textContent = NOC_TXT[est] || '';
+    $('manualNocBtns').innerHTML = '';
+    (NOC_BTNS[est] || []).forEach(([accion, txt]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm btn-noc-accion btn-noc';
+      b.dataset.emp = ctx.emp; b.dataset.fecha = ctx.fecha; b.dataset.accion = accion;
+      b.textContent = txt;
+      $('manualNocBtns').appendChild(b);
+    });
   }
 
   // RH/Admin: clic directo en la celda.
@@ -993,7 +1089,6 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
               '<div class="col-4"><div class="dato-lbl">Horas</div><div class="dato-val">' + (function(h){ const t=Math.round((Number(h)||0)*60); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); })(d.asistencia.horas) + '</div></div>' +
               '</div>';
             if (d.asistencia.plantaEntrada) h += '<div class="small text-body-secondary">Planta: ' + d.asistencia.plantaEntrada + '</div>';
-            if (d.asistencia.minutosRetardo > 0) h += '<div class="small text-danger">Retardo: ' + d.asistencia.minutosRetardo + ' min</div>';
             if (d.asistencia.checadas.length) {
               h += '<div class="mt-2 d-flex flex-wrap gap-1">' + d.asistencia.checadas.map(function(c){
                 return '<span class="badge bg-light text-dark border">' + c.hora + ' ' + c.tipo + '</span>';

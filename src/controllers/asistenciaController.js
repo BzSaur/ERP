@@ -381,6 +381,25 @@ export const guardarChecadaManualDia = async (req, res) => {
   }
 };
 
+/**
+ * Jornada nocturna: confirmar / rechazar ("fue olvido") / marcar / quitar.
+ * POST /asistencia/nocturna  { ID_Empleado, fecha, accion }
+ */
+export const cambiarNocturna = async (req, res) => {
+  try {
+    const { ID_Empleado, fecha, accion } = req.body;
+    const r = await asistenciaService.cambiarEstadoNocturna({ empleadoId: parseInt(ID_Empleado), fecha, accion });
+    await registrarCambio({
+      usuario: req.user, accion: 'UPDATE', tabla: 'Empleados_Asistencia', idRegistro: String(ID_Empleado),
+      descripcion: `Jornada nocturna ${fecha}: ${accion}`,
+      datosNuevos: { ID_Empleado, fecha, accion }, ip: obtenerIP(req)
+    });
+    res.json({ ok: true, estado: r.Nocturna_Estado });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+};
+
 // ============================================================
 // API PARA SISTEMA BIOMÉTRICO
 // ============================================================

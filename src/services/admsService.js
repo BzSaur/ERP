@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN, detectarCruceNocturno, CORTE_NOCTURNO_MIN } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -312,20 +312,73 @@ export function consolidarChecadas(checadas) {
   return manuales.length ? aplicarManuales(relojDedup, manuales) : relojDedup;
 }
 
-export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, empleado) {
-  const finDia = new Date(fechaDia);
-  finDia.setHours(23, 59, 59, 999);
+const ESTADOS_NOCTURNA_FIJOS = ['CONFIRMADA', 'MANUAL', 'RECHAZADA'];
+const claveLocal = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+const claveDB = (f) => new Date(f).toISOString().slice(0, 10); // @db.Date llega 00:00Z
+const diaMas = (fecha, delta) => { const f = new Date(fecha); f.setDate(f.getDate() + delta); f.setHours(0, 0, 0, 0); return f; };
+
+/**
+ * Recalcula el día y sus vecinos. Una checada en D puede abrir o cerrar la
+ * jornada nocturna D-1 -> D y D -> D+1, así que se recalculan D-1, D y D+1 en
+ * orden: cada día lee lo que la víspera acaba de escribir. Si el cruce que sale
+ * de un día ya no coincide con lo guardado en el siguiente (noches seguidas,
+ * "fue olvido"), se sigue hacia adelante hasta que coincida (máx. una semana).
+ */
+export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia) {
+  let cruza = false;
+  for (const delta of [-1, 0, 1]) {
+    cruza = await recalcularDia(tx, idEmpleado, diaMas(fechaDia, delta));
+  }
+  for (let delta = 2; delta <= 8; delta++) {
+    const f = diaMas(fechaDia, delta);
+    const sig = await tx.empleados_Asistencia.findUnique({
+      where: { ID_Empleado_Fecha: { ID_Empleado: idEmpleado, Fecha: f } },
+      select: { Nocturna_Entrante: true }
+    });
+    if (!sig || sig.Nocturna_Entrante === cruza) break;
+    cruza = await recalcularDia(tx, idEmpleado, f);
+  }
+}
+
+async function recalcularDia(tx, idEmpleado, fechaDia) {
+  const fPrev = diaMas(fechaDia, -1);
+  const fSig = diaMas(fechaDia, 1);
+  const filas = await tx.empleados_Asistencia.findMany({
+    where: { ID_Empleado: idEmpleado, Fecha: { gte: fPrev, lte: fSig } },
+    select: { ID_Asistencia: true, Fecha: true, Nocturna_Estado: true, Nocturna_Entrante: true }
+  });
+  const fila = filas.find(r => claveDB(r.Fecha) === claveLocal(fechaDia));
+  if (!fila) return false;
 
   const checadas = await tx.historial_Checadas.findMany({
     where: {
-      asistencia: { ID_Empleado: idEmpleado, Fecha: fechaDia },
-      Fecha_Hora: { gte: fechaDia, lte: finDia }
+      ID_Asistencia: { in: filas.map(r => r.ID_Asistencia) },
+      Fecha_Hora: { gte: fPrev, lt: diaMas(fechaDia, 2) }
     },
     orderBy: { Fecha_Hora: 'asc' },
     include: { checador: { select: { ID_Checador: true, ID_Planta: true, Ubicacion_Codigo: true, planta: { select: { Nombre: true } } } } }
   });
+  // Checadas de un día = las de su fila cuya hora cae en ese día calendario.
+  const delDia = (f) => {
+    const r = filas.find(x => claveDB(x.Fecha) === claveLocal(f));
+    return {
+      fila: r || null,
+      cs: r ? consolidarChecadas(checadas.filter(c => c.ID_Asistencia === r.ID_Asistencia && claveLocal(c.Fecha_Hora) === claveLocal(f))) : []
+    };
+  };
+  const prev = delDia(fPrev);
+  const act = delDia(fechaDia);
+  const sig = delDia(fSig);
+  if (act.cs.length === 0) return false;
 
-  if (checadas.length === 0) return;
+  // Jornada nocturna: pIn = salida (primera checada de hoy) del par que abrió la
+  // víspera; pOut = salida de mañana que cierra el último par abierto de hoy.
+  const propiasPrev = prev.fila?.Nocturna_Entrante ? prev.cs.slice(1) : prev.cs;
+  const pIn = detectarCruceNocturno(propiasPrev, act.cs, prev.fila?.Nocturna_Estado ?? null);
+  const propias = pIn ? act.cs.slice(1) : act.cs;
+  const pOut = detectarCruceNocturno(propias, sig.cs, fila.Nocturna_Estado);
+  const ePrev = pIn ? propiasPrev[propiasPrev.length - 1] : null;
+  const minutosDe = (c) => c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes();
 
   const { toleranciaMin, aplicaCobertura, restrictivo } = reglaToleranciaPorFecha(fechaDia);
   let coberturaEspecial = false;
@@ -337,27 +390,27 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
     coberturaEspecial = esAreaCoberturaEspecial({ area: empInfo?.area?.Nombre_Area, puesto: empInfo?.puesto?.Nombre_Puesto });
   }
 
-  // Colapsar dobles checadas (<20 min, conserva la primera) ANTES de elegir
-  // entrada/salida y calcular horas. Evita que un doble marcaje (ej. 07:35 y
-  // 07:36) quede como entrada+salida de 1 min. Solo aplica a las del reloj:
-  // las manuales no se deduplican.
-  const conservadas = consolidarChecadas(checadas);
-  if (conservadas.length === 0) return;
-
-  const primera = conservadas[0];
-  const ultima = conservadas[conservadas.length - 1];
+  // Dobles checadas (<20 min) y manuales ya resueltas en consolidarChecadas.
+  const conservadas = pIn ? [pIn, ...propias] : propias;
 
   // Construir input para calcularHorasPorPares (espera {hora, minuto, totalMinutos, horaStr})
   const checadasCalc = conservadas.map(c => {
-    const h = c.Fecha_Hora.getHours();
-    const m = c.Fecha_Hora.getMinutes();
-    return { hora: h, minuto: m, totalMinutos: h * 60 + m, horaStr: minutosAHora(h * 60 + m) };
+    const t = minutosDe(c);
+    return { hora: Math.floor(t / 60), minuto: t % 60, totalMinutos: t, horaStr: minutosAHora(t) };
   });
 
   const esSabado = fechaDia.getDay() === 6;
   // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
   // ventanaDedupMin 0 porque ya deduplicamos arriba.
-  const calc = calcularHorasPorPares(checadasCalc, { esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo });
+  const calc = calcularHorasPorPares(checadasCalc, {
+    esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo,
+    // Entró la víspera: el tramo cuenta desde las 22:00 (o su entrada si fue más tarde).
+    entradaNocturnaMin: ePrev ? Math.max(minutosDe(ePrev), CORTE_NOCTURNO_MIN) - 1440 : null,
+    salidaNocturna: !!pOut
+  });
+
+  const primera = ePrev || conservadas[0];
+  const ultima = pOut || conservadas[conservadas.length - 1];
 
   // Ubicaciones (String legacy) y plantas
   const ubicEntrada = primera.checador?.Ubicacion_Codigo || primera.checador?.planta?.Nombre || primera.Ubicacion;
@@ -366,13 +419,26 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
   const plantaSalida  = ultima.checador?.ID_Planta ?? null;
   const multiPlanta = plantaEntrada !== null && plantaSalida !== null && plantaEntrada !== plantaSalida;
 
-  const horaEntrada = conservadas.length >= 1 ? primera.Fecha_Hora : null;
+  // Entrada nocturna: el día empieza a las 22:00 de la víspera (o la entrada real si fue después).
+  const horaEntrada = ePrev
+    ? new Date(Math.max(ePrev.Fecha_Hora.getTime(), fechaDia.getTime() - (1440 - CORTE_NOCTURNO_MIN) * 60000))
+    : primera.Fecha_Hora;
   // Par abierto (cantidad impar: entra, sale, regresa) = sin salida. Antes la
   // última checada ("regresa") se guardaba como salida y el día aparecía cerrado.
-  const horaSalida  = conservadas.length >= 2 && !calc.incompleta ? ultima.Fecha_Hora : null;
+  // Salida nocturna: la checada real de mañana.
+  const horaSalida = pOut
+    ? pOut.Fecha_Hora
+    : ((conservadas.length >= 2 || pIn) && !calc.incompleta ? ultima.Fecha_Hora : null);
+
+  // CONFIRMADA/MANUAL/RECHAZADA las decide RH y no se pisan mientras el cruce
+  // exista; si el día ya no tiene par abierto que cruce, se limpia (salvo RECHAZADA).
+  const estadoActual = fila.Nocturna_Estado;
+  const nocturnaEstado = pOut
+    ? (ESTADOS_NOCTURNA_FIJOS.includes(estadoActual) ? estadoActual : 'AUTO')
+    : (estadoActual === 'RECHAZADA' ? 'RECHAZADA' : null);
 
   await tx.empleados_Asistencia.update({
-    where: { ID_Asistencia: idAsistencia },
+    where: { ID_Asistencia: fila.ID_Asistencia },
     data: {
       Hora_Entrada: horaEntrada,
       Hora_Salida: horaSalida,
@@ -387,21 +453,29 @@ export async function recalcularJornada(tx, idAsistencia, idEmpleado, fechaDia, 
       ID_Checador_Salida: horaSalida ? (ultima.ID_Checador ?? null) : null,
       Multi_Planta: multiPlanta,
       Notas: calc.notas || null,
+      Nocturna_Estado: nocturnaEstado,
+      Nocturna_Entrante: !!pIn,
       UpdatedAt: new Date()
     }
   });
 
   // Marcar tipos de checada y el Estado de la ENTRADA en historial, para coherencia con
   // las vistas (que muestran Historial_Checadas.Estado). El retardo sale de calc (misma
-  // fuente que la jornada).
+  // fuente que la jornada). La salida nocturna recibida (pIn) es SALIDA, no entrada.
   const estadoEntrada = calc.retardo ? 'RETARDO' : 'A_TIEMPO';
-  await tx.historial_Checadas.update({
-    where: { ID_Checada: primera.ID_Checada },
-    data: { Tipo_Checada: 'ENTRADA', Estado: estadoEntrada }
-  });
-  if (horaSalida) {
+  if (pIn) {
+    await tx.historial_Checadas.update({ where: { ID_Checada: pIn.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
+  }
+  if (propias.length) {
+    await tx.historial_Checadas.update({
+      where: { ID_Checada: propias[0].ID_Checada },
+      data: { Tipo_Checada: 'ENTRADA', Estado: estadoEntrada }
+    });
+  }
+  if (horaSalida && ultima !== pIn && ultima !== propias[0]) {
     await tx.historial_Checadas.update({ where: { ID_Checada: ultima.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
   }
+  return !!pOut;
 }
 
 // ============================================================

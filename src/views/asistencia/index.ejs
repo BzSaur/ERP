@@ -108,8 +108,8 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <p class="text-body-secondary mb-1 small text-uppercase">Retardos</p>
-                                <h2 class="mb-0 text-warning"><%= resumen.conRetardo %></h2>
+                                <p class="text-body-secondary mb-1 small text-uppercase" title="Empleados activos que ya no ganan el bono de puntualidad esta semana (entrada después de 8:00 o día sin entrada, lunes a viernes)">Sin bono esta semana</p>
+                                <h2 class="mb-0 text-warning"><%= resumen.sinBono %></h2>
                             </div>
                             <div class="bg-warning bg-opacity-10 p-3 rounded">
                                 <i class="bi bi-clock-history text-warning fs-4"></i>
@@ -220,27 +220,16 @@
                                                 </td>
                                                 <td>
                                                     <%
-                                                        var esEntrada = checada.Tipo_Checada === 'ENTRADA';
-                                                        var jornadaRetardo = checada.asistencia && checada.asistencia.Retardo;
-                                                        var estadoMostrar = checada.Estado;
-                                                        if (esEntrada && jornadaRetardo) estadoMostrar = 'RETARDO';
+                                                        // Sin retardos: solo se indica si la entrada cuenta para el bono (08:00 o antes).
+                                                        var hEnt = new Date(checada.Fecha_Hora);
+                                                        var paraBono = checada.Tipo_Checada === 'ENTRADA' && (hEnt.getHours() * 60 + hEnt.getMinutes()) <= 480;
                                                     %>
-                                                    <% if (estadoMostrar === 'A_TIEMPO') { %>
-                                                        <span class="text-success">
-                                                            <i class="bi bi-check-circle-fill"></i> A tiempo
-                                                        </span>
-                                                    <% } else if (estadoMostrar === 'TOLERANCIA') { %>
-                                                        <span class="text-warning">
-                                                            <i class="bi bi-exclamation-circle-fill"></i> Tolerancia
-                                                        </span>
-                                                    <% } else if (estadoMostrar === 'RETARDO') { %>
-                                                        <span class="text-danger">
-                                                            <i class="bi bi-x-circle-fill"></i> Retardo
-                                                        </span>
+                                                    <% if (checada.Tipo_Checada !== 'ENTRADA') { %>
+                                                        <span class="text-body-secondary">-</span>
+                                                    <% } else if (paraBono) { %>
+                                                        <span class="text-success">Cuenta para bono</span>
                                                     <% } else { %>
-                                                        <span class="text-body-secondary">
-                                                            <i class="bi bi-dash-circle"></i> <%= estadoMostrar %>
-                                                        </span>
+                                                        <span class="text-body-secondary">Después de 8:00</span>
                                                     <% } %>
                                                 </td>
                                             </tr>
