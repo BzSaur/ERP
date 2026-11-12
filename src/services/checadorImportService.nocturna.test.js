@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularHorasPorPares, detectarCruceNocturno } from './checadorImportService.js';
+import { calcularHorasPorPares, detectarCruceNocturno, salidaHuerfanaNocturna } from './checadorImportService.js';
 
 const ck = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number);
@@ -59,10 +59,10 @@ test('detección: olvidó salida y al día siguiente sella normal (par) no es no
   assert.equal(detectarCruceNocturno(lun, mar), null);
 });
 
-test('detección: día cerrado, salida después de mediodía, gap > 20 h o RECHAZADA no cruzan', () => {
+test('detección: día cerrado, salida después de mediodía, gap > 24 h o RECHAZADA no cruzan', () => {
   assert.equal(detectarCruceNocturno([at(0, '08:00'), at(0, '18:00')], [at(1, '02:00')]), null);
   assert.equal(detectarCruceNocturno([at(0, '18:00')], [at(1, '13:00')]), null);
-  assert.equal(detectarCruceNocturno([at(0, '08:00')], [at(1, '06:00')]), null); // 22 h
+  assert.equal(detectarCruceNocturno([at(0, '05:00')], [at(1, '06:00')]), null); // 25 h
   assert.equal(detectarCruceNocturno([at(0, '08:00')], [at(1, '02:00')], 'RECHAZADA'), null);
 });
 
@@ -87,4 +87,18 @@ test('detección: MANUAL/CONFIRMADA fuerzan el cruce aunque D+1 no cuadre', () =
   assert.equal(detectarCruceNocturno(lun, mar), null);
   assert.equal(detectarCruceNocturno(lun, mar, 'MANUAL'), mar[0]);
   assert.equal(detectarCruceNocturno(lun, mar, 'CONFIRMADA'), mar[0]);
+});
+
+test('detección: turno de 08:00 a 06:00 del día siguiente (22 h) se detecta', () => {
+  assert.ok(detectarCruceNocturno([at(0, '08:00')], [at(1, '06:00')]));
+});
+
+test('salida huérfana: día 05:00 y 20:00 con salida 05:00 mañana = noche sin entrada + nueva noche', () => {
+  const hoy = [at(0, '05:00'), at(0, '20:00')];
+  const manana = [at(1, '05:00')];
+  assert.equal(salidaHuerfanaNocturna(hoy, manana), hoy[0]);
+  assert.equal(salidaHuerfanaNocturna(hoy, manana, 'RECHAZADA'), null); // RH dijo No: día normal
+  // Turno de día normal (08:00-18:00) o día siguiente normal: no aplica
+  assert.equal(salidaHuerfanaNocturna([at(0, '08:00'), at(0, '18:00')], manana), null);
+  assert.equal(salidaHuerfanaNocturna(hoy, [at(1, '08:00'), at(1, '18:00')]), null);
 });

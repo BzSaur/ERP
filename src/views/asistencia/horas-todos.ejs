@@ -434,13 +434,14 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                      tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + fmtH(c.horas||0);
                    }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
-                   else if (c.presente && (c.nocturna || c.nocturnaEntrante)) {
-                     cls = 'cel-nocturna' + (c.nocturna === 'AUTO' ? ' noc-auto' : '');
+                   else if (c.presente && (c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente)) {
+                     cls = 'cel-nocturna' + (c.nocturna === 'AUTO' || c.nocturnaPendiente ? ' noc-auto' : '');
                      tip = 'Jornada nocturna'
                        + (c.nocturnaEntrante ? ' · incluye el tramo desde las 22:00 del día anterior' : '')
-                       + (c.nocturna ? ' · sale al día siguiente a las ' + (c.salidaReal || c.salida || '') + ' (18-22 extra, desde 22:00 cuenta al día siguiente)' : '')
-                       + (c.nocturna === 'AUTO' ? ' · detectada automáticamente, por confirmar' : '')
-                       + ' · ' + fmtH(c.horas||0);
+                       + (c.nocturnaPendiente ? ' · salida ' + (c.salidaReal || '') + ' de la nocturna del día anterior, por confirmar (no suma)' : '')
+                       + (c.nocturna ? ' · sale al día siguiente a las ' + (c.salidaReal || c.salida || '') + '. Este día solo cuenta hasta las 22:00 (18-22 extra); desde las 22:00 suma al día siguiente' : '')
+                       + (c.nocturna === 'AUTO' ? ' · por confirmar: no suma hasta que digan Sí' : '')
+                       + ' · ' + fmtH(c.horas||0) + ' este día';
                    }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + fmtH(c.horas||0) + ' (menos de 2h con checada)'; }
                    else if (c.enCurso) { cls='cel-parcial'; tip='En curso (sin salida)'; }
@@ -519,7 +520,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <div class="cel-es">
                       <%# Nocturna compacta: el color de la celda ya la distingue; -1/+1 marcan el
                           día anterior/siguiente y la hora real de salida va en el title. %>
-                      <div><span class="ent"><%= c.entrada || '--:--' %></span><% if (c.nocturnaEntrante) { %><span class="noc-dia">-1</span><% } %></div>
+                      <div><span class="ent"><%= c.entrada || (c.nocturnaPendiente ? '22:00' : '--:--') %></span><% if (c.nocturnaEntrante || c.nocturnaPendiente) { %><span class="noc-dia">-1</span><% } %></div>
                       <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %><span class="noc-dia">+1</span><% } %></div>
                       <% if (c.nocturna === 'AUTO' && puedeManual) { %>
                         <div class="noc-confirmar">
@@ -565,7 +566,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
               <%
                 // Días cerrados con entrada pero sin salida: cuentan 0 h. Se avisa junto al
                 // total porque RH suele completarlos a mano y si no el total "no cuadra".
-                const sinSalida = f.celdas.filter(function(c){ return c.presente && c.incompleta && !c.enCurso; }).length;
+                const sinSalida = f.celdas.filter(function(c){ return c.presente && c.incompleta && !c.enCurso && !c.nocturnaPendiente && !c.nocturna; }).length;
               %>
               <td class="text-center fw-bold col-total">
                 <span class="tot"><%= fmtH(f.horas) %></span>

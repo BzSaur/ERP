@@ -1502,7 +1502,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       planta: planta || null,
       nocturna: nocturno && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
       nocturnaEntrante: entranteAplicada(a),
-      nocturnaEstado: a.Nocturna_Estado || null
+      nocturnaEstado: a.Nocturna_Estado || null,
+      // Día que solo trae la salida de una nocturna aún por confirmar.
+      nocturnaPendiente: !!(a.Nocturna_Entrante && !a.Hora_Entrada)
     });
   }
 
@@ -1589,7 +1591,10 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       // Cubre olvido de entrada/salida (cierre a 23:59 da pocos minutos).
       const tieneChecada = !!(c.entrada || c.salida);
       // Jornada nocturna detectada sola (AUTO): RH confirma o la deshace (fue olvido).
-      const requiereRevision = (c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS)
+      // Días nocturnos no van por "<2h": hoy solo cuenta lo previo a las 22:00 y el
+      // resto suma al día siguiente (21:00-05:00 = 1h hoy + 7h mañana).
+      const esNoct = c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente;
+      const requiereRevision = (!esNoct && c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS)
         || c.nocturna === 'AUTO';
       if (requiereRevision) {
         revisiones.push({

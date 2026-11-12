@@ -53,7 +53,7 @@ export const CORTE_NOCTURNO_MIN = 22 * 60;
 // esa checada es antes de las 07:30 y a no más de 20 h (ver detectarCruceNocturno).
 // Más tarde parece la llegada normal tras olvidar la salida (datos reales: las
 // nocturnas salen 01:00-07:00; 07:35-08:22 eran llegadas). Esas se marcan a mano.
-const MAX_CRUCE_HORAS = 20;
+const MAX_CRUCE_HORAS = 24; // hay turnos de 08:00 a 06:00 del día siguiente
 const SALIDA_NOCTURNA_MAX_MIN = 7 * 60 + 30;
 // Noches seguidas (sale y vuelve a entrar el mismo día): la salida debe ser de
 // madrugada; a las 07:55 parece llegada normal, no salida.
@@ -644,13 +644,29 @@ function checadaSintetica(totalMinutos) {
  * @param {string|null} estado - Nocturna_Estado de D (AUTO|CONFIRMADA|RECHAZADA|MANUAL)
  * @returns la checada de D+1 que cierra el par, o null
  *
- * Automático solo si D queda impar, la salida es antes de las 07:30 y a <= 20 h,
+ * Automático solo si D queda impar, la salida es antes de las 07:30 y a <= 24 h,
  * y al quitar la salida a D+1 le quedan pares completos o UNA sola re-entrada
  * (noches seguidas: sale antes de las 07:00 y vuelve a entrar). Quien olvidó salir y
  * al día siguiente sella su jornada normal (08, 14, 15, 18) NO se empareja.
  * CONFIRMADA/MANUAL fuerzan el cruce; RECHAZADA lo impide.
  * ponytail: casos ambiguos (D+1 = 08:00 y 18:00) se detectan y quedan AUTO para que RH confirme.
  */
+/**
+ * Salida huérfana: noche anterior sin entrada sellada. El día empieza de
+ * madrugada (antes de 07:30), termina en la noche (18:00 o después) y esa
+ * última checada cruza al día siguiente. Ej. día 05:00 y 20:00, mañana 05:00:
+ * el 05:00 es salida de una noche sin entrada y el 20:00 entrada de otra
+ * noche, no un turno de 05:00 a 20:00. Devuelve la checada huérfana o null.
+ * Con RECHAZADA (RH dijo "No") se cuenta como día normal.
+ */
+export function salidaHuerfanaNocturna(checadasD, sigD, estado = null) {
+  if (estado === 'RECHAZADA' || !checadasD || checadasD.length < 2 || checadasD.length % 2) return null;
+  const min = (c) => c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes();
+  if (min(checadasD[0]) >= SALIDA_NOCTURNA_MAX_MIN) return null;
+  if (min(checadasD[checadasD.length - 1]) < HORA_EXTRAS_INICIO) return null;
+  return detectarCruceNocturno(checadasD.slice(1), sigD, estado) ? checadasD[0] : null;
+}
+
 export function detectarCruceNocturno(propiasD, sigD, estado = null) {
   if (estado === 'RECHAZADA' || !propiasD?.length || !sigD?.length) return null;
   if (propiasD.length % 2 === 0) return null;

@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN, detectarCruceNocturno, CORTE_NOCTURNO_MIN } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN, detectarCruceNocturno, salidaHuerfanaNocturna, CORTE_NOCTURNO_MIN } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -376,7 +376,9 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   // víspera; pOut = salida de mañana que cierra el último par abierto de hoy.
   const propiasPrev = prev.fila?.Nocturna_Entrante ? prev.cs.slice(1) : prev.cs;
   const pIn = detectarCruceNocturno(propiasPrev, act.cs, prev.fila?.Nocturna_Estado ?? null);
-  const propias = pIn ? act.cs.slice(1) : act.cs;
+  // Sin entrada la víspera pero el día abre con salida de madrugada (noche sin entrada sellada).
+  const huerfana = pIn ? null : salidaHuerfanaNocturna(act.cs, sig.cs, fila.Nocturna_Estado);
+  const propias = (pIn || huerfana) ? act.cs.slice(1) : act.cs;
   const pOut = detectarCruceNocturno(propias, sig.cs, fila.Nocturna_Estado);
   // Detectada sola (AUTO) = pendiente: se marca y su salida no se empareja con
   // nada, pero NO suma horas hasta que RH diga "Sí" (CONFIRMADA) o la marque a mano.
@@ -402,7 +404,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
     await tx.empleados_Asistencia.update({
       where: { ID_Asistencia: fila.ID_Asistencia },
       data: {
-        Hora_Entrada: null, Hora_Salida: null, Horas_Trabajadas: 0, Horas_Extras: 0,
+        Hora_Entrada: null, Hora_Salida: pIn.Fecha_Hora, Horas_Trabajadas: 0, Horas_Extras: 0,
         Minutos_Retardo: 0, Retardo: false, Presente: true, Multi_Planta: false,
         Ubicacion_Entrada: null, Ubicacion_Salida: null, ID_Checador_Entrada: null, ID_Checador_Salida: null,
         Notas: 'Salida de jornada nocturna por confirmar',
@@ -474,9 +476,9 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
       ID_Checador_Entrada: primera.ID_Checador ?? null,
       ID_Checador_Salida: horaSalida ? (ultima.ID_Checador ?? null) : null,
       Multi_Planta: multiPlanta,
-      Notas: (pOut && !aplicaOut ? 'Nocturna por confirmar (no suma) · ' : '') + (calc.notas || ''),
+      Notas: (huerfana ? 'Salida sin entrada (noche anterior) · ' : '') + (pOut && !aplicaOut ? 'Nocturna por confirmar (no suma) · ' : '') + (calc.notas || ''),
       Nocturna_Estado: nocturnaEstado,
-      Nocturna_Entrante: !!pIn,
+      Nocturna_Entrante: !!(pIn || huerfana),
       UpdatedAt: new Date()
     }
   });
@@ -485,8 +487,8 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   // las vistas (que muestran Historial_Checadas.Estado). El retardo sale de calc (misma
   // fuente que la jornada). La salida nocturna recibida (pIn) es SALIDA, no entrada.
   const estadoEntrada = calc.retardo ? 'RETARDO' : 'A_TIEMPO';
-  if (pIn) {
-    await tx.historial_Checadas.update({ where: { ID_Checada: pIn.ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
+  if (pIn || huerfana) {
+    await tx.historial_Checadas.update({ where: { ID_Checada: (pIn || huerfana).ID_Checada }, data: { Tipo_Checada: 'SALIDA' } });
   }
   if (propias.length) {
     await tx.historial_Checadas.update({
