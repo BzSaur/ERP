@@ -71,6 +71,12 @@ test('detección: noches seguidas (sale 02:00 y vuelve a entrar 15:00 el mismo d
   assert.ok(detectarCruceNocturno([at(1, '15:00')], [at(2, '06:00'), at(2, '16:00'), at(2, '20:00')]));
 });
 
+test('detección: "salida" a las 07:30 o después parece llegada normal (olvidó salida), no nocturna', () => {
+  assert.equal(detectarCruceNocturno([at(0, '09:35'), at(0, '14:00'), at(0, '15:00')], [at(1, '08:02')]), null);
+  assert.equal(detectarCruceNocturno([at(0, '18:00')], [at(1, '07:35')]), null);
+  assert.ok(detectarCruceNocturno([at(0, '18:00')], [at(1, '06:57')]));
+});
+
 test('detección: checada abierta en la noche + día siguiente normal de 2 checadas no es nocturna', () => {
   assert.equal(detectarCruceNocturno([at(0, '06:00'), at(0, '16:00'), at(0, '20:00')], [at(1, '07:55'), at(1, '18:00')]), null);
 });

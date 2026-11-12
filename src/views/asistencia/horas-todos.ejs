@@ -327,6 +327,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   .matriz-horas td.cel-nocturna.noc-auto { outline-style:dashed; }
   .matriz-horas .cel-es .noc-tag { color:#3730a3; font-size:.62rem; font-weight:700; }
   .matriz-horas .cel-es .noc-dia { color:#3730a3; font-size:.6rem; }
+  .matriz-horas .cel-es .noc-confirmar { font-size:.6rem; color:#3730a3; margin-top:2px; }
+  .matriz-horas .cel-es .noc-confirmar .btn-noc-accion { font-size:.6rem; padding:0 .3rem; }
   .badge-nocturna { background:#e0e7ff; color:#3730a3; border:1px solid #6366f1; font-weight:600; }
   .btn-noc-accion { padding:0 .35rem; font-size:.65rem; line-height:1.4; border:1px solid #6366f1; color:#3730a3; background:#fff; }
   .btn-noc-accion:hover { background:#6366f1; color:#fff; }
@@ -492,7 +494,16 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                       <div><span class="ent"><%= c.entrada || '--:--' %></span><% if (c.nocturnaEntrante) { %> <span class="noc-dia">(-1)</span><% } %></div>
                       <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %> <span class="noc-dia">(+1)</span><% } %></div>
                       <% if (c.nocturna || c.nocturnaEntrante) { %>
-                        <div class="noc-tag">Nocturna<%= c.nocturna === 'AUTO' ? ' (auto)' : '' %></div>
+                        <div class="noc-tag">
+                          <% if (c.nocturna) { %>Nocturna, sale <%= c.salidaReal || c.salida %> (+1)<% } else { %>Nocturna desde 22:00 (-1)<% } %>
+                        </div>
+                        <% if (c.nocturna === 'AUTO' && puedeManual) { %>
+                          <div class="noc-confirmar">
+                            <span>¿Nocturna?</span>
+                            <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button>
+                            <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="rechazar" title="No: olvidó sellar salida">No</button>
+                          </div>
+                        <% } %>
                       <% } %>
                       <% if (c.requiereRevision && c.nocturna !== 'AUTO') { %>
                         <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= fmtH(c.horas||0) %></div>
@@ -892,7 +903,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
 
   // RH/Admin: clic directo en la celda.
-  document.querySelectorAll('td.cel-manual').forEach(td => td.addEventListener('click', () => abrir(td)));
+  document.querySelectorAll('td.cel-manual').forEach(td => td.addEventListener('click', (ev) => { if (!ev.target.closest('.btn-noc')) abrir(td); }));
 
   // Encargado: la celda abre el panel lateral; el botón del panel abre este modal.
   let ultimaCelda = null;
@@ -1061,7 +1072,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
   }
 
   document.querySelectorAll('td.cel-editable').forEach(function(td){
-    td.addEventListener('click', function(){
+    td.addEventListener('click', function(ev){
+      if (ev.target.closest('.btn-noc')) return;
       ctx = { emp: td.dataset.emp, fecha: td.dataset.fecha, tieneActividad: false, idActividad: null, idAsignacion: null, idRecurrencia: null, esRecurrente: false };
       if (!ctx.emp || !ctx.fecha) return;
 

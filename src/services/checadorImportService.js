@@ -50,9 +50,11 @@ export const VENTANA_DEDUP_MIN = 20;
 // 18-22 de D queda como extra con la regla normal.
 export const CORTE_NOCTURNO_MIN = 22 * 60;
 // Una entrada abierta en D se empareja con la primera checada de D+1 solo si
-// esa checada es antes de mediodía y a no más de 20 h (ver detectarCruceNocturno).
+// esa checada es antes de las 07:30 y a no más de 20 h (ver detectarCruceNocturno).
+// Más tarde parece la llegada normal tras olvidar la salida (datos reales: las
+// nocturnas salen 01:00-07:00; 07:35-08:22 eran llegadas). Esas se marcan a mano.
 const MAX_CRUCE_HORAS = 20;
-const SALIDA_NOCTURNA_MAX_MIN = 12 * 60;
+const SALIDA_NOCTURNA_MAX_MIN = 7 * 60 + 30;
 // Noches seguidas (sale y vuelve a entrar el mismo día): la salida debe ser de
 // madrugada; a las 07:55 parece llegada normal, no salida.
 const SALIDA_NOCHE_SEGUIDA_MAX_MIN = 7 * 60;
@@ -642,7 +644,7 @@ function checadaSintetica(totalMinutos) {
  * @param {string|null} estado - Nocturna_Estado de D (AUTO|CONFIRMADA|RECHAZADA|MANUAL)
  * @returns la checada de D+1 que cierra el par, o null
  *
- * Automático solo si D queda impar, la salida es antes de mediodía y a <= 20 h,
+ * Automático solo si D queda impar, la salida es antes de las 07:30 y a <= 20 h,
  * y al quitar la salida a D+1 le quedan pares completos o UNA sola re-entrada
  * (noches seguidas: sale antes de las 07:00 y vuelve a entrar). Quien olvidó salir y
  * al día siguiente sella su jornada normal (08, 14, 15, 18) NO se empareja.
