@@ -28,6 +28,7 @@ router.get('/asistencia/excel', isEncargado, asistenciaEncargadoController.horas
 router.get('/asistencia/dia', isEncargado, asistenciaEncargadoController.detalleDia);
 router.post('/asistencia/checada-manual', isEncargado, asistenciaEncargadoController.guardarChecadaManual);
 router.post('/asistencia/nocturna', isEncargado, asistenciaEncargadoController.cambiarNocturna);
+router.post('/asistencia/nocturna/lote', isEncargado, asistenciaEncargadoController.cambiarNocturnaLote);
 
 // Actividades. Crear es autoservicio del encargado (dueño = req.user.ID_Empleado);
 // ver/agregar/quitar asignación permiten además supervisión de ADMIN/RH/SUPER_ADMIN

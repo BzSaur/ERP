@@ -1,6 +1,6 @@
 // Detecta jornadas nocturnas ya registradas: días con entrada sin salida
 // (Hora_Salida null) cuya salida quedó en la mañana siguiente, y recalcula las
-// que ya estaban como AUTO. Vuelve a correr recalcularJornada (mismo cálculo que
+// que ya estaban como AUTO, CONFIRMADA o MANUAL (corte nuevo, nov-2026). Vuelve a correr recalcularJornada (mismo cálculo que
 // ADMS, con vecinos) y reporta las nocturnas AUTO: quedan pendientes (no suman
 // horas) hasta que RH diga "Sí" en /asistencia/horas.
 //
@@ -20,14 +20,15 @@ class Simulacro extends Error {}
 
 const abiertas = await prisma.empleados_Asistencia.findMany({
   where: {
-    OR: [{ Hora_Salida: null, Presente: true }, { Nocturna_Estado: 'AUTO' }],
+    // CONFIRMADA/MANUAL: recalcular con el corte nuevo (9 h cumplidas, no antes de 22:00).
+    OR: [{ Hora_Salida: null, Presente: true }, { Nocturna_Estado: { in: ['AUTO', 'CONFIRMADA', 'MANUAL'] } }],
     ...(desde || hasta ? { Fecha: { ...(desde && { gte: new Date(`${desde}T00:00:00Z`) }), ...(hasta && { lte: new Date(`${hasta}T00:00:00Z`) }) } } : {}),
     historial_checadas: { some: {} }
   },
   orderBy: [{ ID_Empleado: 'asc' }, { Fecha: 'asc' }],
   select: { ID_Asistencia: true, ID_Empleado: true, Fecha: true }
 });
-console.log(`${aplicar ? 'APLICAR' : 'SIMULACRO'}: ${abiertas.length} días sin salida o nocturna AUTO`);
+console.log(`${aplicar ? 'APLICAR' : 'SIMULACRO'}: ${abiertas.length} días sin salida o con nocturna`);
 
 let nocturnas = 0, errores = 0;
 for (const a of abiertas) {
@@ -40,10 +41,10 @@ for (const a of abiertas) {
         where: { ID_Asistencia: a.ID_Asistencia },
         select: { Nocturna_Estado: true, Hora_Entrada: true, Hora_Salida: true, Horas_Trabajadas: true }
       });
-      if (d.Nocturna_Estado === 'AUTO') {
+      if (d.Nocturna_Estado) {
         nocturnas++;
         const hhmm = (x) => x ? x.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '--:--';
-        console.log(`  emp ${a.ID_Empleado} ${f.toISOString().slice(0, 10)}: ${hhmm(d.Hora_Entrada)} -> ${hhmm(d.Hora_Salida)} (+1), por confirmar`);
+        console.log(`  emp ${a.ID_Empleado} ${f.toISOString().slice(0, 10)}: ${hhmm(d.Hora_Entrada)} -> ${hhmm(d.Hora_Salida)} ${d.Nocturna_Estado} ${Number(d.Horas_Trabajadas)} h`);
       }
       if (!aplicar) throw new Simulacro();
     }, { timeout: 30000 });

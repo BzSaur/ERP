@@ -435,7 +435,7 @@ export async function evaluarPuntualidad({
 }) {
   const asistencias = await prisma.empleados_Asistencia.findMany({
     where: { ID_Empleado: empleadoId, Fecha: { gte: fechaInicio, lte: fechaFin } },
-    select: { Fecha: true, Presente: true, Hora_Entrada: true }
+    select: { Fecha: true, Presente: true, Hora_Entrada: true, Hora_Salida: true, Nocturna_Entrante: true }
   });
   const config = await getConfigMultiple(['BONO_PUNTUALIDAD_ACTIVO', 'BONO_PUNTUALIDAD_MONTO']);
   const bono = bonoDeAsistencias(asistencias, fechaInicio, fechaFin);

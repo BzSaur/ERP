@@ -45,10 +45,17 @@ const TOLERANCIA_MINUTOS_NUEVA = 10;
 // Checadas "falsas" (dobles): dos marcajes a menos de esta ventana cuentan como uno.
 export const VENTANA_DEDUP_MIN = 20;
 
-// Jornada nocturna (cruza medianoche): lo trabajado desde las 22:00 del día D
-// cuenta como jornada del día D+1 (completo, sin comida ni retardo); el tramo
-// 18-22 de D queda como extra con la regla normal.
+// Jornada nocturna (cruza medianoche): el día D se corta cuando cumple su
+// jornada de 9 h netas, pero nunca antes de las 22:00 (ver minutoCorteNocturno).
+// Lo que pasa del corte es tramo nocturno y cuenta en D+1 (sin comida ni retardo).
+// Ej. 08:00 -> 06:00: D 08-22 (9 día + 4 extra), D+1 22-06 nocturno.
+//     15:00 -> 06:00: D 15-00 (9 día), D+1 00-06 nocturno.
 export const CORTE_NOCTURNO_MIN = 22 * 60;
+// Marcas en Empleados_Asistencia.Notas (no hay columna para esto): la salida
+// guardada es el corte, no checada; o el día solo trae la salida de un turno
+// nocturno ya cumplido el día anterior ("... (8 h)").
+export const NOTA_CORTE_JORNADA = 'Corte de jornada';
+export const NOTA_TURNO_CUMPLIDO = 'Salida de turno nocturno cumplido';
 // Una entrada abierta en D se empareja con la primera checada de D+1 solo si
 // esa checada es antes de las 07:30 y a no más de 20 h (ver detectarCruceNocturno).
 // Más tarde parece la llegada normal tras olvidar la salida (datos reales: las
@@ -58,6 +65,10 @@ const SALIDA_NOCTURNA_MAX_MIN = 7 * 60 + 30;
 // Noches seguidas (sale y vuelve a entrar el mismo día): la salida debe ser de
 // madrugada; a las 07:55 parece llegada normal, no salida.
 const SALIDA_NOCHE_SEGUIDA_MAX_MIN = 7 * 60;
+// Día con un solo sello entre 17:30 y 19:00: casi siempre olvidó la entrada y
+// selló su salida normal. No se asume nocturna; RH puede marcarla a mano.
+const SELLO_SOLO_TARDE_MIN = 17 * 60 + 30;
+const SELLO_SOLO_TARDE_MAX = 19 * 60;
 
 const COBERTURA_DESCUENTO_MIN = 10;
 const COBERTURA_VENTANA_MAX = 25;
@@ -675,10 +686,55 @@ export function detectarCruceNocturno(propiasD, sigD, estado = null) {
   const gapMin = (p.Fecha_Hora - e.Fecha_Hora) / 60000;
   if (gapMin <= 0) return null;
   if (estado === 'CONFIRMADA' || estado === 'MANUAL') return p;
+  const eMin = e.Fecha_Hora.getHours() * 60 + e.Fecha_Hora.getMinutes();
+  if (propiasD.length === 1 && eMin >= SELLO_SOLO_TARDE_MIN && eMin < SELLO_SOLO_TARDE_MAX) return null;
   const pMin = p.Fecha_Hora.getHours() * 60 + p.Fecha_Hora.getMinutes();
   const resto = sigD.length - 1; // checadas de D+1 después de la salida
   const ok = (resto % 2 === 0 || (resto === 1 && pMin < SALIDA_NOCHE_SEGUIDA_MAX_MIN)) && gapMin <= MAX_CRUCE_HORAS * 60 && pMin < SALIDA_NOCTURNA_MAX_MIN;
   return ok ? p : null;
+}
+
+/**
+ * Minuto (del día D, puede pasar de 1440) en que se corta la jornada que sale de
+ * noche: cuando las checadas propias de D cumplen 9 h netas (comida 14-15 solo si
+ * el tramo la cruza), nunca antes de las 22:00. Entrada abierta a las 22:00 o
+ * después: el corte es la salida real (todo el turno queda en D). Nunca pasa la salida real.
+ * Mismo redondeo que calcularHorasPorPares.
+ * ponytail: ignora la entrada de cobertura especial (sistemas); difiere minutos solo en ese caso.
+ *
+ * @param {Array} propias checadas de D ({totalMinutos}) sin la salida nocturna recibida; cantidad impar
+ * @param {{toleranciaMin?:number, restrictivo?:boolean, salidaRealMin?:number|null}} opts
+ *        salidaRealMin: salida real relativa a D (06:00 de D+1 = 1800)
+ * @returns {number|null} null si no hay par abierto
+ */
+export function minutoCorteNocturno(propias, { toleranciaMin = TOLERANCIA_MINUTOS, restrictivo = false, salidaRealMin = null } = {}) {
+  const orden = [...(propias || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
+  if (orden.length % 2 === 0) return null;
+  const ent = (c, i) => (i === 0 || restrictivo) ? redondearEntrada(c.totalMinutos, toleranciaMin) : c.totalMinutos;
+  let netos = 0;
+  for (let i = 0; i + 1 < orden.length; i += 2) {
+    const e = ent(orden[i], i);
+    const s = restrictivo ? redondearSalida(orden[i + 1].totalMinutos) : orden[i + 1].totalMinutos;
+    if (s <= e) continue;
+    const comida = Math.max(0, Math.min(s, COMIDA_FIN_DEFAULT) - Math.max(e, COMIDA_INICIO_DEFAULT));
+    netos += (s - e) - comida;
+  }
+  const abierta = ent(orden[orden.length - 1], orden.length - 1);
+  let corte;
+  if (abierta >= CORTE_NOCTURNO_MIN) {
+    // Entró a las 22:00 o después: todo el turno queda en este día (nocturno).
+    corte = salidaRealMin ?? abierta + JORNADA_COMPLETA_HORAS * 60;
+  } else {
+    let t = abierta;
+    let falta = Math.max(0, JORNADA_COMPLETA_HORAS * 60 - netos);
+    if (t < COMIDA_INICIO_DEFAULT) {
+      const antes = Math.min(falta, COMIDA_INICIO_DEFAULT - t);
+      t += antes; falta -= antes;
+    }
+    if (falta > 0) t = Math.max(t, COMIDA_FIN_DEFAULT) + falta;
+    corte = Math.max(CORTE_NOCTURNO_MIN, t);
+  }
+  return salidaRealMin != null ? Math.min(corte, salidaRealMin) : corte;
 }
 
 export function calcularHorasPorPares(checadas, opciones = {}) {
@@ -699,21 +755,29 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     // entradaNocturnaMin: el día recibe el tramo nocturno de la víspera; la
     //   primera checada es la SALIDA de un par que empezó en este minuto
     //   (negativo, ej. -120 = 22:00 del día anterior). Sin comida ni retardo.
-    // salidaNocturna: el último par abierto sigue a la madrugada; aquí cierra a las 22:00.
+    // salidaNocturna: el último par abierto sigue a la madrugada; aquí cierra en
+    //   el corte (minutoCorteNocturno). salidaNocturnaMin = salida real relativa a
+    //   este día (06:00 de mañana = 1800), tope del corte.
     entradaNocturnaMin = null,
-    salidaNocturna = false
+    salidaNocturna = false,
+    salidaNocturnaMin = null
   } = opciones;
 
   const ordenCrudo = [...(checadas || [])].sort((a, b) => a.totalMinutos - b.totalMinutos);
   // Colapsar dobles checadas (mismo empleado, <1h) antes de armar pares E/S.
   const real = dedupChecadas(ordenCrudo, ventanaDedupMin);
   // Jornada nocturna: entrada sintética previa (minutos negativos = día anterior)
-  // y/o salida sintética a las 22:00 para el par que sigue abierto. Se agregan
+  // y/o salida sintética en el corte para el par que sigue abierto. Se agregan
   // después del dedup para que no se colapsen con checadas reales.
   const nocIn = entradaNocturnaMin != null;
   const orden = [...real];
   if (nocIn) orden.unshift(checadaSintetica(entradaNocturnaMin));
-  if (salidaNocturna && orden.length % 2 === 1) orden.push(checadaSintetica(CORTE_NOCTURNO_MIN));
+  const nocOut = salidaNocturna && orden.length % 2 === 1;
+  if (nocOut) {
+    // Las 9 h se cuentan solo con lo propio del día, sin el tramo nocturno recibido.
+    const corte = minutoCorteNocturno(nocIn ? real.slice(1) : real, { toleranciaMin, restrictivo, salidaRealMin: salidaNocturnaMin });
+    orden.push(checadaSintetica(corte));
+  }
 
   if (orden.length === 0) {
     return { presente: false, entrada: null, salida: null, horasTrabajadas: 0,
@@ -738,6 +802,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
   let minutosNormales = 0;
   let minutosExtras = 0;
   let minutosComida = 0;
+  let minutosNoct = 0; // tramo nocturno recibido de la víspera (incluido en normales)
   const pares = [];
   let incompleta = false;
 
@@ -780,7 +845,17 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
       }
     }
     minutosComida += comidaPar;
+    if (i === 0 && nocIn) minutosNoct += salMin - entMin;
     pares.push({ entrada: ent.horaStr, salida: sal.horaStr });
+  }
+
+  // Día que sale de noche: las primeras 9 h propias son jornada y lo demás antes
+  // del corte es extra (entrando a las 15:00, 15-00 es jornada, no 3 + 6 extra).
+  if (nocOut && !esSabado) {
+    const propiosMin = minutosNormales + minutosExtras - minutosNoct;
+    const jornadaMin = Math.min(propiosMin, JORNADA_COMPLETA_HORAS * 60);
+    minutosNormales = minutosNoct + jornadaMin;
+    minutosExtras = propiosMin - jornadaMin;
   }
 
   const horasNormales = Math.round((minutosNormales / 60) * 100) / 100;
@@ -805,6 +880,8 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     horasTrabajadas,
     horasNormales,
     horasExtras,
+    horasNocturnas: Math.round((minutosNoct / 60) * 100) / 100,
+    corteNocturnoMin: nocOut ? orden[orden.length - 1].totalMinutos : null,
     minutosComidaDescontados: minutosComida,
     minutosRetardo: minutosRetardo > 0 ? minutosRetardo : 0,
     retardo,

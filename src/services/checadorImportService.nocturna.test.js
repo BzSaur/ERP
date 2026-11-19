@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularHorasPorPares, detectarCruceNocturno, salidaHuerfanaNocturna } from './checadorImportService.js';
+import { calcularHorasPorPares, detectarCruceNocturno, salidaHuerfanaNocturna, minutoCorteNocturno } from './checadorImportService.js';
 
 const ck = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number);
@@ -25,21 +25,52 @@ test('caso A: lun 08:00 -> mar 02:00. Lun normal 08-18 menos comida + extra 18-2
   assert.equal(mar.incompleta, false);
 });
 
-test('caso B: mar 15 -> mié 06, mié 16 -> 20', () => {
-  const mar = calcularHorasPorPares([ck('15:00')], { ...R, salidaNocturna: true });
-  assert.equal(mar.horasNormales, 3);
-  assert.equal(mar.horasExtras, 4);
-  const mie = calcularHorasPorPares([ck('06:00'), ck('16:00'), ck('20:00')], { ...R, entradaNocturnaMin: -120 });
-  assert.equal(mie.horasNormales, 10); // 22-06 (8) + 16-18 (2)
-  assert.equal(mie.horasExtras, 2);    // 18-20
+test('caso B: mar 15 -> mié 06, mié 16 -> 20. Corte a las 00:00 (9 h cumplidas), sin comida', () => {
+  const mar = calcularHorasPorPares([ck('15:00')], { ...R, salidaNocturna: true, salidaNocturnaMin: 1440 + 360 });
+  assert.equal(mar.corteNocturnoMin, 1440);
+  assert.equal(mar.horasNormales, 9);
+  assert.equal(mar.horasExtras, 0);
+  const mie = calcularHorasPorPares([ck('06:00'), ck('16:00'), ck('20:00')], { ...R, entradaNocturnaMin: 0 });
+  assert.equal(mie.horasNocturnas, 6);  // 00-06
+  assert.equal(mie.horasNormales, 8);   // 00-06 (6) + 16-18 (2)
+  assert.equal(mie.horasExtras, 2);     // 18-20
   assert.equal(mie.retardo, false);
 });
 
-test('entrada después de las 22:00: todo cuenta al día siguiente', () => {
-  const lun = calcularHorasPorPares([ck('23:00')], { ...R, salidaNocturna: true });
-  assert.equal(lun.horasTrabajadas, 0);
-  const mar = calcularHorasPorPares([ck('07:00')], { ...R, entradaNocturnaMin: 23 * 60 - 1440 });
-  assert.equal(mar.horasTrabajadas, 8);
+test('corte nunca pasa la salida real: 17:00 -> 01:00 es todo jornada del día', () => {
+  const lun = calcularHorasPorPares([ck('17:00')], { ...R, salidaNocturna: true, salidaNocturnaMin: 1440 + 60 });
+  assert.equal(lun.corteNocturnoMin, 1500);
+  assert.equal(lun.horasNormales, 8);
+  const mar = calcularHorasPorPares([ck('01:00')], { ...R, entradaNocturnaMin: 60 });
+  assert.equal(mar.horasTrabajadas, 0);
+});
+
+test('noches seguidas: recibe 00-06 y vuelve a entrar 16:00; sus 9 h propias se cortan a la 01:00', () => {
+  const r = calcularHorasPorPares([ck('06:00'), ck('16:00')], { ...R, entradaNocturnaMin: 0, salidaNocturna: true });
+  assert.equal(r.corteNocturnoMin, 1500);
+  assert.equal(r.horasNocturnas, 6);
+  assert.equal(r.horasNormales, 15);
+  assert.equal(r.horasExtras, 0);
+});
+
+test('minutoCorteNocturno: 9 h cumplidas, nunca antes de 22:00; entrada >= 22:00 = hasta la salida real', () => {
+  const c = (hhmm, extra = []) => minutoCorteNocturno([...extra, ck(hhmm)], R);
+  assert.equal(c('08:00'), 22 * 60);           // 9 h a las 18:00 -> 22:00
+  assert.equal(c('12:00'), 22 * 60);           // 12-14 + 15-22 = 9 h (comida)
+  assert.equal(c('13:00'), 23 * 60);           // 13-14 + 15-23
+  assert.equal(c('15:00'), 24 * 60);           // sin comida
+  assert.equal(c('23:00'), 23 * 60 + 540);      // sin salida conocida: 9 h desde la entrada
+  assert.equal(minutoCorteNocturno([ck('23:00')], { ...R, salidaRealMin: 1440 + 420 }), 1440 + 420);
+  assert.equal(c('16:00', [ck('08:00'), ck('12:00')]), 22 * 60); // ya llevaba 4 h: 16-21 -> 22:00
+  assert.equal(minutoCorteNocturno([ck('17:00')], { ...R, salidaRealMin: 1440 + 60 }), 1440 + 60); // 17+9 = 02:00 > salida 01:00
+  assert.equal(minutoCorteNocturno([ck('08:00'), ck('18:00')], R), null); // nada abierto
+});
+
+test('entrada después de las 22:00: todo el turno queda en el día que entró', () => {
+  const lun = calcularHorasPorPares([ck('23:00')], { ...R, salidaNocturna: true, salidaNocturnaMin: 1440 + 420 });
+  assert.equal(lun.corteNocturnoMin, 1440 + 420); // corte = salida real 07:00
+  assert.equal(lun.horasNormales, 8);
+  assert.equal(lun.horasExtras, 0);
 });
 
 test('tramo nocturno no descuenta comida aunque salga después de las 15:00', () => {
@@ -74,7 +105,14 @@ test('detección: noches seguidas (sale 02:00 y vuelve a entrar 15:00 el mismo d
 test('detección: "salida" a las 07:30 o después parece llegada normal (olvidó salida), no nocturna', () => {
   assert.equal(detectarCruceNocturno([at(0, '09:35'), at(0, '14:00'), at(0, '15:00')], [at(1, '08:02')]), null);
   assert.equal(detectarCruceNocturno([at(0, '18:00')], [at(1, '07:35')]), null);
-  assert.ok(detectarCruceNocturno([at(0, '18:00')], [at(1, '06:57')]));
+  assert.ok(detectarCruceNocturno([at(0, '20:00')], [at(1, '06:57')]));
+});
+
+test('detección: sello solo entre 17:30 y 19:00 = olvidó la entrada, no se asume nocturna', () => {
+  assert.equal(detectarCruceNocturno([at(0, '18:05')], [at(1, '07:00')]), null);
+  assert.equal(detectarCruceNocturno([at(0, '17:30')], [at(1, '02:00')]), null);
+  assert.ok(detectarCruceNocturno([at(0, '18:05')], [at(1, '07:00')], 'MANUAL')); // RH la convierte
+  assert.ok(detectarCruceNocturno([at(0, '08:00'), at(0, '14:00'), at(0, '18:05')], [at(1, '02:00')])); // con más sellos sí
 });
 
 test('detección: checada abierta en la noche + día siguiente normal de 2 checadas no es nocturna', () => {

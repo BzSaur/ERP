@@ -47,7 +47,10 @@ export const claveDiaLocal = (f) => `${f.getFullYear()}-${String(f.getMonth() + 
 export function bonoDeAsistencias(asistencias, fechaInicio, fechaFin) {
   const entradas = new Map();
   for (const a of asistencias) {
-    if (a.Presente && a.Hora_Entrada) entradas.set(new Date(a.Fecha).toISOString().slice(0, 10), a.Hora_Entrada);
+    // Día que solo trae la salida de un turno nocturno (de madrugada): esa salida
+    // cuenta como su llegada; trabajó de noche, no es "sin entrada".
+    const ent = a.Hora_Entrada || (a.Nocturna_Entrante ? a.Hora_Salida : null);
+    if (a.Presente && ent) entradas.set(new Date(a.Fecha).toISOString().slice(0, 10), ent);
   }
   const fechas = [];
   const d = new Date(fechaInicio); d.setHours(0, 0, 0, 0);

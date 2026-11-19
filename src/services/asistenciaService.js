@@ -10,7 +10,7 @@
 
 import prisma from '../config/database.js';
 import { getConfig, getConfigMultiple } from './nominaService.js';
-import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha, redondearEntrada, redondearSalida, VENTANA_DEDUP_MIN } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, esAreaCoberturaEspecial, entradaCobertura, reglaToleranciaPorFecha, redondearEntrada, redondearSalida, VENTANA_DEDUP_MIN, CORTE_NOCTURNO_MIN, NOTA_CORTE_JORNADA, NOTA_TURNO_CUMPLIDO } from './checadorImportService.js';
 import { horaLocalDevice, esDiaEnCurso, minutosDelDiaAhora, fechaLocalDB } from '../utils/tiempo.js';
 import { esFestivo } from './diasFestivosService.js';
 import { bonoDeAsistencias } from '../utils/bonoPuntualidad.js';
@@ -717,6 +717,39 @@ export async function cambiarEstadoNocturna({ empleadoId, fecha, accion }) {
 }
 
 /**
+ * Jornada nocturna por persona: confirma o rechaza de una vez todas sus
+ * nocturnas por confirmar (AUTO) del rango. Suele ser la misma gente la que se
+ * queda de noche, así RH decide por persona y no día por día.
+ * @returns {{ aplicadas:number, errores:string[] }}
+ */
+export async function cambiarEstadoNocturnaLote({ empleadoId, fechaInicio, fechaFin, accion }) {
+  if (!['confirmar', 'rechazar'].includes(accion)) throw new Error('Acción inválida');
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (!re.test(fechaInicio || '') || !re.test(fechaFin || '')) throw new Error('Rango inválido');
+  const dias = await prisma.empleados_Asistencia.findMany({
+    where: {
+      ID_Empleado: empleadoId, Nocturna_Estado: 'AUTO',
+      Fecha: { gte: new Date(`${fechaInicio}T00:00:00Z`), lte: new Date(`${fechaFin}T00:00:00Z`) }
+    },
+    orderBy: { Fecha: 'asc' },
+    select: { Fecha: true }
+  });
+  let aplicadas = 0;
+  const errores = [];
+  // En orden: cada día recalcula a sus vecinos, que también pueden estar en la lista.
+  for (const d of dias) {
+    const fecha = new Date(d.Fecha).toISOString().slice(0, 10); // @db.Date llega 00:00Z
+    try {
+      await cambiarEstadoNocturna({ empleadoId, fecha, accion });
+      aplicadas++;
+    } catch (e) {
+      errores.push(`${fecha}: ${e.message}`);
+    }
+  }
+  return { aplicadas, errores };
+}
+
+/**
  * Evalúa el estado de una checada (a tiempo, retardo, etc.)
  */
 function evaluarEstadoChecada(tipoChecada, fechaHora, config) {
@@ -919,10 +952,10 @@ function paresDesdeChecadas(checadasCrudas, empleadoRegla, noc = null) {
   const fmt = d => { const x = new Date(d); return String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
   const pares = [];
   // Jornada nocturna recibida: la primera checada es la salida del tramo que
-  // empezó la víspera (22:00 o la entrada real si fue después).
+  // empezó en el corte de la víspera (no es checada).
   // Con la nocturna pendiente esa salida no se empareja con nada (no se muestra).
   if (noc?.entrante && checadas.length) {
-    if (noc.aplicada) pares.push({ entrada: fmt(noc.horaEntrada) + ' (-1)', salida: fmt(checadas[0].Fecha_Hora) });
+    if (noc.aplicada) pares.push({ entrada: fmt(noc.horaEntrada) + ' (corte)', salida: fmt(checadas[0].Fecha_Hora) });
     checadas = checadas.slice(1);
     empleadoRegla = null;
   }
@@ -935,9 +968,10 @@ function paresDesdeChecadas(checadasCrudas, empleadoRegla, noc = null) {
       salida: checadas[i + 1] ? fmt(checadas[i + 1].Fecha_Hora) : null
     });
   }
-  // Sale de madrugada: el último par abierto cierra con la checada de mañana.
+  // Sale de madrugada: el último par abierto cierra en el corte (confirmada) o,
+  // por confirmar, con la checada de mañana.
   const ultimo = pares[pares.length - 1];
-  if (noc?.saliente && ultimo && !ultimo.salida && noc.horaSalida) ultimo.salida = fmt(noc.horaSalida) + ' (+1)';
+  if (noc?.saliente && ultimo && !ultimo.salida && noc.horaSalida) ultimo.salida = fmt(noc.horaSalida) + (noc.corte ? ' (corte)' : ' (día sig.)');
   return pares;
 }
 
@@ -1207,11 +1241,14 @@ export async function obtenerDesgloseHoras(empleadoId, fechaInicio, fechaFin) {
       // Jornada nocturna: estado del cruce que sale este día y si recibe el de la víspera.
       nocturna: esDiaNocturno(a) && a.Nocturna_Estado !== 'RECHAZADA' ? a.Nocturna_Estado : null,
       nocturnaEntrante: entranteAplicada(a),
+      nocturnas: horasNocturnas(a),
+      turnoPrevio: turnoNocturnoPrevio(a),
       // Pares entrada-salida para visualización (consecutivos desde checadas crudas).
       pares: paresDesdeChecadas(checadas, empParaRegla, esDiaNocturno(a) ? {
         entrante: a.Nocturna_Entrante,
         aplicada: entranteAplicada(a),
         saliente: ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado),
+        corte: salidaEsCorte(a),
         horaEntrada: a.Hora_Entrada, horaSalida: a.Hora_Salida
       } : null),
       checadas: checadas.map(c => ({
@@ -1395,7 +1432,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     select: {
       ID_Empleado: true, Fecha: true, Presente: true, Retardo: true, Multi_Planta: true,
       Hora_Entrada: true, Hora_Salida: true, Minutos_Retardo: true,
-      Horas_Trabajadas: true, Horas_Extras: true, Nocturna_Estado: true, Nocturna_Entrante: true,
+      Horas_Trabajadas: true, Horas_Extras: true, Nocturna_Estado: true, Nocturna_Entrante: true, Notas: true,
       Ubicacion_Entrada: true, Ubicacion_Salida: true,
       ID_Checador_Entrada: true, ID_Checador_Salida: true,
       historial_checadas: { orderBy: { Fecha_Hora: 'asc' }, select: { ID_Checada: true, Fecha_Hora: true, Origen_Sincronizacion: true } }
@@ -1504,7 +1541,15 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       nocturnaEntrante: entranteAplicada(a),
       nocturnaEstado: a.Nocturna_Estado || null,
       // Día que solo trae la salida de una nocturna aún por confirmar.
-      nocturnaPendiente: !!(a.Nocturna_Entrante && !a.Hora_Entrada)
+      nocturnaPendiente: !!(a.Nocturna_Entrante && !a.Hora_Entrada && !turnoNocturnoPrevio(a)),
+      // Cierra un turno nocturno ya cumplido ayer: "01:00 · Turno nocturno 8 h cumplidas".
+      turnoPrevio: (() => { const t = turnoNocturnoPrevio(a); return t ? { salida: fmt(t.salida), horas: t.horas } : null; })(),
+      // Desglose (ya incluido en horas): extra del día y tramo nocturno recibido.
+      extra1822: a.Hora_Salida ? Number(a.Horas_Extras) || 0 : 0,
+      nocturnas: horasNocturnas(a),
+      // Hora de corte de la jornada nocturna (no es checada): se pinta distinto.
+      corteSal: salidaEsCorte(a),
+      corteEnt: entradaEsCorte(a)
     });
   }
 
@@ -1593,7 +1638,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       // Jornada nocturna detectada sola (AUTO): RH confirma o la deshace (fue olvido).
       // Días nocturnos no van por "<2h": hoy solo cuenta lo previo a las 22:00 y el
       // resto suma al día siguiente (21:00-05:00 = 1h hoy + 7h mañana).
-      const esNoct = c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente;
+      const esNoct = c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente || c.turnoPrevio;
       const requiereRevision = (!esNoct && c.presente && !c.enCurso && key < hoyLocal && tieneChecada && c.horas < UMBRAL_REVISION_HORAS)
         || c.nocturna === 'AUTO';
       if (requiereRevision) {
@@ -1608,8 +1653,13 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
           nocturna: c.nocturna
         });
       }
-      return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, jornadaCompleta: c.horas >= (jornada - 0.5) };
+      // Celda que recibe (o trae la salida de) la nocturna de la víspera: sus
+      // acciones Sí/No actúan sobre el día en que entró.
+      const nocturnaOrigen = (c.nocturnaEntrante || c.nocturnaPendiente || c.turnoPrevio)
+        ? new Date(f.getTime() - 86400000).toISOString().slice(0, 10) : null;
+      return { ...c, esDomingo, ausencia, ausenciaDesplazada, actividad, requiereRevision, nocturnaOrigen, jornadaCompleta: c.horas >= (jornada - 0.5) };
     });
+    const sumaCeldas = (campo) => celdas.reduce((s, c) => s + aMinutos(c[campo]), 0) / 60;
 
     // Total = suma de las celdas (días checados + días sin checada cubiertos por
     // actividad o ausencia), en minutos enteros. Extra = excedente sobre 45h de
@@ -1634,6 +1684,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       area: e.area?.Nombre_Area || '',
       puesto: e.puesto?.Nombre_Puesto || '',
       horas, extras, normales,
+      // Desglose informativo (ya dentro de horas): extra 18-22 y tramo nocturno.
+      extra1822: sumaCeldas('extra1822'),
+      nocturnas: sumaCeldas('nocturnas'),
       dias: acc.dias, multi: acc.multi,
       // Sin retardos: solo si gana el bono de puntualidad en el rango mostrado.
       bono: bonoDeAsistencias(asistenciasPorEmp.get(e.ID_Empleado) || [], inicio, fin),
@@ -1654,7 +1707,9 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
       ID_Empleado: f.ID_Empleado,
       nombre: f.nombre,
       area: f.area,
-      dias: f.revisiones
+      dias: f.revisiones,
+      // Nocturnas por confirmar de la persona: "Sí a todas" / "No a todas".
+      nocturnasAuto: f.revisiones.filter(d => d.nocturna === 'AUTO').length
     }));
   const totalRevisiones = resumenRevisiones.reduce((s, r) => s + r.dias.length, 0);
 
@@ -1906,9 +1961,47 @@ export function salidaRedondeadaVista(horaSalidaReal) {
 // sus horas solo existen consolidadas en BD. Recalcular por pares del día
 // calendario las rompería (la salida de las 06:00 es de la víspera).
 // El día recibe de verdad el tramo de la víspera (nocturna confirmada): su entrada
-// es de la noche anterior. Con la nocturna pendiente no hay tramo que mostrar.
-export const entranteAplicada = (a) =>
-  !!(a?.Nocturna_Entrante && a.Hora_Entrada && new Date(a.Hora_Entrada) < fechaLocalDB(a.Fecha));
+// es el corte de la víspera (22:00 o después, puede ser ya de madrugada), antes
+// de la primera checada del día, que es la salida nocturna. Con la nocturna
+// pendiente no hay tramo: la entrada es null o la propia del día (después).
+// Requiere historial_checadas ordenado.
+export const entranteAplicada = (a) => {
+  const primera = a?.historial_checadas?.[0]?.Fecha_Hora;
+  return !!(a?.Nocturna_Entrante && a.Hora_Entrada && primera && new Date(a.Hora_Entrada) <= new Date(primera));
+};
+
+// La salida guardada es el corte de una jornada nocturna (no es checada). Si el
+// turno no llegó al corte (salió antes de cumplir, o entró después de las 22:00)
+// la salida es la real y no se marca. Ver NOTA_CORTE_JORNADA en recalcularDia.
+export const salidaEsCorte = (a) => !!a && ['CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado)
+  && !!a.Hora_Salida && (a.Notas || '').includes(NOTA_CORTE_JORNADA);
+
+// El día solo cierra un turno nocturno ya cumplido ayer: { salida:Date, horas:number } o null.
+const RE_TURNO_CUMPLIDO = new RegExp('^' + NOTA_TURNO_CUMPLIDO + ' \\(([\\d.]+) h\\)');
+export function turnoNocturnoPrevio(a) {
+  const m = a?.Nocturna_Entrante ? (a.Notas || '').match(RE_TURNO_CUMPLIDO) : null;
+  const salida = a?.historial_checadas?.[0]?.Fecha_Hora;
+  return m && salida ? { salida: new Date(salida), horas: Number(m[1]) } : null;
+}
+
+// Horas nocturnas del día (desglose, ya incluidas en Horas_Trabajadas):
+// - recibe el tramo de la víspera: del corte a la salida (primera checada);
+// - entró a las 22:00 o después y salió mañana: todo su turno, que queda en este día.
+// Con el redondeo de la fecha. 0 si no aplica.
+export function horasNocturnas(a) {
+  const horas = (desde, hasta) => Math.max(0, aMinutos((salidaPagoDesde(hasta) - desde) / 3600000)) / 60;
+  if (entranteAplicada(a)) return horas(new Date(a.Hora_Entrada), a.historial_checadas[0].Fecha_Hora);
+  const ult = a?.historial_checadas?.at(-1)?.Fecha_Hora;
+  if (!ult || !a.Hora_Salida || !['CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado) || salidaEsCorte(a)) return 0;
+  const d = new Date(ult);
+  const min = d.getHours() * 60 + d.getMinutes();
+  if (min < CORTE_NOCTURNO_MIN) return 0;
+  const ent = new Date(d);
+  ent.setHours(0, redondearEntrada(min, reglaToleranciaPorFecha(d).toleranciaMin), 0, 0);
+  return horas(ent, a.Hora_Salida);
+}
+
+export const entradaEsCorte = (a) => entranteAplicada(a);
 
 export const esDiaNocturno = (a) =>
   !!a && (a.Nocturna_Entrante || ['AUTO', 'CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado));
@@ -2196,7 +2289,7 @@ export async function obtenerResumenDiario(fecha = new Date(), filtro = null) {
     prisma.empleados.findMany({ where: { estatus: { is: { Nombre_Estatus: 'ACTIVO' } } }, select: { ID_Empleado: true } }),
     prisma.empleados_Asistencia.findMany({
       where: { Fecha: { gte: lunes, lte: fechaFin } },
-      select: { ID_Empleado: true, Fecha: true, Presente: true, Hora_Entrada: true }
+      select: { ID_Empleado: true, Fecha: true, Presente: true, Hora_Entrada: true, Hora_Salida: true, Nocturna_Entrante: true }
     })
   ]);
   const semanaPorEmp = new Map();
@@ -2359,6 +2452,7 @@ export default {
   registrarChecada,
   registrarChecadaManualDia,
   cambiarEstadoNocturna,
+  cambiarEstadoNocturnaLote,
   obtenerResumenAsistencia,
   obtenerReportePorUbicacion,
   obtenerPresenciaPorPlanta,

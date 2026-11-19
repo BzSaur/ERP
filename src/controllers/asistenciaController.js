@@ -400,6 +400,25 @@ export const cambiarNocturna = async (req, res) => {
   }
 };
 
+/**
+ * Jornada nocturna por persona: Sí/No a todas sus nocturnas por confirmar del rango.
+ * POST /asistencia/nocturna/lote  { ID_Empleado, fechaInicio, fechaFin, accion }
+ */
+export const cambiarNocturnaLote = async (req, res) => {
+  try {
+    const { ID_Empleado, fechaInicio, fechaFin, accion } = req.body;
+    const r = await asistenciaService.cambiarEstadoNocturnaLote({ empleadoId: parseInt(ID_Empleado), fechaInicio, fechaFin, accion });
+    await registrarCambio({
+      usuario: req.user, accion: 'UPDATE', tabla: 'Empleados_Asistencia', idRegistro: String(ID_Empleado),
+      descripcion: `Jornada nocturna ${fechaInicio} a ${fechaFin}: ${accion} todas (${r.aplicadas})`,
+      datosNuevos: { ID_Empleado, fechaInicio, fechaFin, accion, ...r }, ip: obtenerIP(req)
+    });
+    res.json({ ok: true, ...r });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+};
+
 // ============================================================
 // API PARA SISTEMA BIOMÉTRICO
 // ============================================================

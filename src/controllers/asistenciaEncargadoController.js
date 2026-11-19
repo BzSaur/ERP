@@ -261,4 +261,24 @@ export const cambiarNocturna = async (req, res) => {
   }
 };
 
-export default { horasEquipo, horasEquipoExcel, detalleDia, guardarChecadaManual, cambiarNocturna };
+// POST /encargado/asistencia/nocturna/lote  { ID_Empleado, fechaInicio, fechaFin, accion }
+export const cambiarNocturnaLote = async (req, res) => {
+  try {
+    const miId = resolverEncargadoEfectivo({ ...req, query: { ...req.query, ...req.body } });
+    if (!miId) return res.status(400).json({ ok: false, error: 'Selecciona un encargado responsable' });
+    const idEmpleado = parseInt(req.body.ID_Empleado);
+    const { fechaInicio, fechaFin, accion } = req.body;
+    if (!Number.isInteger(idEmpleado) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFin || '')) {
+      return res.status(400).json({ ok: false, error: 'Empleado o fecha inválidos' });
+    }
+    if (!(await empleadoEnEquipoDeEncargado(idEmpleado, miId, new Date(`${fechaFin}T00:00:00`)))) {
+      return res.status(403).json({ ok: false, error: 'Ese empleado no pertenece a tu equipo vigente esa fecha' });
+    }
+    const r = await asistenciaService.cambiarEstadoNocturnaLote({ empleadoId: idEmpleado, fechaInicio, fechaFin, accion });
+    res.json({ ok: true, ...r });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+};
+
+export default { horasEquipo, horasEquipoExcel, detalleDia, guardarChecadaManual, cambiarNocturna, cambiarNocturnaLote };

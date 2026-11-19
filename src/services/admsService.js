@@ -22,7 +22,7 @@ import crypto from 'crypto';
 import prisma from '../config/database.js';
 import config from '../config/env.js';
 import { horaLocalDevice } from '../utils/tiempo.js';
-import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN, detectarCruceNocturno, salidaHuerfanaNocturna, CORTE_NOCTURNO_MIN } from './checadorImportService.js';
+import { calcularHorasPorPares, minutosAHora, dedupChecadas, esAreaCoberturaEspecial, reglaToleranciaPorFecha, VENTANA_DEDUP_MIN, detectarCruceNocturno, salidaHuerfanaNocturna, minutoCorteNocturno, NOTA_CORTE_JORNADA, NOTA_TURNO_CUMPLIDO } from './checadorImportService.js';
 
 // ============================================================
 // PARSEO DE ATTLOG
@@ -346,7 +346,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   const fSig = diaMas(fechaDia, 1);
   const filas = await tx.empleados_Asistencia.findMany({
     where: { ID_Empleado: idEmpleado, Fecha: { gte: fPrev, lte: fSig } },
-    select: { ID_Asistencia: true, Fecha: true, Nocturna_Estado: true, Nocturna_Entrante: true }
+    select: { ID_Asistencia: true, Fecha: true, Nocturna_Estado: true, Nocturna_Entrante: true, Horas_Trabajadas: true }
   });
   const fila = filas.find(r => claveDB(r.Fecha) === claveLocal(fechaDia));
   if (!fila) return false;
@@ -386,6 +386,19 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   const aplicaOut = !!pOut && NOCTURNA_APLICADA.includes(fila.Nocturna_Estado);
   const ePrev = aplicaIn ? propiasPrev[propiasPrev.length - 1] : null;
   const minutosDe = (c) => c.Fecha_Hora.getHours() * 60 + c.Fecha_Hora.getMinutes();
+  const aCalc = (c) => ({ totalMinutos: minutosDe(c) });
+  // Tramo recibido: empieza en el corte de la víspera (cuando cumplió sus 9 h, no
+  // antes de las 22:00), relativo a hoy (negativo = víspera; 0 = medianoche).
+  const corteVispera = ePrev
+    ? minutoCorteNocturno(propiasPrev.map(aCalc), { ...reglaToleranciaPorFecha(fPrev), salidaRealMin: minutosDe(pIn) + 1440 }) - 1440
+    : null;
+  // La víspera ya cubrió todo hasta la salida (entró a las 22:00 o después, o no
+  // llegó a cumplir sus 9 h): hoy no recibe tramo, la salida solo cierra el turno
+  // de ayer. Hoy se calcula como día normal con sus propias checadas.
+  const turnoCumplido = aplicaIn && corteVispera >= minutosDe(pIn);
+  const recibe = aplicaIn && !turnoCumplido;
+  const notaCumplido = turnoCumplido
+    ? `${NOTA_TURNO_CUMPLIDO} (${Number(prev.fila.Horas_Trabajadas) || 0} h) · ` : '';
 
   const { toleranciaMin, aplicaCobertura, restrictivo } = reglaToleranciaPorFecha(fechaDia);
   let coberturaEspecial = false;
@@ -398,16 +411,17 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   }
 
   // Dobles checadas (<20 min) y manuales ya resueltas en consolidarChecadas.
-  const conservadas = aplicaIn ? [pIn, ...propias] : propias;
+  const conservadas = recibe ? [pIn, ...propias] : propias;
   if (conservadas.length === 0) {
-    // Solo trae la salida de una nocturna aún por confirmar: el día no suma nada.
+    // Solo trae la salida de una nocturna (por confirmar, o turno ya cumplido
+    // ayer): el día no suma nada.
     await tx.empleados_Asistencia.update({
       where: { ID_Asistencia: fila.ID_Asistencia },
       data: {
         Hora_Entrada: null, Hora_Salida: pIn.Fecha_Hora, Horas_Trabajadas: 0, Horas_Extras: 0,
         Minutos_Retardo: 0, Retardo: false, Presente: true, Multi_Planta: false,
         Ubicacion_Entrada: null, Ubicacion_Salida: null, ID_Checador_Entrada: null, ID_Checador_Salida: null,
-        Notas: 'Salida de jornada nocturna por confirmar',
+        Notas: turnoCumplido ? notaCumplido.slice(0, -3) : 'Salida de jornada nocturna por confirmar',
         Nocturna_Estado: fila.Nocturna_Estado === 'RECHAZADA' ? 'RECHAZADA' : null,
         Nocturna_Entrante: true,
         UpdatedAt: new Date()
@@ -428,12 +442,14 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   // ventanaDedupMin 0 porque ya deduplicamos arriba.
   const calc = calcularHorasPorPares(checadasCalc, {
     esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo,
-    // Entró la víspera: el tramo cuenta desde las 22:00 (o su entrada si fue más tarde).
-    entradaNocturnaMin: ePrev ? Math.max(minutosDe(ePrev), CORTE_NOCTURNO_MIN) - 1440 : null,
-    salidaNocturna: aplicaOut
+    // Entró la víspera: el tramo cuenta desde el corte de la víspera.
+    entradaNocturnaMin: recibe ? corteVispera : null,
+    salidaNocturna: aplicaOut,
+    salidaNocturnaMin: aplicaOut ? minutosDe(pOut) + 1440 : null
   });
+  const enMinuto = (min) => new Date(fechaDia.getTime() + min * 60000);
 
-  const primera = ePrev || conservadas[0];
+  const primera = (recibe && ePrev) || conservadas[0];
   const ultima = pOut || conservadas[conservadas.length - 1];
 
   // Ubicaciones (String legacy) y plantas
@@ -443,16 +459,18 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   const plantaSalida  = ultima.checador?.ID_Planta ?? null;
   const multiPlanta = plantaEntrada !== null && plantaSalida !== null && plantaEntrada !== plantaSalida;
 
-  // Entrada nocturna: el día empieza a las 22:00 de la víspera (o la entrada real si fue después).
-  const horaEntrada = ePrev
-    ? new Date(Math.max(ePrev.Fecha_Hora.getTime(), fechaDia.getTime() - (1440 - CORTE_NOCTURNO_MIN) * 60000))
-    : primera.Fecha_Hora;
+  // Entrada nocturna: el día empieza en el corte de la víspera (no es checada).
+  // enMinuto usa la fecha local del día: fechaDia viene a medianoche local.
+  const horaEntrada = recibe ? enMinuto(corteVispera) : primera.Fecha_Hora;
   // Par abierto (cantidad impar: entra, sale, regresa) = sin salida. Antes la
   // última checada ("regresa") se guardaba como salida y el día aparecía cerrado.
-  // Salida nocturna: la checada real de mañana.
-  const horaSalida = pOut
-    ? pOut.Fecha_Hora
-    : ((conservadas.length >= 2 || aplicaIn) && !calc.incompleta ? ultima.Fecha_Hora : null);
+  // Salida nocturna confirmada: el corte (fin de su jornada, no es checada); la
+  // salida real queda en el día siguiente. Por confirmar (AUTO): la salida real.
+  const horaSalida = aplicaOut && calc.corteNocturnoMin != null
+    ? enMinuto(calc.corteNocturnoMin)
+    : pOut
+      ? pOut.Fecha_Hora
+      : ((conservadas.length >= 2 || recibe) && !calc.incompleta ? ultima.Fecha_Hora : null);
 
   // CONFIRMADA/MANUAL/RECHAZADA las decide RH y no se pisan mientras el cruce
   // exista; si el día ya no tiene par abierto que cruce, se limpia (salvo RECHAZADA).
@@ -476,7 +494,12 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
       ID_Checador_Entrada: primera.ID_Checador ?? null,
       ID_Checador_Salida: horaSalida ? (ultima.ID_Checador ?? null) : null,
       Multi_Planta: multiPlanta,
-      Notas: (huerfana ? 'Salida sin entrada (noche anterior) · ' : '') + (pOut && !aplicaOut ? 'Nocturna por confirmar (no suma) · ' : '') + (calc.notas || ''),
+      // Notas lleva dos marcas que leen las vistas (sin columna propia en BD):
+      // NOTA_CORTE_JORNADA = la salida es el corte, no checada (la real queda mañana);
+      // NOTA_TURNO_CUMPLIDO = hoy solo cierra el turno nocturno de ayer.
+      Notas: notaCumplido
+        + (aplicaOut && calc.corteNocturnoMin < minutosDe(pOut) + 1440 ? `${NOTA_CORTE_JORNADA} · ` : '')
+        + (huerfana ? 'Salida sin entrada (noche anterior) · ' : '') + (pOut && !aplicaOut ? 'Nocturna por confirmar (no suma) · ' : '') + (calc.notas || ''),
       Nocturna_Estado: nocturnaEstado,
       Nocturna_Entrante: !!(pIn || huerfana),
       UpdatedAt: new Date()

@@ -186,9 +186,9 @@ const urlNocturna = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asist
                 <% if (d.nocturna === 'AUTO') { %>
                   <span class="badge badge-nocturna rev-badge d-inline-flex align-items-center gap-1" data-tipo="noc"
                         title="Nocturna por confirmar: entró <%= d.entrada||'—' %> y salió <%= d.salida||'—' %> del día siguiente. Sí = jornada nocturna; No = olvidó sellar salida.">
-                    <%= d.nombreDia %> <%= fmtDM(d.fecha) %> · <%= d.entrada||'—' %>-<%= d.salida||'—' %><sup>+1</sup>
+                    <%= d.nombreDia %> <%= fmtDM(d.fecha) %> · entra <%= d.entrada||'—' %>, sale <%= d.salida||'—' %> día sig.
                     <% if (puedeManual) { %>
-                      <span class="noc-confirmar"><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="rechazar" title="No fue nocturna: olvidó sellar salida">No</button></span>
+                      <span class="noc-confirmar"><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="confirmar" title="Sí fue jornada nocturna (se puede cambiar después desde la celda)">Sí</button><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= r.ID_Empleado %>" data-fecha="<%= d.fecha %>" data-accion="rechazar" title="No fue nocturna: olvidó sellar salida">No</button></span>
                     <% } %>
                   </span>
                 <% } else { %>
@@ -201,6 +201,12 @@ const urlNocturna = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asist
               </div>
             </td>
             <td class="text-end rev-acciones">
+              <% if (r.nocturnasAuto > 0 && puedeManual) { %>
+                <span class="d-inline-flex gap-1 me-2 align-middle" title="Decide de una vez las <%= r.nocturnasAuto %> nocturna(s) por confirmar de esta persona en el rango">
+                  <button type="button" class="btn btn-noc-accion btn-noc-lote" data-emp="<%= r.ID_Empleado %>" data-accion="confirmar">Sí a todas (<%= r.nocturnasAuto %>)</button>
+                  <button type="button" class="btn btn-noc-accion btn-noc-lote" data-emp="<%= r.ID_Empleado %>" data-accion="rechazar">No a todas</button>
+                </span>
+              <% } %>
               <% if (esRH) { %>
                 <a href="/asistencia/horas/<%= r.ID_Empleado %>?fechaInicio=<%= fechaInicio %>&fechaFin=<%= fechaFin %>" class="btn btn-sm btn-link p-0 me-2">Revisar</a>
               <% } %>
@@ -350,7 +356,10 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
      punteado (por confirmar); confirmada o marcada a mano = borde sólido. */
   .matriz-horas td.cel-nocturna { background:#e0e7ff; outline:2px solid #6366f1; outline-offset:-2px; }
   .matriz-horas td.cel-nocturna.noc-auto { outline-style:dashed; }
-  .matriz-horas .cel-es .noc-dia { color:#3730a3; font-size:.55rem; font-weight:700; vertical-align:super; margin-left:1px; }
+  /* Hora de corte de la jornada nocturna: no es checada de reloj ni manual. */
+  .matriz-horas .cel-es .hora-corte { font-style:italic; color:#3730a3; text-decoration:underline dotted; text-underline-offset:2px; }
+  .matriz-horas .cel-es .noc-hrs { color:#3730a3; font-size:.62rem; font-weight:600; }
+  .matriz-horas .col-desg { color:#6c757d; }
   .matriz-horas .cel-es .noc-confirmar { margin-top:1px; line-height:1; }
   .matriz-horas .cel-es .noc-confirmar .btn-noc-accion { font-size:.58rem; padding:0 .25rem; line-height:1.3; border-radius:0; }
   .matriz-horas .cel-es .noc-confirmar .btn-noc-accion:first-child { border-radius:3px 0 0 3px; }
@@ -364,11 +373,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 </style>
 
 <!-- Buscador -->
-<div class="mb-3" style="max-width:340px">
-  <div class="input-group input-group-sm">
+<div class="mb-3 d-flex flex-wrap align-items-center gap-3">
+  <div class="input-group input-group-sm" style="max-width:340px">
     <span class="input-group-text"><i class="bi bi-search"></i></span>
     <input type="text" id="buscarEmp" class="form-control" placeholder="Buscar por nombre o ID...">
   </div>
+  <small class="text-body-secondary" style="font-size:.72rem">
+    Nocturna: la jornada se corta al cumplir 9 h (no antes de las 22:00); de ahí a la salida es nocturno y se ve en el día siguiente.
+    Hora <span style="font-style:italic;color:#3730a3;text-decoration:underline dotted">en cursiva</span> = corte, no es checada.
+  </small>
 </div>
 
 <div class="card">
@@ -387,6 +400,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             <% }); %>
             <th class="text-center">Norm</th>
             <th class="text-center" title="Horas completas sobre 45h de cada semana">Extra</th>
+            <th class="text-center col-desg" title="Desglose informativo, ya incluido en el total: horas del día después de cumplir la jornada (18-22)">18-22</th>
+            <th class="text-center col-desg" title="Desglose informativo, ya incluido en el total: tramo nocturno, desde el corte de la jornada hasta la salida">Noct.</th>
             <th class="text-center sortable" data-sort="total" data-type="num">Total <span class="arrow"></span></th>
             <th class="text-center" title="Total ÷ 9 (jornada de 9h), fracción real de día para multiplicar por el sueldo diario. 50h = 5.56">Días</th>
             <th class="text-center" title="Bono de puntualidad: entrada a las 8:00 o antes todos los días de lunes a viernes del rango; cualquier ausencia lo quita">Bono</th>
@@ -434,13 +449,15 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                      tip='Tipo: ' + c.actividad.tipo + ' · Encargado: ' + c.actividad.responsable + ' · Actividad: ' + c.actividad.nombre + (c.actividad.empresa ? ' · Empresa: ' + c.actividad.empresa : '') + ' · ' + fmtH(c.horas||0);
                    }
                    else if (!c.presente && c.vacio) { cls='cel-ausente'; tip='Ausente'; }
-                   else if (c.presente && (c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente)) {
+                   else if (c.presente && (c.nocturna || c.nocturnaEntrante || c.nocturnaPendiente || c.turnoPrevio)) {
                      cls = 'cel-nocturna' + (c.nocturna === 'AUTO' || c.nocturnaPendiente ? ' noc-auto' : '');
                      tip = 'Jornada nocturna'
-                       + (c.nocturnaEntrante ? ' · incluye el tramo desde las 22:00 del día anterior' : '')
-                       + (c.nocturnaPendiente ? ' · salida ' + (c.salidaReal || '') + ' de la nocturna del día anterior, por confirmar (no suma)' : '')
-                       + (c.nocturna ? ' · sale al día siguiente a las ' + (c.salidaReal || c.salida || '') + '. Este día solo cuenta hasta las 22:00 (18-22 extra); desde las 22:00 suma al día siguiente' : '')
-                       + (c.nocturna === 'AUTO' ? ' · por confirmar: no suma hasta que digan Sí' : '')
+                       + (c.nocturnaEntrante ? ' · tramo nocturno de ' + c.entrada + ' (corte de la jornada anterior) a ' + (c.salidaReal || '') + ': ' + fmtH(c.nocturnas||0) : '')
+                       + (c.turnoPrevio ? ' · salida ' + c.turnoPrevio.salida + ' del turno nocturno de ayer, que ya contó sus ' + fmtH(c.turnoPrevio.horas).replace(/:00$/, '') + ' h en ese día' : '')
+                       + (c.nocturnaPendiente ? ' · salida ' + (c.salidaReal || '') + ' de una nocturna por confirmar (no suma)' : '')
+                       + (c.nocturna === 'AUTO' ? ' · entró este día y salió al día siguiente a las ' + (c.salidaReal || '') + '. Por confirmar: no suma hasta que digan Sí' : '')
+                       + (c.corteSal ? ' · la jornada se corta a las ' + c.salida + ' (9 h cumplidas, no antes de las 22:00); lo demás es nocturno del día siguiente' : '')
+                       + (c.extra1822 > 0 ? ' · ' + fmtH(c.extra1822) + ' extra después de la jornada' : '')
                        + ' · ' + fmtH(c.horas||0) + ' este día';
                    }
                    else if (c.requiereRevision) { cls='cel-revision'; tip='Requiere revisión RH · ' + fmtH(c.horas||0) + ' (menos de 2h con checada)'; }
@@ -475,6 +492,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     data-horas="<%= c.horas || 0 %>"
                     data-presente="<%= c.presente ? 1 : 0 %>"
                     data-noc="<%= c.nocturnaEstado || '' %>"
+                    data-noc-origen="<%= c.nocturnaOrigen || '' %>"
+                    data-noc-origen-est="<%= (c.nocturnaEntrante || c.turnoPrevio) ? 'CONFIRMADA' : (c.nocturnaPendiente ? 'AUTO' : '') %>"
                     data-inc="<%= c.incompleta ? 1 : 0 %>"
                     data-dom="<%= descansoVacio ? 1 : 0 %>"
                     data-vacio="<%= (!c.presente && c.vacio) ? 1 : 0 %>">
@@ -518,16 +537,24 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                     <span class="text-danger fw-bold">Falta</span>
                   <% } else if (c.presente) { %>
                     <div class="cel-es">
-                      <%# Nocturna compacta: el color de la celda ya la distingue; -1/+1 marcan el
-                          día anterior/siguiente y la hora real de salida va en el title. %>
-                      <div><span class="ent"><%= c.entrada || (c.nocturnaPendiente ? '22:00' : '--:--') %></span><% if (c.nocturnaEntrante || c.nocturnaPendiente) { %><span class="noc-dia">-1</span><% } %></div>
-                      <div><span class="sal"><%= c.salida || '--:--' %></span><% if (c.nocturna) { %><span class="noc-dia">+1</span><% } %></div>
+                      <%# Nocturna: el color de la celda la distingue. La hora de corte (fin de
+                          la jornada del día / inicio del tramo nocturno) va en cursiva: no es checada. %>
+                      <% if (c.turnoPrevio) { %>
+                        <div class="noc-hrs" style="white-space:normal;line-height:1.1"><%= c.turnoPrevio.salida %> · Turno nocturno <%= fmtH(c.turnoPrevio.horas).replace(/:00$/, '') %> h cumplidas</div>
+                      <% } %>
+                      <% if (!c.turnoPrevio || c.entrada) { %>
+                      <div><span class="ent<%= c.corteEnt ? ' hora-corte' : '' %>"<% if (c.corteEnt) { %> title="Corte de jornada: no es checada"<% } %>><%= c.entrada || '--:--' %></span></div>
+                      <div><span class="sal<%= c.corteSal ? ' hora-corte' : '' %>"<% if (c.corteSal) { %> title="Corte de jornada: no es checada"<% } %>><%= c.salida || '--:--' %></span></div>
+                      <% } %>
+                      <% if (c.nocturnas > 0) { %><div class="noc-hrs">noct <%= fmtH(c.nocturnas) %></div><% } %>
                       <% if (c.nocturna === 'AUTO' && puedeManual) { %>
                         <div class="noc-confirmar">
                           <button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="confirmar" title="Sí fue jornada nocturna">Sí</button><button type="button" class="btn btn-noc-accion btn-noc" data-emp="<%= f.ID_Empleado %>" data-fecha="<%= fechaCelda %>" data-accion="rechazar" title="No fue nocturna: olvidó sellar salida">No</button>
                         </div>
                       <% } %>
-                      <% if (c.requiereRevision && c.nocturna !== 'AUTO') { %>
+                      <% if (c.turnoPrevio && !c.entrada) { %>
+                        <div class="hrs text-body-secondary">—</div>
+                      <% } else if (c.requiereRevision && c.nocturna !== 'AUTO') { %>
                         <div class="hrs"><i class="bi bi-exclamation-triangle-fill text-warning"></i> <%= fmtH(c.horas||0) %></div>
                       <% } else if (c.enCurso) { %>
                         <div class="hrs text-primary"><i class="bi bi-hourglass-split"></i> <%= fmtH(c.horas||0) %></div>
@@ -563,10 +590,12 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
               <% }); %>
               <td class="text-center col-normal"><%= f.normales>0?fmtH(f.normales):'-' %></td>
               <td class="text-center col-extra"><%= f.extras>0?fmtH(f.extras):'-' %></td>
+              <td class="text-center col-desg"><%= f.extra1822>0?fmtH(f.extra1822):'-' %></td>
+              <td class="text-center col-desg"><%= f.nocturnas>0?fmtH(f.nocturnas):'-' %></td>
               <%
                 // Días cerrados con entrada pero sin salida: cuentan 0 h. Se avisa junto al
                 // total porque RH suele completarlos a mano y si no el total "no cuadra".
-                const sinSalida = f.celdas.filter(function(c){ return c.presente && c.incompleta && !c.enCurso && !c.nocturnaPendiente && !c.nocturna; }).length;
+                const sinSalida = f.celdas.filter(function(c){ return c.presente && c.incompleta && !c.enCurso && !c.nocturnaPendiente && !c.nocturna && !c.turnoPrevio; }).length;
               %>
               <td class="text-center fw-bold col-total">
                 <span class="tot"><%= fmtH(f.horas) %></span>
@@ -582,7 +611,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             </tr>
             <% }); %>
           <% } else { %>
-            <tr><td colspan="<%= datos.fechas.length + 7 %>" class="text-center text-body-secondary py-4">No hay empleados activos</td></tr>
+            <tr><td colspan="<%= datos.fechas.length + 9 %>" class="text-center text-body-secondary py-4">No hay empleados activos</td></tr>
           <% } %>
         </tbody>
       </table>
@@ -690,6 +719,8 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
             if (hp > 0) horas = hp + hAct;
           }
         }
+        // Celda que solo cierra el turno nocturno de ayer: sin entrada/salida propias.
+        if (!celEs.querySelector('.ent')) { minPorDia[idx] = aMin(horasPago); return; }
         celEs.querySelector('.ent').textContent = ent || '--:--';
         celEs.querySelector('.sal').textContent = sal || '--:--';
         const hrs = celEs.querySelector('.hrs');
@@ -844,6 +875,23 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
       })
       .catch(() => { b.disabled = false; });
   });
+  // Por persona: Sí/No a todas sus nocturnas por confirmar del rango visible.
+  document.addEventListener('click', function(ev){
+    const b = ev.target.closest('.btn-noc-lote');
+    if (!b) return;
+    b.closest('span').querySelectorAll('button').forEach(x => { x.disabled = true; });
+    const body = { ID_Empleado: parseInt(b.dataset.emp), fechaInicio: <%- JSON.stringify(fechaInicio) %>, fechaFin: <%- JSON.stringify(fechaFin) %>, accion: b.dataset.accion };
+    if (ENC_DELEGADO) body.encargado = ENC_DELEGADO;
+    fetch(URL_NOCTURNA + '/lote', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok && res.errores && res.errores.length) window.alert('Aplicadas: ' + res.aplicadas + '\nNo se pudieron aplicar:\n' + res.errores.join('\n'));
+        if (res.ok) return window.location.reload();
+        b.closest('span').querySelectorAll('button').forEach(x => { x.disabled = false; });
+        window.alert(res.error || 'No se pudo guardar');
+      })
+      .catch(() => { b.closest('span').querySelectorAll('button').forEach(x => { x.disabled = false; }); });
+  });
 })();
 </script>
 <style>
@@ -911,31 +959,34 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
   // Jornada nocturna: acciones según el estado del día.
   const NOC_TXT = {
-    '': 'Entrada sin salida este día. Si salió al día siguiente, márcala como nocturna: 18-22 cuenta como extra y desde las 22:00 como jornada del día siguiente.',
-    AUTO: 'Detectada automáticamente: entró este día y salió a la mañana siguiente.',
+    '': 'Entrada sin salida este día. Si salió al día siguiente, márcala como nocturna: la jornada se corta al cumplir 9 h (no antes de las 22:00) y lo demás cuenta como nocturno del día siguiente.',
+    AUTO: 'Detectada automáticamente: entró este día y salió a la mañana siguiente. No suma hasta confirmar.',
     CONFIRMADA: 'Jornada nocturna confirmada.',
     MANUAL: 'Jornada nocturna marcada a mano.',
     RECHAZADA: 'Se marcó como olvido de salida (no nocturna).'
   };
   const NOC_BTNS = {
     '': [['marcar', 'Marcar nocturna']],
-    AUTO: [['confirmar', 'Confirmar nocturna'], ['rechazar', 'Fue olvido']],
-    CONFIRMADA: [['rechazar', 'Fue olvido']],
-    MANUAL: [['rechazar', 'Fue olvido']],
-    RECHAZADA: [['quitar', 'Volver a detectar']]
+    AUTO: [['confirmar', 'Sí es nocturna'], ['rechazar', 'No, olvidó sellar']],
+    CONFIRMADA: [['rechazar', 'No fue nocturna']],
+    MANUAL: [['rechazar', 'No fue nocturna']],
+    RECHAZADA: [['marcar', 'Sí es nocturna'], ['quitar', 'Volver a detectar']]
   };
   function pintarNocturna(td) {
-    const est = td.dataset.noc || '';
+    // Celda que recibe la nocturna de la víspera: las acciones van sobre el día en que entró.
+    const origen = td.dataset.nocOrigen || '';
+    const est = origen ? (td.dataset.nocOrigenEst || '') : (td.dataset.noc || '');
+    const fechaNoc = origen || ctx.fecha;
     const aplica = est !== '' || td.dataset.inc === '1';
     $('manualNoc').classList.toggle('d-none', !aplica);
     if (!aplica) return;
-    $('manualNocTxt').textContent = NOC_TXT[est] || '';
+    $('manualNocTxt').textContent = (origen ? 'Nocturna que entró el día anterior (' + origen + '). ' : '') + (NOC_TXT[est] || '');
     $('manualNocBtns').innerHTML = '';
     (NOC_BTNS[est] || []).forEach(([accion, txt]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn btn-sm btn-noc-accion btn-noc';
-      b.dataset.emp = ctx.emp; b.dataset.fecha = ctx.fecha; b.dataset.accion = accion;
+      b.dataset.emp = ctx.emp; b.dataset.fecha = fechaNoc; b.dataset.accion = accion;
       b.textContent = txt;
       $('manualNocBtns').appendChild(b);
     });

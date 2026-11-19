@@ -99,6 +99,7 @@ router.post('/checada-manual-dia', isAdminOrRH, asistenciaController.guardarChec
 
 // Jornada nocturna: confirmar / fue olvido / marcar / quitar (JSON)
 router.post('/nocturna', isAdminOrRH, asistenciaController.cambiarNocturna);
+router.post('/nocturna/lote', isAdminOrRH, asistenciaController.cambiarNocturnaLote);
 
 // Marcar faltas (solo RH/Admin)
 router.post('/api/marcar-faltas', isAdminOrRH, asistenciaController.apiMarcarFaltas);
