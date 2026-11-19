@@ -64,6 +64,11 @@ test('minutoCorteNocturno: 9 h cumplidas, nunca antes de 22:00; entrada >= 22:00
   assert.equal(c('16:00', [ck('08:00'), ck('12:00')]), 22 * 60); // ya llevaba 4 h: 16-21 -> 22:00
   assert.equal(minutoCorteNocturno([ck('17:00')], { ...R, salidaRealMin: 1440 + 60 }), 1440 + 60); // 17+9 = 02:00 > salida 01:00
   assert.equal(minutoCorteNocturno([ck('08:00'), ck('18:00')], R), null); // nada abierto
+  // emp 61, 30-oct: entra 20:02, cumple 9 h a las 05:00, sale 05:29. El tramo 05:00-05:29
+  // vale 0 h redondeado: no se corta, la salida real queda en el día que entró.
+  assert.equal(minutoCorteNocturno([ck('20:02')], { ...R, salidaRealMin: 1440 + 329 }), 1440 + 329);
+  const d = calcularHorasPorPares([ck('20:02')], { ...R, salidaNocturna: true, salidaNocturnaMin: 1440 + 329 });
+  assert.equal(d.horasTrabajadas, 9);
 });
 
 test('entrada después de las 22:00: todo el turno queda en el día que entró', () => {

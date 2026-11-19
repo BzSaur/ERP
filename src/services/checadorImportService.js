@@ -734,7 +734,11 @@ export function minutoCorteNocturno(propias, { toleranciaMin = TOLERANCIA_MINUTO
     if (falta > 0) t = Math.max(t, COMIDA_FIN_DEFAULT) + falta;
     corte = Math.max(CORTE_NOCTURNO_MIN, t);
   }
-  return salidaRealMin != null ? Math.min(corte, salidaRealMin) : corte;
+  if (salidaRealMin == null) return corte;
+  // Lo que queda después del corte vale 0 h con el redondeo (cumple 05:00, sale
+  // 05:29 -> 05:00): no se corta; todo el turno queda en D con su salida real.
+  const tope = restrictivo ? redondearSalida(salidaRealMin) : salidaRealMin;
+  return corte >= tope ? salidaRealMin : corte;
 }
 
 export function calcularHorasPorPares(checadas, opciones = {}) {
