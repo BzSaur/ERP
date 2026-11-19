@@ -83,9 +83,9 @@ const urlNocturna = urlExcelBase.indexOf('/encargado') === 0 ? '/encargado/asist
       <input type="hidden" name="fechaFin" id="fechaFin" value="<%= fechaFin %>">
     </div>
     <div class="form-check form-switch mb-1">
-      <input class="form-check-input" type="checkbox" id="chkRedondear" checked>
+      <input class="form-check-input" type="checkbox" id="chkRedondear">
       <%# El valor viaja en este hidden (1/0), no en el checkbox: apagado tiene que mandar 0, porque el default es activo. %>
-      <input type="hidden" name="redondear" id="hidRedondear" value="1">
+      <input type="hidden" name="redondear" id="hidRedondear" value="0">
       <label class="form-check-label small" for="chkRedondear">Redondear horas</label>
     </div>
     <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
@@ -753,7 +753,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     });
   }
   // El estado sobrevive al filtrar / cambiar de encargado: viaja en la URL
-  // (?redondear=0 lo apaga; sin parámetro queda activo). Se usan inputs
+  // (?redondear=1 lo prende; sin parámetro queda apagado, a petición de RH). Se usan inputs
   // hidden y no un listener de submit porque flatpickr envía con form.submit(),
   // que no dispara el evento.
   const hidRed = document.getElementById('hidRedondear');
@@ -769,7 +769,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     if (hidRed) hidRed.value = v;
     if (hidEnc) hidEnc.value = v;
   };
-  chk.checked = new URLSearchParams(location.search).get('redondear') !== '0';
+  chk.checked = new URLSearchParams(location.search).get('redondear') === '1';
   syncRedondear();
   chk.addEventListener('change', () => { syncRedondear(); aplicarRedondeo(); actualizarLinkExcel(); });
   aplicarRedondeo();

@@ -122,7 +122,7 @@ export const horasEquipoExcel = async (req, res, next) => {
     const idsPermitidos = equipo.map(e => e.ID_Empleado);
 
     const buffer = await generarExcelHoras(inicio, fin, {
-      sort, dir, redondear: req.query.redondear !== '0', // default = redondeado (regla de pago)
+      sort, dir, redondear: req.query.redondear === '1', // default = sin redondear (pedido de RH)
       filtro: { idsPermitidos: idsPermitidos.length ? idsPermitidos : [-1] }
     });
 
