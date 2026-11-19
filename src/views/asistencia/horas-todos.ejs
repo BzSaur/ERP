@@ -379,7 +379,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
     <input type="text" id="buscarEmp" class="form-control" placeholder="Buscar por nombre o ID...">
   </div>
   <small class="text-body-secondary" style="font-size:.72rem">
-    Nocturna: la jornada se corta al cumplir 9 h (no antes de las 22:00); de ahí a la salida es nocturno y se ve en el día siguiente.
+    Nocturna de hasta 13 h: va completa en el día que entró. Más larga: se corta al cumplir 9 h (no antes de las 22:00) y el resto se ve en el día siguiente.
     Hora <span style="font-style:italic;color:#3730a3;text-decoration:underline dotted">en cursiva</span> = corte, no es checada.
   </small>
 </div>
@@ -456,7 +456,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
                        + (c.turnoPrevio ? ' · salida ' + c.turnoPrevio.salida + ' del turno nocturno de ayer, que ya contó sus ' + fmtH(c.turnoPrevio.horas).replace(/:00$/, '') + ' h en ese día' : '')
                        + (c.nocturnaPendiente ? ' · salida ' + (c.salidaReal || '') + ' de una nocturna por confirmar (no suma)' : '')
                        + (c.nocturna === 'AUTO' ? ' · entró este día y salió al día siguiente a las ' + (c.salidaReal || '') + '. Por confirmar: no suma hasta que digan Sí' : '')
-                       + (c.corteSal ? ' · la jornada se corta a las ' + c.salida + ' (9 h cumplidas, no antes de las 22:00); lo demás es nocturno del día siguiente' : '')
+                       + (c.corteSal ? ' · la jornada se corta a las ' + c.salida + ' (turno de más de 13 h: 9 h cumplidas, no antes de las 22:00); lo demás pasa al día siguiente' : '')
                        + (c.extra1822 > 0 ? ' · ' + fmtH(c.extra1822) + ' extra después de la jornada' : '')
                        + ' · ' + fmtH(c.horas||0) + ' este día';
                    }
@@ -959,7 +959,7 @@ function fmtFechaCorta(d){ const x=new Date(d); return String(x.getDate()).padSt
 
   // Jornada nocturna: acciones según el estado del día.
   const NOC_TXT = {
-    '': 'Entrada sin salida este día. Si salió al día siguiente, márcala como nocturna: la jornada se corta al cumplir 9 h (no antes de las 22:00) y lo demás cuenta como nocturno del día siguiente.',
+    '': 'Entrada sin salida este día. Si salió al día siguiente, márcala como nocturna: hasta 13 h va completa en este día; si es más larga se corta al cumplir 9 h (no antes de las 22:00) y lo demás pasa al día siguiente.',
     AUTO: 'Detectada automáticamente: entró este día y salió a la mañana siguiente. No suma hasta confirmar.',
     CONFIRMADA: 'Jornada nocturna confirmada.',
     MANUAL: 'Jornada nocturna marcada a mano.',

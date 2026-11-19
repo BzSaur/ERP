@@ -25,14 +25,14 @@ test('nocturna por confirmar: sin entrada o entrada propia después de la salida
   assert.equal(horasNocturnas(propia), 0);
 });
 
-test('entró 23:00 y salió 07:00: todo en el día que entró, 8 h nocturnas, salida real (no corte)', () => {
+test('entró 23:00 y salió 07:00: todo en el día que entró, 7 h nocturnas (23-06), salida real (no corte)', () => {
   const a = {
     Fecha: new Date('2026-11-10T00:00:00Z'), Nocturna_Estado: 'CONFIRMADA', Notas: '1 periodo(s) · nocturna',
     Hora_Entrada: new Date(2026, 10, 10, 23, 0), Hora_Salida: new Date(2026, 10, 11, 7, 0),
     historial_checadas: [{ Fecha_Hora: new Date(2026, 10, 10, 23, 0) }]
   };
   assert.equal(salidaEsCorte(a), false);
-  assert.equal(horasNocturnas(a), 8);
+  assert.equal(horasNocturnas(a), 7);
   assert.equal(salidaEsCorte({ ...a, Notas: 'Corte de jornada · 1 periodo(s)' }), true);
 });
 
@@ -44,4 +44,13 @@ test('día que solo cierra el turno de ayer: "Turno nocturno 8 h cumplidas"', ()
   };
   assert.deepEqual(turnoNocturnoPrevio(a), { salida: new Date(2026, 10, 11, 1, 0), horas: 8 });
   assert.equal(turnoNocturnoPrevio({ ...a, Notas: 'Salida de jornada nocturna por confirmar' }), null);
+});
+
+test('turno 18:00 -> 06:00 completo en un día: 8 h nocturnas (22-06)', () => {
+  const a = {
+    Nocturna_Estado: 'CONFIRMADA', Notas: '1 periodo(s) · nocturna',
+    Hora_Entrada: new Date(2026, 10, 10, 18, 0), Hora_Salida: new Date(2026, 10, 11, 6, 0),
+    historial_checadas: [{ Fecha_Hora: new Date(2026, 10, 10, 18, 4) }]
+  };
+  assert.equal(horasNocturnas(a), 8);
 });

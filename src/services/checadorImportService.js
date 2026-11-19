@@ -65,6 +65,10 @@ const SALIDA_NOCTURNA_MAX_MIN = 7 * 60 + 30;
 // Noches seguidas (sale y vuelve a entrar el mismo día): la salida debe ser de
 // madrugada; a las 07:55 parece llegada normal, no salida.
 const SALIDA_NOCHE_SEGUIDA_MAX_MIN = 7 * 60;
+// Turno de hasta 13 h (primera entrada del día a la salida real) va completo en
+// el día que entró, con su salida real: partirlo confunde a RH ("salió a las 3").
+// Solo los turnos más largos (08:00 -> 06:00) se parten en el corte.
+const TURNO_UN_DIA_MAX_MIN = 13 * 60;
 // Día con un solo sello entre 17:30 y 19:00: casi siempre olvidó la entrada y
 // selló su salida normal. No se asume nocturna; RH puede marcarla a mano.
 const SELLO_SOLO_TARDE_MIN = 17 * 60 + 30;
@@ -699,6 +703,7 @@ export function detectarCruceNocturno(propiasD, sigD, estado = null) {
  * noche: cuando las checadas propias de D cumplen 9 h netas (comida 14-15 solo si
  * el tramo la cruza), nunca antes de las 22:00. Entrada abierta a las 22:00 o
  * después: el corte es la salida real (todo el turno queda en D). Nunca pasa la salida real.
+ * Turno de hasta 13 h (primera entrada a salida real): no se corta, todo en D.
  * Mismo redondeo que calcularHorasPorPares.
  * ponytail: ignora la entrada de cobertura especial (sistemas); difiere minutos solo en ese caso.
  *
@@ -735,6 +740,7 @@ export function minutoCorteNocturno(propias, { toleranciaMin = TOLERANCIA_MINUTO
     corte = Math.max(CORTE_NOCTURNO_MIN, t);
   }
   if (salidaRealMin == null) return corte;
+  if (salidaRealMin - ent(orden[0], 0) <= TURNO_UN_DIA_MAX_MIN) return salidaRealMin;
   // Lo que queda después del corte vale 0 h con el redondeo (cumple 05:00, sale
   // 05:29 -> 05:00): no se corta; todo el turno queda en D con su salida real.
   const tope = restrictivo ? redondearSalida(salidaRealMin) : salidaRealMin;

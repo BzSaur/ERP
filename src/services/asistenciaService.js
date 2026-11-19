@@ -1986,7 +1986,8 @@ export function turnoNocturnoPrevio(a) {
 
 // Horas nocturnas del día (desglose, ya incluidas en Horas_Trabajadas):
 // - recibe el tramo de la víspera: del corte a la salida (primera checada);
-// - entró a las 22:00 o después y salió mañana: todo su turno, que queda en este día.
+// - turno que cruza la noche y quedó completo en este día (hasta 13 h, sin
+//   corte): lo que cae entre las 22:00 y las 06:00.
 // Con el redondeo de la fecha. 0 si no aplica.
 export function horasNocturnas(a) {
   const horas = (desde, hasta) => Math.max(0, aMinutos((salidaPagoDesde(hasta) - desde) / 3600000)) / 60;
@@ -1994,11 +1995,14 @@ export function horasNocturnas(a) {
   const ult = a?.historial_checadas?.at(-1)?.Fecha_Hora;
   if (!ult || !a.Hora_Salida || !['CONFIRMADA', 'MANUAL'].includes(a.Nocturna_Estado) || salidaEsCorte(a)) return 0;
   const d = new Date(ult);
-  const min = d.getHours() * 60 + d.getMinutes();
-  if (min < CORTE_NOCTURNO_MIN) return 0;
   const ent = new Date(d);
-  ent.setHours(0, redondearEntrada(min, reglaToleranciaPorFecha(d).toleranciaMin), 0, 0);
-  return horas(ent, a.Hora_Salida);
+  ent.setHours(0, redondearEntrada(d.getHours() * 60 + d.getMinutes(), reglaToleranciaPorFecha(d).toleranciaMin), 0, 0);
+  const ini = new Date(d); ini.setHours(0, CORTE_NOCTURNO_MIN, 0, 0);   // 22:00 del día
+  const fin = new Date(d); fin.setHours(24 + 6, 0, 0, 0);               // 06:00 del día siguiente
+  const sal = salidaPagoDesde(a.Hora_Salida);
+  const desde = ent > ini ? ent : ini;
+  const hasta = sal < fin ? sal : fin;
+  return hasta > desde ? aMinutos((hasta - desde) / 3600000) / 60 : 0;
 }
 
 export const entradaEsCorte = (a) => entranteAplicada(a);
