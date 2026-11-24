@@ -11,6 +11,7 @@
 //   docker exec erp_rh_app node scripts/recalcular-horas-tolerancia.js            # simulacro, no escribe
 //   docker exec erp_rh_app node scripts/recalcular-horas-tolerancia.js --aplicar
 //   ... --desde=2026-10-19 --hasta=2026-11-30
+//   ... --sabados --desde=2026-01-01   # sábados y domingos sin hora de comida
 import prisma from '../src/config/database.js';
 import { recalcularJornada } from '../src/services/admsService.js';
 
@@ -34,9 +35,11 @@ const asistencias = await prisma.empleados_Asistencia.findMany({
   },
   orderBy: [{ Fecha: 'asc' }, { ID_Empleado: 'asc' }]
 });
-const candidatas = asistencias.filter(a => a._count.historial_checadas >= 3);
+// --sabados: sábados y domingos con checadas (ya no descuentan comida 14-15, cualquier número de checadas).
+const sabados = process.argv.includes('--sabados');
+const candidatas = asistencias.filter(a => sabados ? [0, 6].includes(a.Fecha.getUTCDay()) : a._count.historial_checadas >= 3);
 console.log(`${aplicar ? 'APLICAR' : 'SIMULACRO (usa --aplicar para escribir)'}: desde ${desde}${hasta ? ' hasta ' + hasta : ''}`);
-console.log(`${candidatas.length} días con 3+ checadas (de ${asistencias.length} con checadas)\n`);
+console.log(`${candidatas.length} días ${sabados ? "sábado/domingo" : "con 3+ checadas"} (de ${asistencias.length} con checadas)\n`);
 
 const fmtH = (h) => { const t = Math.round((Number(h) || 0) * 60); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 let cambiados = 0, errores = 0, difMinTotal = 0;

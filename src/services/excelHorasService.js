@@ -16,6 +16,9 @@ import prisma from '../config/database.js';
 import { reglaToleranciaPorFecha, formatearHoras } from './checadorImportService.js';
 import { esDiaNocturno, entradaEsCorte, salidaEsCorte, horasNocturnas, turnoNocturnoPrevio, asistenciaVisible, obtenerAusenciasJustificadas, ausenciaEnFecha, periodoAusenciaEnFecha, ganadorDelDia, resolverActividadesPorRango, horasDeActividad, esDiaDescanso, entradaRedondeadaVista, salidaRedondeadaVista, horasPorParesVista, topeHorasHoy, fmtTramo, fmtMinutos, aMinutos, repartirSemanal } from './asistenciaService.js';
 
+// CFB (lector/escritor zip interno de SheetJS) solo viene en el export CJS.
+const { CFB } = XLSX.default || XLSX;
+
 // Horas fijas que cuenta un día de Campo/Home Office sin checada (jornada
 // completa), consistente con la misma regla usada en las vistas HTML.
 const HORAS_FIJAS_ACTIVIDAD = 9;
@@ -26,6 +29,44 @@ function fmtHora(d) {
   if (!d) return '';
   const dt = new Date(d);
   return String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+}
+
+// El xlsx comunitario descarta los estilos de celda (relleno, ajuste de texto):
+// se agregan sobre el archivo ya generado. Cada estilo base usado por las
+// celdas indicadas se clona con relleno amarillo + wrapText, y esas celdas
+// apuntan al clon (las horas conservan su formato [h]:mm).
+// ponytail: parcheo de XML con regex sobre la salida de SheetJS; si se cambia
+// a una librería con estilos (xlsx-js-style/exceljs), esto se borra.
+export function resaltarCeldas(buffer, refs, hoja = 'sheet1') {
+  if (!refs.length) return buffer;
+  const cfb = CFB.read(buffer, { type: 'buffer' });
+  const leer = (ruta) => Buffer.from(CFB.find(cfb, ruta).content).toString('utf8');
+  const escribir = (ruta, txt) => { CFB.find(cfb, ruta).content = Buffer.from(txt, 'utf8'); };
+
+  let styles = leer('/xl/styles.xml');
+  const fillId = Number(styles.match(/<fills count="(\d+)"/)[1]);
+  const xfs = styles.match(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/)[1].match(/<xf [^>]*\/>/g);
+  const nuevos = [], clon = new Map();
+  const xfAmarillo = (s) => {
+    if (!clon.has(s)) {
+      nuevos.push(xfs[s]
+        .replace(/fillId="\d+"/, `fillId="${fillId}" applyFill="1" applyAlignment="1"`)
+        .replace(/\/>$/, '><alignment vertical="top" wrapText="1"/></xf>'));
+      clon.set(s, xfs.length + nuevos.length - 1);
+    }
+    return clon.get(s);
+  };
+
+  const set = new Set(refs);
+  const hojaPath = `/xl/worksheets/${hoja}.xml`;
+  escribir(hojaPath, leer(hojaPath).replace(/<c r="([A-Z]+\d+)"(?: s="(\d+)")?/g,
+    (m, ref, s) => set.has(ref) ? `<c r="${ref}" s="${xfAmarillo(Number(s || 0))}"` : m));
+
+  styles = styles
+    .replace(/<fills count="\d+">([\s\S]*?)<\/fills>/, (_, f) => `<fills count="${fillId + 1}">${f}<fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills>`)
+    .replace(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/, (_, x) => `<cellXfs count="${xfs.length + nuevos.length}">${x}${nuevos.join('')}</cellXfs>`);
+  escribir('/xl/styles.xml', styles);
+  return CFB.write(cfb, { type: 'buffer', fileType: 'zip' });
 }
 
 function fmtFechaCorta(d) {
@@ -167,6 +208,9 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     // Desglose informativo (ya incluido en el total): extra del día y tramo nocturno.
     let min1822 = 0, minNoct = 0;
     let offsetDia = 0;
+    // Columna inicial de cada día con actividad: se pinta en amarillo con
+    // ajuste de texto, para que la actividad (y sus horas) no quede oculta.
+    const colsAct = [];
     const horaCelda = (h) => {
       const m = aMinutos(h);
       minPorDia[offsetDia] = (minPorDia[offsetDia] || 0) + m;
@@ -204,6 +248,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
             .filter(av => Number.isFinite(av.horaInicio) && Number.isFinite(av.horaFin))
             .map(av => fmtTramo(av.horaInicio, av.horaFin))
             .join(' + ');
+          colsAct.push(fila.length);
           fila.push(desc, horarios, horaCelda(horasAct));
 
           listaAct.forEach(av => detalleActividades.push({
@@ -306,10 +351,8 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
             ? ` ${fmtTramo(av.horaInicio, av.horaFin)}` : '';
           return `${av.tipo.toUpperCase()}: ${av.nombre}${tramo}${av.esRecurrente ? ' [recurrente]' : ''}`;
         }).join(' + ');
-        // Un solo renglón: el writer de xlsx (build comunitario) descarta los
-        // estilos de celda, así que sin wrapText un "\n" queda pintado en una
-        // línea y el ancho de columna se come la actividad. Con " · " el texto
-        // sigue siendo legible al ensanchar o al leerlo desde la barra.
+        // Separador " · " en vez de "\n": resaltarCeldas aplica wrapText y el
+        // alto de fila se calcula por largo de texto, así que el texto fluye solo.
         entMostrar = entMostrar ? `${entMostrar} · ${descC}` : descC;
 
         listaC.forEach(av => detalleActividades.push({
@@ -324,6 +367,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
         }));
       }
 
+      if (actividadConChecada) colsAct.push(fila.length);
       fila.push(entMostrar, salMostrar, horaCelda(horas));
       if (a.Hora_Salida) min1822 += aMinutos(a.Horas_Extras);
       minNoct += aMinutos(horasNocturnas(a));
@@ -341,7 +385,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     fila.push(r.total / 24, r.normales / 24, r.extras / 24, diasPago,
       bono.aplica ? 'SÍ' : (bono.pendiente ? 'EN CURSO' : `NO · ${bono.fallas.map(x => `${x.fecha.slice(5)} ${x.motivo}`).join(', ')}`),
       min1822 ? min1822 / 1440 : '', minNoct ? minNoct / 1440 : '');
-    return { fila, id: e.ID_Empleado, nombre, total: r.total };
+    return { fila, id: e.ID_Empleado, nombre, total: r.total, colsAct };
   });
 
   // Orden del reporte. Con ~120 empleados el orden importa para poder
@@ -385,6 +429,26 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
   cols.push({ wch: 9 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 28 }, { wch: 10 }, { wch: 10 });
   ws['!cols'] = cols;
 
+  // Días con actividad: amarillo + ajuste de texto en sus 3 celdas, y la fila
+  // crece lo necesario para leer el texto completo (Excel no recalcula el alto
+  // al abrir un archivo generado).
+  const celdasAct = [];
+  const rows = [];
+  filas.forEach((f, i) => {
+    if (!f.colsAct.length) return;
+    const r = FILA_DATOS + i;
+    let lineas = 1;
+    for (const c0 of f.colsAct) {
+      for (let c = c0; c < c0 + 3; c++) {
+        celdasAct.push(XLSX.utils.encode_cell({ r, c }));
+        const txt = typeof f.fila[c] === 'string' ? f.fila[c] : '';
+        lineas = Math.max(lineas, Math.ceil(txt.length / Math.max(1, cols[c].wch - 2)));
+      }
+    }
+    rows[r] = { hpt: 16 * lineas };
+  });
+  ws['!rows'] = rows;
+
   // Merge del título sobre las primeras columnas
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
@@ -426,7 +490,7 @@ export async function generarExcelHoras(fechaInicio, fechaFin, opciones = {}) {
     XLSX.utils.book_append_sheet(wb, wsAct, 'Actividades');
   }
 
-  return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+  return resaltarCeldas(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }), celdasAct);
 }
 
-export default { generarExcelHoras };
+export default { generarExcelHoras, resaltarCeldas };

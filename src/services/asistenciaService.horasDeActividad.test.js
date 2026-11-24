@@ -86,3 +86,26 @@ test('aMinutos + repartirSemanal: total = suma de celdas; extra por semana en ho
   assert.equal(dos.extras, 0);
   assert.equal(dos.semanas, 2);
 });
+
+test('sábado sin hora de comida: 10-15 = 5 h (checada, actividad y calcularHorasPorPares)', async () => {
+  const { horasPorParesVista } = await import('./asistenciaService.js');
+  const { calcularHorasPorPares } = await import('./checadorImportService.js');
+  // 2026-11-21 es sábado; 2026-11-20 viernes.
+  const ch = (d, h) => ({ ID_Checada: d * 100 + h, Origen_Sincronizacion: 'ADMS_PUSH', Fecha_Hora: new Date(2026, 10, d, h) });
+  assert.equal(horasPorParesVista([ch(21, 10), ch(21, 15)]).real, 5);
+  assert.equal(horasPorParesVista([ch(20, 10), ch(20, 15)]).real, 4); // viernes sí descuenta
+  assert.equal(horasDeActividad(act(hm(10), hm(15), { sinComida: true }), null, null), 5);
+  assert.equal(horasDeActividad(act(hm(10), hm(15)), null, null), 4);
+  const c = (h) => ({ hora: h, minuto: 0, totalMinutos: h * 60, horaStr: `${h}:00` });
+  assert.equal(calcularHorasPorPares([c(10), c(15)], { esSabado: true }).horasTrabajadas, 5);
+});
+
+test('domingo sin hora de comida igual que sábado', async () => {
+  const { horasPorParesVista } = await import('./asistenciaService.js');
+  const { calcularHorasPorPares } = await import('./checadorImportService.js');
+  // 2026-11-22 es domingo.
+  const ch = (h) => ({ ID_Checada: h, Origen_Sincronizacion: 'ADMS_PUSH', Fecha_Hora: new Date(2026, 10, 22, h) });
+  assert.equal(horasPorParesVista([ch(10), ch(15)]).real, 5);
+  const c = (h) => ({ hora: h, minuto: 0, totalMinutos: h * 60, horaStr: `${h}:00` });
+  assert.equal(calcularHorasPorPares([c(10), c(15)], { esDomingo: true }).horasTrabajadas, 5);
+});

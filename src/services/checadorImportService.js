@@ -377,9 +377,10 @@ function parsearDiasEmpleado(filaDias, filaNombresDia, filaChecadas, rangoFechas
 
     // Detectar si es sábado
     const esSabado = nombreDia && nombreDia.toLowerCase().startsWith('s\u00e1b');
+    const esDomingo = nombreDia && nombreDia.toLowerCase().startsWith('dom'); // sin hora de comida, como sábado
 
     const restrictivo = fecha ? reglaToleranciaPorFecha(fecha).restrictivo : false;
-    const calculo = calcularHorasDia(checadas, { ...opciones, esSabado, esMixto, restrictivo });
+    const calculo = calcularHorasDia(checadas, { ...opciones, esSabado, esDomingo, esMixto, restrictivo });
 
     dias.push({
       fecha,
@@ -435,6 +436,7 @@ export function calcularHorasDia(checadas, opciones = {}) {
     comidaInicio = COMIDA_INICIO_DEFAULT,
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
+    esDomingo = false, // sin hora de comida, como sábado
     esMixto = false,
     minutoCierre = HORA_SALIDA_ESTANDAR,
     coberturaEspecial = false,
@@ -528,7 +530,8 @@ export function calcularHorasDia(checadas, opciones = {}) {
 
   // Comida: se descuenta si la jornada (de pago) cruza 14:00-15:00
   let minutosComidaDescontados = 0;
-  if (entradaPagoMin < comidaFin && salidaMin > comidaInicio) {
+  // Sábado y domingo no hay hora de comida: 10-15 son 5 h.
+  if (!esSabado && !esDomingo && entradaPagoMin < comidaFin && salidaMin > comidaInicio) {
     const inicioOverlap = Math.max(entradaPagoMin, comidaInicio);
     const finOverlap = Math.min(salidaMin, comidaFin);
     minutosComidaDescontados = Math.max(0, finOverlap - inicioOverlap);
@@ -752,6 +755,7 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
     comidaInicio = COMIDA_INICIO_DEFAULT,
     comidaFin = COMIDA_FIN_DEFAULT,
     esSabado = false,
+    esDomingo = false, // sin hora de comida, como sábado
     esMixto = false,
     ventanaDedupMin = VENTANA_DEDUP_MIN,
     // Minuto al que se cierra una jornada SIN salida. Default 18:00 (día cerrado).
@@ -837,7 +841,8 @@ export function calcularHorasPorPares(checadas, opciones = {}) {
 
     // Comida: overlap del par presente con 14-15 (si estuvo, se descuenta)
     let comidaPar = 0;
-    if (!(i === 0 && nocIn) && entMin < comidaFin && salMin > comidaInicio) {
+    // Sábado/domingo sin comida.
+    if (!esSabado && !esDomingo && !(i === 0 && nocIn) && entMin < comidaFin && salMin > comidaInicio) {
       comidaPar = Math.max(0, Math.min(salMin, comidaFin) - Math.max(entMin, comidaInicio));
     }
 

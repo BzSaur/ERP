@@ -441,7 +441,7 @@ async function recalcularDia(tx, idEmpleado, fechaDia) {
   // Suma de pares E/S: soporta salidas intermedias (clases) sin pagar el hueco.
   // ventanaDedupMin 0 porque ya deduplicamos arriba.
   const calc = calcularHorasPorPares(checadasCalc, {
-    esSabado, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo,
+    esSabado, esDomingo: fechaDia.getDay() === 0, ventanaDedupMin: 0, coberturaEspecial, toleranciaMin, restrictivo,
     // Entró la víspera: el tramo cuenta desde el corte de la víspera.
     entradaNocturnaMin: recibe ? corteVispera : null,
     salidaNocturna: aplicaOut,

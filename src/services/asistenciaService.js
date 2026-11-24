@@ -314,7 +314,8 @@ export async function obtenerActividadesPorRango(empleadoIds, fechaInicio, fecha
   for (const [key, lista] of porDia) {
     // Orden por hora de inicio; las sin tramo van primero (cubren el día).
     lista.sort((x, y) => (x.horaInicio ?? -1) - (y.horaInicio ?? -1));
-    mapa.set(key, { ...lista[0], todas: lista });
+    // Sábado/domingo no tienen hora de comida: horasDeActividad lo lee de aquí.
+    mapa.set(key, { ...lista[0], todas: lista, sinComida: esDiaDescanso(key.split('_')[1]) });
   }
   return mapa;
 }
@@ -416,7 +417,7 @@ export async function resolverActividadesPorRango(empleadoIds, fechaInicio, fech
         // sin desplazar a la principal.
         yaPuntual.todas.push(itemRec);
       } else {
-        resultado.set(key, { ...itemRec, todas: [itemRec] });
+        resultado.set(key, { ...itemRec, todas: [itemRec], sinComida: esDiaDescanso(ymd) });
       }
     }
   }
@@ -831,11 +832,13 @@ export function calcularHorasDesdeChecadas(checadasHistorial, fecha, opts = {}) 
     .sort((a, b) => a.totalMinutos - b.totalMinutos);
 
   const esSabado = new Date(fecha).getUTCDay() === 6; // .Date: UTC
+  const esDomingo = new Date(fecha).getUTCDay() === 0;
   // Día en curso: no estimar salida a 18:00; cerrar a la hora actual (México).
   const minutoCierre = esDiaEnCurso(fecha) ? minutosDelDiaAhora() : undefined;
   const { toleranciaMin, aplicaCobertura, restrictivo } = reglaToleranciaPorFecha(fecha);
   return calcularHorasPorPares(checadas, {
     esSabado,
+    esDomingo,
     toleranciaMin,
     restrictivo,
     coberturaEspecial: aplicaCobertura && !!opts.coberturaEspecial,
@@ -1007,14 +1010,15 @@ const JORNADA_INICIO_MIN = 8 * 60, JORNADA_FIN_MIN = 18 * 60;
 
 // Horas netas de un tramo [desdeMin, hastaMin] descontando la comida si lo
 // cruza. Mismo criterio de overlap que calcularHorasPorPares.
-export function minutosNetosTramo(desdeMin, hastaMin) {
+// conComida=false: sábado/domingo, no hay hora de comida (10-15 son 5 h, no 4).
+export function minutosNetosTramo(desdeMin, hastaMin, conComida = true) {
   if (!Number.isFinite(desdeMin) || !Number.isFinite(hastaMin) || hastaMin <= desdeMin) return 0;
   let netos = hastaMin - desdeMin;
-  netos -= Math.max(0, Math.min(hastaMin, COMIDA_FIN_MIN) - Math.max(desdeMin, COMIDA_INI_MIN));
+  if (conComida) netos -= Math.max(0, Math.min(hastaMin, COMIDA_FIN_MIN) - Math.max(desdeMin, COMIDA_INI_MIN));
   return Math.max(0, netos);
 }
-export function horasNetasTramo(desdeMin, hastaMin) {
-  return Math.round((minutosNetosTramo(desdeMin, hastaMin) / 60) * 100) / 100;
+export function horasNetasTramo(desdeMin, hastaMin, conComida = true) {
+  return Math.round((minutosNetosTramo(desdeMin, hastaMin, conComida) / 60) * 100) / 100;
 }
 
 // Minutos desde medianoche -> 'HH:MM'. Un fin de tramo > 1440 (termina al día
@@ -1034,16 +1038,16 @@ export function fmtTramo(ini, fin) {
 // de lo transcurrido desde las 8:00 (con descuento de comida). Otros días, igual.
 export function topeHorasHoy(horas, fecha) {
   if (!horas || !esDiaEnCurso(fecha)) return horas;
-  return Math.min(horas, horasNetasTramo(JORNADA_INICIO_MIN, minutosDelDiaAhora()));
+  return Math.min(horas, horasNetasTramo(JORNADA_INICIO_MIN, minutosDelDiaAhora(), !esDiaDescanso(fecha)));
 }
 
-export function horasActividadHastaEntrada(horaEntrada) {
+export function horasActividadHastaEntrada(horaEntrada, conComida = true) {
   if (!horaEntrada) return 0;
   const entrada = new Date(horaEntrada);
   const entMin = entrada.getHours() * 60 + entrada.getMinutes();
   const INICIO_ACTIVIDAD = 8 * 60; // 8:00am
   if (entMin <= INICIO_ACTIVIDAD) return 0; // checó antes de las 8, no hay tramo previo
-  return horasNetasTramo(INICIO_ACTIVIDAD, entMin);
+  return horasNetasTramo(INICIO_ACTIVIDAD, entMin, conComida);
 }
 
 // ¿La actividad del día explica que la entrada fuera tarde? Sí si alguna no
@@ -1071,6 +1075,8 @@ export function actividadJustificaRetardo(actividad, horaEntrada) {
  */
 export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinSalidaCuentaCero = false) {
   if (!actividad) return 0;
+  // Sábado/domingo: sin hora de comida (sinComida lo marca obtenerActividadesPorRango).
+  const cc = !actividad.sinComida;
 
   // Varias actividades el mismo día: se fusionan sus tramos para no contar
   // dos veces lo que se traslape entre ellas, y luego se resta lo que ya
@@ -1082,7 +1088,7 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinS
 
     // Solo actividades sin tramo: jornada implícita.
     if (sinTramo.length > 0 && conTramo.length === 0) {
-      return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
+      return horaEntrada ? horasActividadHastaEntrada(horaEntrada, cc) : HORAS_FIJAS_JORNADA;
     }
 
     // Mezcla de ambas: la actividad sin tramo cubre la jornada estándar
@@ -1095,10 +1101,10 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinS
     if (sinTramo.length > 0) {
       let extra = 0;
       for (const a of conTramo) {
-        extra += horasNetasTramo(a.horaInicio, Math.min(a.horaFin, JORNADA_INICIO_MIN));
-        extra += horasNetasTramo(Math.max(a.horaInicio, JORNADA_FIN_MIN), a.horaFin);
+        extra += horasNetasTramo(a.horaInicio, Math.min(a.horaFin, JORNADA_INICIO_MIN), cc);
+        extra += horasNetasTramo(Math.max(a.horaInicio, JORNADA_FIN_MIN), a.horaFin, cc);
       }
-      const base = horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
+      const base = horaEntrada ? horasActividadHastaEntrada(horaEntrada, cc) : HORAS_FIJAS_JORNADA;
       return Math.round((base + extra) * 100) / 100;
     }
 
@@ -1116,7 +1122,7 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinS
     // Cada tramo cuenta solo sus horas: sin piso de jornada.
     let total = 0;
     for (const [ini, fin] of fusionados) {
-      total += horasDeActividad({ horaInicio: ini, horaFin: fin }, horaEntrada, horaSalida, sinSalidaCuentaCero);
+      total += horasDeActividad({ horaInicio: ini, horaFin: fin, sinComida: !cc }, horaEntrada, horaSalida, sinSalidaCuentaCero);
     }
     return Math.round(total * 100) / 100;
   }
@@ -1142,15 +1148,15 @@ export function horasDeActividad(actividad, horaEntrada, horaSalida = null, sinS
         salMin = sinSalidaCuentaCero ? entMin : 18 * 60;
       }
       // Partes del tramo anteriores y posteriores a la jornada registrada.
-      const antes = horasNetasTramo(horaInicio, Math.min(horaFin, entMin));
-      const despues = horasNetasTramo(Math.max(horaInicio, salMin), horaFin);
+      const antes = horasNetasTramo(horaInicio, Math.min(horaFin, entMin), cc);
+      const despues = horasNetasTramo(Math.max(horaInicio, salMin), horaFin, cc);
       return Math.round((antes + despues) * 100) / 100;
     }
     // Sin checada: cuenta solo el tramo capturado (16:00-17:00 = 1h).
-    return horasNetasTramo(horaInicio, horaFin);
+    return horasNetasTramo(horaInicio, horaFin, cc);
   }
 
-  return horaEntrada ? horasActividadHastaEntrada(horaEntrada) : HORAS_FIJAS_JORNADA;
+  return horaEntrada ? horasActividadHastaEntrada(horaEntrada, cc) : HORAS_FIJAS_JORNADA;
 }
 
 /**
@@ -1490,7 +1496,7 @@ export async function obtenerHorasSemanalTodos(fechaInicio, fechaFin, filtro = n
     if (!nocturno && horasReales === 0 && a.Presente && a.Hora_Entrada && a.Hora_Salida) {
       const entR = new Date(a.Hora_Entrada);
       const salR = new Date(a.Hora_Salida);
-      horasReales = horasNetasTramo(entR.getHours() * 60 + entR.getMinutes(), salR.getHours() * 60 + salR.getMinutes());
+      horasReales = horasNetasTramo(entR.getHours() * 60 + entR.getMinutes(), salR.getHours() * 60 + salR.getMinutes(), !esDiaDescanso(a.Fecha));
     }
     // Minutos enteros: la celda muestra exactamente lo que suma al total.
     const h = aMinutos(horasReales + horasActividadDia) / 60;
@@ -2015,14 +2021,15 @@ export function horasPorParesVista(checadas) {
   if (c.length % 2) c = c.slice(0, -1); // par abierto no suma, los pares cerrados sí
   if (c.length < 2) return { real: 0, red: 0, pares: [] };
   const min = (x) => x.Fecha_Hora.getHours() * 60 + x.Fecha_Hora.getMinutes();
+  const cc = ![0, 6].includes(c[0].Fecha_Hora.getDay()); // sábado/domingo: sin hora de comida (Fecha_Hora local, TZ del contenedor)
   let realMin = 0, redMin = 0;
   const pares = [];
   for (let i = 0; i < c.length; i += 2) {
     const e = min(c[i]), s = min(c[i + 1]);
     const eRed = redondearEntrada(e, REGLA_REDONDEO_VISTA.toleranciaMin);
     const sRed = redondearSalida(s);
-    realMin += minutosNetosTramo(e, s);
-    redMin += minutosNetosTramo(eRed, sRed);
+    realMin += minutosNetosTramo(e, s, cc);
+    redMin += minutosNetosTramo(eRed, sRed, cc);
     pares.push({ e, s, eRed, sRed });
   }
   return { real: realMin / 60, red: redMin / 60, pares };
